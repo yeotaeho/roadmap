@@ -1,0 +1,60 @@
+rss:
+  sources:
+    economy:
+      - name: "연합뉴스 경제"
+        url: "https://www.yna.co.kr/rss/economy.xml"
+        enabled: true
+      - name: "한겨레 경제"
+        url: "https://www.hani.co.kr/rss/economy/"
+        enabled: true
+      - name: "매일경제"
+        url: "https://www.mk.co.kr/rss/30000041/"
+        enabled: true
+    
+    politics:
+      - name: "연합뉴스 정치"
+        url: "https://www.yna.co.kr/rss/politics.xml"
+        enabled: true
+      - name: "한겨레 정치"
+        url: "https://www.hani.co.kr/rss/politics/"
+        enabled: true
+    
+    society:
+      - name: "연합뉴스 사회"
+        url: "https://www.yna.co.kr/rss/society.xml"
+        enabled: true
+      - name: "한겨레 사회"
+        url: "https://www.hani.co.kr/rss/society/"
+        enabled: true
+    
+    culture:
+      - name: "연합뉴스 생활/문화"
+        url: "https://www.yna.co.kr/rss/culture.xml"
+        enabled: true
+    
+    world:
+      - name: "연합뉴스 국제"
+        url: "https://www.yna.co.kr/rss/international.xml"
+        enabled: true
+      - name: "한겨레 국제"
+        url: "https://www.hani.co.kr/rss/international/"
+        enabled: true
+    
+    it-science:
+      - name: "연합뉴스 IT/과학"
+        url: "https://www.yna.co.kr/rss/technology.xml"
+        enabled: true
+      - name: "한겨레 IT/과학"
+        url: "https://www.hani.co.kr/rss/science/"
+        enabled: true
+    
+    sports:
+      - name: "연합뉴스 스포츠"
+        url: "https://www.yna.co.kr/rss/sports.xml"
+        enabled: true
+    
+    entertainment:
+      - name: "연합뉴스 연예"
+        url: "https://www.yna.co.kr/rss/entertainment.xml"
+        enabled: true
+

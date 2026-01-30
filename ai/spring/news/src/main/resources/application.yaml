@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: news-service
+  
+  datasource:
+    url: ${NEON_DATABASE_URL:jdbc:postgresql://localhost:5432/my_project}
+    username: ${NEON_DATABASE_USER:postgres}
+    password: ${NEON_DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  # RSS 설정 import
+  config:
+    import:
+      - classpath:rss-urls.yml
+
+server:
+  port: 8084
+
+# 로깅 설정
+logging:
+  level:
+    kr.yeotaeho.api.service.RssService: DEBUG
+
+# 네이버 API 설정
+naver:
+  client-id: ${NAVER_CLIENT_ID}
+  client-secret: ${NAVER_CLIENT_SECRET}
+
+# Eureka 설정 제거됨 (SimpleDiscoveryClient 사용)

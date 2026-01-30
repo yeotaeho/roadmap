@@ -1,0 +1,177 @@
+services:
+  # Eureka 서비스 제거됨 (SimpleDiscoveryClient 사용)
+  # config 서비스도 필요없다면 제거 가능 (현재는 유지)
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: gateway-server
+    ports:
+      - "8080:8080"
+    networks:
+      - api-network
+    depends_on:
+      - user
+      - common
+      - oauth
+      - news
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+
+  common:
+    build:
+      context: .
+      dockerfile: services/common/Dockerfile
+    container_name: common-service
+    ports:
+      - "8082:8082"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - NEON_DATABASE_URL=${NEON_DATABASE_URL}
+      - NEON_DATABASE_USER=${NEON_DATABASE_USER}
+      - NEON_DATABASE_PASSWORD=${NEON_DATABASE_PASSWORD}
+
+  user:
+    build:
+      context: .
+      dockerfile: services/user/Dockerfile
+    container_name: user-service
+    ports:
+      - "8083:8083"
+    networks:
+      - api-network
+    depends_on:
+      - common
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - NEON_DATABASE_URL=${NEON_DATABASE_URL}
+      - NEON_DATABASE_USER=${NEON_DATABASE_USER}
+      - NEON_DATABASE_PASSWORD=${NEON_DATABASE_PASSWORD}
+
+  oauth:
+    build:
+      context: .
+      dockerfile: services/oauth/Dockerfile
+    container_name: oauth-service
+    ports:
+      - "8085:8085"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - NEON_DATABASE_URL=${NEON_DATABASE_URL}
+      - NEON_DATABASE_USER=${NEON_DATABASE_USER}
+      - NEON_DATABASE_PASSWORD=${NEON_DATABASE_PASSWORD}
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+      - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      - KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+      - KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
+      - KAKAO_ADMIN_KEY=${KAKAO_ADMIN_KEY}
+      - NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
+      - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
+      - NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - JWT_SECRET=${JWT_SECRET}
+
+  news:
+    build:
+      context: .
+      dockerfile: services/news/Dockerfile
+    container_name: news-service
+    ports:
+      - "8084:8084"
+    networks:
+      - api-network
+    depends_on:
+      - common
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - NEON_DATABASE_URL=${NEON_DATABASE_URL}
+      - NEON_DATABASE_USER=${NEON_DATABASE_USER}
+      - NEON_DATABASE_PASSWORD=${NEON_DATABASE_PASSWORD}
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+      - NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
+      - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
+
+  chatbotservice:
+    build:
+      context: ./ai/service/chatbotservice
+      dockerfile: Dockerfile
+    container_name: chatbotservice
+    ports:
+      - "9001:9001"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+
+  clawlerservice:
+    build:
+      context: ./ai/service/clawlerservice
+      dockerfile: Dockerfile
+    container_name: clawlerservice
+    ports:
+      - "9002:9002"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+
+  mlservice:
+    build:
+      context: ./ai/service/mlservice
+      dockerfile: dockerfile
+    container_name: mlservice
+    ports:
+      - "9003:9003"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+
+  trendservice:
+    build:
+      context: ./ai/service/trend
+      dockerfile: Dockerfile
+    container_name: trendservice
+    ports:
+      - "9004:9004"
+    networks:
+      - api-network
+    restart: unless-stopped
+    environment:
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - UPSTASH_REDIS_HOST=${UPSTASH_REDIS_HOST}
+      - UPSTASH_REDIS_PORT=${UPSTASH_REDIS_PORT}
+      - UPSTASH_REDIS_TOKEN=${UPSTASH_REDIS_TOKEN}
+
+networks:
+  api-network:
+    driver: bridge

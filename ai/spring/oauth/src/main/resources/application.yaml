@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: oauth-service
+  datasource:
+    url: ${NEON_DATABASE_URL:jdbc:postgresql://localhost:5432/my_project}
+    username: ${NEON_DATABASE_USER:postgres}
+    password: ${NEON_DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  # Redis 설정 (Upstash)
+  data:
+    redis:
+      host: ${UPSTASH_REDIS_HOST:localhost}
+      port: ${UPSTASH_REDIS_PORT:6379}
+      password: ${UPSTASH_REDIS_TOKEN:}
+      timeout: 2000ms
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}  # Upstash는 true, 로컬은 false
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+# 카카오 OAuth 설정
+kakao:
+  client-id: ${KAKAO_CLIENT_ID:your_kakao_client_id}
+  client-secret: ${KAKAO_CLIENT_SECRET:your_kakao_client_secret}
+  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:3000/auth/kakao/callback}
+  admin-key: ${KAKAO_ADMIN_KEY:your_kakao_admin_key}
+
+# 네이버 OAuth 설정
+naver:
+  client-id: ${NAVER_CLIENT_ID:your_naver_client_id}
+  client-secret: ${NAVER_CLIENT_SECRET:your_naver_client_secret}
+  redirect-uri: ${NAVER_REDIRECT_URI:http://localhost:3000/auth/naver/callback}
+
+# 구글 OAuth 설정
+google:
+  client-id: ${GOOGLE_CLIENT_ID:your_google_client_id}
+  client-secret: ${GOOGLE_CLIENT_SECRET:your_google_client_secret}
+  redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:3000/auth/google/callback}
+
+server:
+  port: 8085
+  servlet:
+    context-path: /oauth  # 모든 엔드포인트 앞에 /oauth 추가
+
+# 파일 업로드 경로 설정
+app:
+  upload:
+    dir: ./uploads
+  base-url: http://localhost:8080
+
+# JWT 설정
+# HS512 알고리즘을 사용하려면 최소 512비트(64바이트)의 키가 필요합니다.
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 1800000 # 30분 (밀리초)
+  refresh-expiration: 1814400000 # 21일 (밀리초)
+
+# Redis 키 설정
+redis:
+  key:
+    refresh-token-prefix: "refreshToken:"
+    user-tokens-prefix: "user:tokens:"
