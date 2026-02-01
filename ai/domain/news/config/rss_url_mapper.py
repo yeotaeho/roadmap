@@ -32,13 +32,15 @@ class RssUrlMapper:
         RSS URL 매퍼 초기화
         
         Args:
-            rss_config_path: RSS 설정 파일 경로 (기본값: ai/spring/news/src/main/resources/rss-urls.yml)
+            rss_config_path: RSS 설정 파일 경로 (기본값: ai/domain/news/config/rss-urls.yml)
         """
         if rss_config_path is None:
-            # 기본 경로: ai/spring/news/src/main/resources/rss-urls.yml
+            # 기본 경로: ai/domain/news/config/rss-urls.yml
+            # __file__ = ai/domain/news/config/rss_url_mapper.py
+            # parent = ai/domain/news/config/
             rss_config_path = (
-                Path(__file__).parent.parent.parent.parent.parent 
-                / "spring" / "news" / "src" / "main" / "resources" / "rss-urls.yml"
+                Path(__file__).parent 
+                / "rss-urls.yml"
             )
         
         self.rss_config_path = Path(rss_config_path)

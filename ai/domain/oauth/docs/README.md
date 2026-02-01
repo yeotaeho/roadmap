@@ -211,7 +211,8 @@ CREATE INDEX idx_users_provider_provider_id ON users(provider, provider_id);
 ### 3. 의존성 설치
 
 ```bash
-pip install -r requirements.txt
+# 메인 requirements.txt 사용 (프로젝트 루트에서)
+pip install -r ../../requirements.txt
 ```
 
 ## 사용 방법

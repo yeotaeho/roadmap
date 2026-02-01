@@ -43,7 +43,7 @@ rss:
     it-science:
       - name: "연합뉴스 IT/과학"
         url: "https://www.yna.co.kr/rss/technology.xml"
-        enabled: true
+        enabled: false  # XML 파싱 오류로 인해 비활성화
       - name: "한겨레 IT/과학"
         url: "https://www.hani.co.kr/rss/science/"
         enabled: true
@@ -57,4 +57,3 @@ rss:
       - name: "연합뉴스 연예"
         url: "https://www.yna.co.kr/rss/entertainment.xml"
         enabled: true
-
