@@ -2,8 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Send, Bot, User, Sparkles, Briefcase, X, Plus, Mic, Volume2 } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MessageBubble } from '@/components/features/chat/MessageBubble';
+import { ChatInput } from '@/components/features/chat/ChatInput';
 
 interface Message {
     id: string;
@@ -18,7 +20,6 @@ export default function ChatPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [chatMode, setChatMode] = useState<'trend' | 'career'>('trend');
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
 
     // 스크롤을 맨 아래로
     const scrollToBottom = () => {
@@ -161,38 +162,12 @@ export default function ChatPage() {
 
                         {/* Input Bar */}
                         <div className="w-full max-w-2xl">
-                            <div className="relative flex items-center bg-white border border-gray-300 rounded-full px-4 py-4 shadow-sm hover:shadow-md transition-shadow">
-                                {/* Left Icon - Plus */}
-                                <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                    <Plus className="w-5 h-5" />
-                                </button>
-
-                                {/* Input Field */}
-                                <input
-                                    ref={inputRef as React.RefObject<HTMLInputElement>}
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleSend();
-                                        }
-                                    }}
-                                    placeholder="무엇이든 물어보세요"
-                                    className="flex-1 px-4 outline-none text-gray-900 placeholder-gray-400"
-                                />
-
-                                {/* Right Icons */}
-                                <div className="flex items-center gap-2">
-                                    <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                        <Mic className="w-5 h-5" />
-                                    </button>
-                                    <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                        <Volume2 className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            </div>
+                            <ChatInput
+                                value={input}
+                                onChange={setInput}
+                                onSend={handleSend}
+                                disabled={isLoading}
+                            />
                         </div>
                     </motion.div>
                 ) : (
@@ -205,38 +180,7 @@ export default function ChatPage() {
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
                             {messages.map((message) => (
-                                <motion.div
-                                    key={message.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    {message.role === 'assistant' && (
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-                                            <Bot className="w-5 h-5 text-white" />
-                                        </div>
-                                    )}
-                                    <div
-                                        className={`max-w-[80%] rounded-lg px-4 py-3 ${message.role === 'user'
-                                            ? 'bg-red-600 text-white'
-                                            : 'bg-gray-100 text-gray-900'
-                                            }`}
-                                    >
-                                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-red-100' : 'text-gray-500'
-                                            }`}>
-                                            {message.timestamp.toLocaleTimeString('ko-KR', {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                        </p>
-                                    </div>
-                                    {message.role === 'user' && (
-                                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
-                                            <User className="w-5 h-5 text-gray-600" />
-                                        </div>
-                                    )}
-                                </motion.div>
+                                <MessageBubble key={message.id} message={message} />
                             ))}
 
                             {isLoading && (
@@ -262,38 +206,12 @@ export default function ChatPage() {
 
                         {/* Input Area */}
                         <div className="border-t border-gray-200 p-4 bg-white">
-                            <div className="relative flex items-center bg-white border border-gray-300 rounded-full px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
-                                {/* Left Icon - Plus */}
-                                <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                    <Plus className="w-5 h-5" />
-                                </button>
-
-                                {/* Input Field */}
-                                <input
-                                    ref={inputRef as React.RefObject<HTMLInputElement>}
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleSend();
-                                        }
-                                    }}
-                                    placeholder="무엇이든 물어보세요"
-                                    className="flex-1 px-4 outline-none text-gray-900 placeholder-gray-400"
-                                />
-
-                                {/* Right Icons */}
-                                <div className="flex items-center gap-2">
-                                    <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                        <Mic className="w-5 h-5" />
-                                    </button>
-                                    <button className="p-2 text-gray-600 hover:text-gray-900 transition">
-                                        <Volume2 className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            </div>
+                            <ChatInput
+                                value={input}
+                                onChange={setInput}
+                                onSend={handleSend}
+                                disabled={isLoading}
+                            />
                         </div>
                     </motion.div>
                 )}

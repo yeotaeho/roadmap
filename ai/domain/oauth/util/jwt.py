@@ -39,7 +39,8 @@ class JWTService:
         user_id: int, 
         provider: str, 
         email: str, 
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        age: Optional[int] = None
     ) -> str:
         """JWT 액세스 토큰 생성"""
         now = datetime.utcnow()
@@ -55,6 +56,9 @@ class JWTService:
             "sub": str(user_id)
         }
         
+        if age is not None:
+            payload["age"] = age
+        
         token = jwt.encode(
             payload,
             self._get_secret_key(),
@@ -69,7 +73,8 @@ class JWTService:
         user_id: int,
         provider: str,
         email: str,
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        age: Optional[int] = None
     ) -> str:
         """리프레시 토큰 생성"""
         now = datetime.utcnow()
@@ -85,6 +90,9 @@ class JWTService:
             "exp": expiry,
             "sub": str(user_id)
         }
+        
+        if age is not None:
+            payload["age"] = age
         
         token = jwt.encode(
             payload,

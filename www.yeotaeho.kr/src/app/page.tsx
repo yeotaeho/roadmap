@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight, Share2, Printer, ChevronDown, AlignJustify } from 'lucide-react';
 import { getUserName } from '@/utils/tokenStorage';
 import { useAuth } from '@/hooks/useStore';
 import { getCurrentUser } from '@/lib/api/user';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
+import { RecentArticles } from '@/components/features/news/RecentArticles';
+import { SectionHeader } from '@/components/features/news/SectionHeader';
 
 // Mock Data (가상 데이터)
-const NAV_LINKS = ['트랜드 분석', '챗', '프레스센터', '뉴스룸소개'];
-const HEADER_LINKS = ['전체 기사', '경제', '정치', '사회', '문화', '국제/세계', 'IT/과학', '스포츠', '연예'];
 
 // API에서 가져올 뉴스 기사 타입
 interface NewsArticle {
@@ -56,41 +56,6 @@ interface Item {
     image: string;
 }
 
-// Reusable Card Component (재사용 가능한 카드 컴포넌트)
-const ArticleCard = ({ article, large = false }: { article: Article; large?: boolean }) => (
-    <div className={`flex flex-col rounded-lg overflow-hidden ${large ? 'col-span-1 sm:col-span-2 md:col-span-1' : 'col-span-1'}`}>
-        <div className="aspect-video bg-gray-100 flex items-center justify-center">
-            <img src={article.image} alt={article.title} className="w-full h-full object-cover" onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-            }} />
-        </div>
-        <div className="p-4 bg-white">
-            <span className="text-xs font-semibold text-red-600 uppercase">{article.type}</span>
-            <h3 className={`mt-1 font-bold ${large ? 'text-lg' : 'text-base'} line-clamp-2`}>{article.title}</h3>
-            {article.date && <p className="mt-2 text-xs text-gray-500">{article.date}</p>}
-        </div>
-    </div>
-);
-
-// Section Header with Pagination (페이지네이션이 있는 섹션 헤더)
-const SectionHeader = ({ title, showPagination = false, hasButton = false }: { title: string; showPagination?: boolean; hasButton?: boolean }) => (
-    <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-800">{title}</h2>
-        {showPagination && (
-            <div className="flex items-center space-x-2">
-                <span className="text-gray-600 text-sm">01 / 06</span>
-                <button className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition"><ChevronLeft size={16} /></button>
-                <button className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition"><ChevronRight size={16} /></button>
-            </div>
-        )}
-        {hasButton && (
-            <button className="hidden sm:flex items-center text-sm font-medium text-white bg-black hover:bg-gray-700 transition px-6 py-3 rounded-full">
-                더 많은 이야기 보러가기
-            </button>
-        )}
-    </div>
-);
 
 // Main Application Component (메인 애플리케이션 컴포넌트)
 export default function App() {
@@ -108,10 +73,12 @@ export default function App() {
                 try {
                     // DB에서 사용자 정보 가져오기
                     const userInfo = await getCurrentUser();
-                    if (userInfo && userInfo.name) {
-                        setUserName(userInfo.name);
+                    if (userInfo) {
+                        // 표시명: nickname이 있으면 nickname, 없으면 name
+                        const displayName = userInfo.nickname || userInfo.name;
+                        setUserName(displayName || null);
                     } else {
-                        // DB에 name이 없으면 JWT에서 가져오기 (fallback)
+                        // DB에 정보가 없으면 JWT에서 가져오기 (fallback)
                         const name = getUserName(token);
                         setUserName(name);
                     }
@@ -213,67 +180,6 @@ export default function App() {
         }
     };
 
-    // Header Component (상단 헤더)
-    const Header = () => (
-        <header className="sticky top-0 z-50 bg-white shadow-md border-b border-gray-100">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                {/* Logo */}
-                <div className="flex items-center space-x-12">
-                    <div className="text-xl font-extrabold text-gray-800">
-                        SAMSUNG <span className="font-normal text-sm block -mt-1">Newsroom</span>
-                    </div>
-                    {/* Desktop Navigation */}
-                    <nav className="hidden lg:flex space-x-6 text-sm">
-                        {NAV_LINKS.map(link => (
-                            <Link
-                                key={link}
-                                href={link === '트랜드 분석' ? '/trend-analysis' : link === '챗' ? '/chat' : '#'}
-                                className="text-gray-600 hover:text-red-600 transition font-medium"
-                            >
-                                {link}
-                            </Link>
-                        ))}
-                    </nav>
-                </div>
-                {/* Login & Signup Buttons, Icons & Mobile Menu */}
-                <div className="flex items-center space-x-4">
-                    {/* 로그인 상태에 따라 다른 UI 표시 */}
-                    {isAuthenticated ? (
-                        <div className="hidden lg:flex items-center space-x-3">
-                            <Link
-                                href="/profile"
-                                className="px-4 py-2 text-sm text-gray-700 font-medium hover:text-red-600 transition cursor-pointer"
-                            >
-                                {userName || '사용자'}님
-                            </Link>
-                            <button
-                                onClick={handleLogout}
-                                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 transition font-medium rounded-full"
-                            >
-                                로그아웃
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="hidden lg:flex items-center space-x-3">
-                            <Link href="/login" className="px-4 py-2 text-sm text-gray-700 hover:text-red-600 transition font-medium">
-                                로그인
-                            </Link>
-                            <Link href="/signup" className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 transition font-medium rounded-full">
-                                회원가입
-                            </Link>
-                        </div>
-                    )}
-                    <button className="p-2 text-gray-600 hover:text-red-600 transition">
-                        <Search size={20} />
-                    </button>
-                    <button className="lg:hidden p-2 text-gray-600 hover:text-red-600 transition">
-                        <AlignJustify size={20} />
-                    </button>
-                </div>
-            </div>
-        </header>
-    );
-
     // Hero Video Component (메인 비디오 섹션)
     const HeroVideo = () => (
         <section className="bg-black mb-12">
@@ -321,101 +227,6 @@ export default function App() {
         </section>
     );
 
-    // Recent Articles Component (최신 기사 섹션)
-    const RecentArticles = () => (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16">
-            <h2 className="text-2xl font-bold mb-6 border-b pb-2">최신 기사</h2>
-
-            {/* Tabs */}
-            <div className="flex overflow-x-auto space-x-4 pb-2 border-b border-gray-200 mb-8 whitespace-nowrap">
-                {HEADER_LINKS.map(link => (
-                    <button
-                        key={link}
-                        onClick={() => setActiveTab(link)}
-                        disabled={loading}
-                        className={`py-2 px-3 text-sm font-medium transition duration-300 ease-in-out relative ${activeTab === link
-                            ? 'text-black border-b-2 border-red-600'
-                            : 'text-gray-500 hover:text-red-600'
-                            } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    >
-                        {link}
-                        {loading && activeTab === link && (
-                            <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
-                                <span className="flex space-x-1">
-                                    <span className="w-1 h-1 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                                    <span className="w-1 h-1 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                                    <span className="w-1 h-1 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                                </span>
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </div>
-
-            {/* Category Info */}
-            {!loading && recentArticles.length > 0 && (
-                <div className="flex justify-between items-center mb-4">
-                    <p className="text-sm text-gray-600">
-                        <span className="font-semibold text-red-600">{activeTab}</span> 카테고리 • 총 {recentArticles.length}개의 기사
-                    </p>
-                    <button className="text-xs text-gray-500 hover:text-red-600 transition">
-                        최신순 ▼
-                    </button>
-                </div>
-            )}
-
-            {/* Articles Grid */}
-            {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {[...Array(8)].map((_, index) => (
-                        <div key={index} className="flex flex-col rounded-lg overflow-hidden animate-pulse">
-                            <div className="aspect-[4/2.5] bg-gray-200"></div>
-                            <div className="p-4 bg-white">
-                                <div className="h-4 bg-gray-200 rounded w-20 mb-2"></div>
-                                <div className="h-5 bg-gray-200 rounded w-full mb-2"></div>
-                                <div className="h-3 bg-gray-200 rounded w-24"></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : recentArticles.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {recentArticles.map((article, index) => (
-                        <a
-                            key={`${article.title}-${index}`}
-                            href={article.link || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-col group rounded-lg overflow-hidden hover:shadow-lg transition"
-                        >
-                            <div className="aspect-[4/2.5] bg-gray-100">
-                                <img src={article.image} alt={article.title} className="w-full h-full object-cover" onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                }} />
-                            </div>
-                            <div className="p-4 bg-white flex flex-col flex-grow">
-                                <span className="text-xs font-semibold text-red-600 uppercase">{article.type || '뉴스'}</span>
-                                <h3 className="mt-1 font-bold text-base line-clamp-2 group-hover:text-red-600 transition flex-grow">{article.title}</h3>
-                                <p className="mt-2 text-xs text-gray-500">{article.date || ''}</p>
-                            </div>
-                        </a>
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-12">
-                    <p className="text-gray-500 text-lg mb-2">
-                        {activeTab === '전체 기사'
-                            ? '뉴스를 불러올 수 없습니다.'
-                            : `'${activeTab}' 카테고리의 뉴스가 없습니다.`}
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                        다른 카테고리를 선택하거나 잠시 후 다시 시도해주세요.
-                    </p>
-                </div>
-            )}
-        </section>
-    );
 
     // Newsroom Pick & More Stories (뉴스룸 픽 및 더 많은 이야기 섹션)
     const NewsroomSections = () => (
@@ -483,33 +294,18 @@ export default function App() {
     // Discovery/Highlight Section (확인해 보세요 및 미디어 하이라이트)
 
 
-    // Footer Component (하단 푸터)
-    const Footer = () => (
-        <footer className="bg-gray-100 mt-12 py-8 border-t border-gray-200">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-                    <div className="text-lg font-extrabold text-gray-800">
-                        SAMSUNG
-                    </div>
-                    <div className="flex space-x-4 text-sm text-gray-600">
-                        <a href="#" className="hover:text-red-600">이용약관</a>
-                        <a href="#" className="hover:text-red-600 font-bold">개인정보처리방침</a>
-                        <a href="#" className="hover:text-red-600">접근성</a>
-                    </div>
-                </div>
-                <div className="mt-4 text-xs text-gray-500">
-                    <p>Copyright © 2025 Samsung. All rights reserved.</p>
-                </div>
-            </div>
-        </footer>
-    );
 
     return (
         <div className="min-h-screen font-sans bg-white">
-            <Header />
+            <Header userName={userName} onLogout={handleLogout} />
             <main>
                 <HeroVideo />
-                <RecentArticles />
+                <RecentArticles
+                    activeTab={activeTab}
+                    recentArticles={recentArticles}
+                    loading={loading}
+                    onTabChange={setActiveTab}
+                />
                 <NewsroomSections />
                 {/* 확인해 보세요 */}
             </main>

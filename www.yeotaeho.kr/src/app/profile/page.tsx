@@ -12,10 +12,11 @@ export default function ProfilePage() {
     const router = useRouter();
     const { token, isAuthenticated, logoutAsync } = useAuth();
     const [userName, setUserName] = useState<string | null>(null);
+    const [userNickname, setUserNickname] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [profileImage, setProfileImage] = useState<string | null>(null);
-    
+
     // 편집 모드 상태
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState<string>('');
@@ -38,7 +39,10 @@ export default function ProfilePage() {
                 const userInfo: UserInfo | null = await getCurrentUser();
                 if (userInfo) {
                     // DB에서 가져온 정보 사용
-                    setUserName(userInfo.name || null);
+                    // 표시명: nickname이 있으면 nickname, 없으면 name
+                    const displayName = userInfo.nickname || userInfo.name;
+                    setUserName(displayName || null);
+                    setUserNickname(userInfo.nickname || null);
                     setUserEmail(userInfo.email || null);
                     setUserId(userInfo.id?.toString() || null);
                     setProfileImage(userInfo.profileImage || null);
@@ -92,7 +96,7 @@ export default function ProfilePage() {
             }
 
             setSelectedFile(file);
-            
+
             // 미리보기 URL 생성
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -127,14 +131,20 @@ export default function ProfilePage() {
 
         setIsSaving(true);
         try {
+            console.log('[프로필 저장 시작] 사용자가 저장 버튼을 클릭했습니다.');
+            console.log('[프로필 저장] 입력된 이름:', editName);
+
             let imageUrl = editProfileImage.trim() || undefined;
 
             // 파일이 선택된 경우 먼저 업로드
             if (selectedFile) {
+                console.log('[프로필 저장] 이미지 파일 업로드 시작:', selectedFile.name);
                 const uploadedUrl = await uploadProfileImage(selectedFile);
                 if (uploadedUrl) {
                     imageUrl = uploadedUrl;
+                    console.log('[프로필 저장] 이미지 파일 업로드 완료:', uploadedUrl);
                 } else {
+                    console.error('[프로필 저장] 이미지 업로드 실패');
                     alert('이미지 업로드에 실패했습니다.');
                     setIsSaving(false);
                     return;
@@ -142,23 +152,36 @@ export default function ProfilePage() {
             }
 
             // 프로필 정보 업데이트
-            const updatedUser = await updateUserProfile({
+            const updateData = {
                 name: editName.trim() || undefined,
                 profileImage: imageUrl,
-            });
+            };
+            console.log('[프로필 저장] 서버 API 호출 시작 - 전송 데이터:', updateData);
+
+            const updatedUser = await updateUserProfile(updateData);
 
             if (updatedUser) {
-                setUserName(updatedUser.name || null);
+                console.log('[프로필 저장] 서버 API 응답 수신:', updatedUser);
+                console.log('[프로필 저장] DB 저장된 nickname:', updatedUser.nickname);
+                console.log('[프로필 저장] DB 저장된 name:', updatedUser.name);
+
+                // 표시명: nickname이 있으면 nickname, 없으면 name
+                const displayName = updatedUser.nickname || updatedUser.name;
+                setUserName(displayName || null);
+                setUserNickname(updatedUser.nickname || null);
                 setProfileImage(updatedUser.profileImage || null);
                 setSelectedFile(null);
                 setPreviewUrl(null);
                 setIsEditing(false);
+
+                console.log('[프로필 저장 완료] 화면 업데이트 완료, 표시명:', displayName);
                 alert('프로필이 업데이트되었습니다.');
             } else {
+                console.error('[프로필 저장 실패] 서버 응답이 null입니다.');
                 alert('프로필 업데이트에 실패했습니다.');
             }
         } catch (error) {
-            console.error('프로필 업데이트 중 오류:', error);
+            console.error('[프로필 저장 오류]', error);
             alert('프로필 업데이트 중 오류가 발생했습니다.');
         } finally {
             setIsSaving(false);
@@ -241,13 +264,13 @@ export default function ProfilePage() {
                                         />
                                     ) : null}
                                     <div className={`w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg ${(previewUrl || profileImage) ? 'hidden avatar-fallback' : ''} ${isEditing ? 'cursor-pointer hover:bg-gray-100' : ''}`}
-                                         onClick={handleAvatarClick}>
+                                        onClick={handleAvatarClick}>
                                         <User size={48} className="text-red-600" />
                                     </div>
                                     {isEditing && (
                                         <div className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer hover:bg-gray-100"
-                                             onClick={handleAvatarClick}
-                                             title="프로필 사진 변경">
+                                            onClick={handleAvatarClick}
+                                            title="프로필 사진 변경">
                                             <Camera size={16} className="text-red-600" />
                                         </div>
                                     )}

@@ -18,7 +18,7 @@ export interface UserInfo {
  */
 export const getCurrentUser = async (): Promise<UserInfo | null> => {
   try {
-    const response = await apiClient.get<UserInfo>('/api/user/me');
+    const response = await apiClient.get<UserInfo>('/api/oauth/me');
     return response.data;
   } catch (error: any) {
     console.error('사용자 정보 조회 실패:', error);
@@ -46,10 +46,21 @@ export interface UpdateProfileRequest {
  */
 export const updateUserProfile = async (data: UpdateProfileRequest): Promise<UserInfo | null> => {
   try {
-    const response = await apiClient.put<UserInfo>('/api/user/me', data);
+    console.log('[API 클라이언트] PUT /api/oauth/me 요청 시작');
+    console.log('[API 클라이언트] 요청 데이터:', data);
+    console.log('[API 클라이언트] 서버 URL:', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+    
+    const response = await apiClient.put<UserInfo>('/api/oauth/me', data);
+    
+    console.log('[API 클라이언트] 서버 응답 수신 성공');
+    console.log('[API 클라이언트] 응답 상태 코드:', response.status);
+    console.log('[API 클라이언트] 응답 데이터:', response.data);
+    
     return response.data;
   } catch (error: any) {
-    console.error('프로필 업데이트 실패:', error);
+    console.error('[API 클라이언트] 프로필 업데이트 실패:', error);
+    console.error('[API 클라이언트] 에러 상태 코드:', error.response?.status);
+    console.error('[API 클라이언트] 에러 메시지:', error.response?.data || error.message);
     if (error.response?.status === 401 || error.response?.status === 404) {
       return null;
     }

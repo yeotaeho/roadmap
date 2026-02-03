@@ -15,6 +15,7 @@ redis==5.0.1
 # Database
 sqlalchemy==2.0.40
 asyncpg>=0.30.0  # Python 3.13 지원
+alembic>=1.13.0  # Database migrations
 
 # Configuration
 python-dotenv==1.0.0

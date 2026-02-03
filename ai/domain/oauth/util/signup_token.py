@@ -39,7 +39,8 @@ class SignupTokenService:
         email: str,
         name: Optional[str] = None,
         nickname: Optional[str] = None,
-        profile_image: Optional[str] = None
+        profile_image: Optional[str] = None,
+        age: Optional[int] = None
     ) -> str:
         """회원가입 토큰 생성"""
         now = datetime.utcnow()
@@ -56,6 +57,9 @@ class SignupTokenService:
             "iat": now,
             "exp": expiry
         }
+        
+        if age is not None:
+            payload["age"] = age
         
         token = jwt.encode(
             payload,
@@ -91,9 +95,9 @@ class SignupTokenService:
             logger.error(f"회원가입 토큰 검증 실패: {e}")
             return None
     
-    def extract_oauth_info(self, claims: Dict[str, Any]) -> Dict[str, str]:
+    def extract_oauth_info(self, claims: Dict[str, Any]) -> Dict[str, Any]:
         """Claims에서 OAuth 정보 추출"""
-        return {
+        result = {
             "provider": claims.get("provider", ""),
             "providerId": claims.get("providerId", ""),
             "email": claims.get("email", ""),
@@ -101,4 +105,10 @@ class SignupTokenService:
             "nickname": claims.get("nickname", ""),
             "profileImage": claims.get("profileImage", "")
         }
+        
+        age = claims.get("age")
+        if age is not None:
+            result["age"] = age
+            
+        return result
 

@@ -1,5 +1,5 @@
 import httpx
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import logging
 from urllib.parse import urlencode
 from ..config.settings import settings
@@ -29,10 +29,10 @@ class GoogleOAuthService:
         self.client_secret = settings.google_client_secret
         self.redirect_uri = settings.google_redirect_uri
     
-    async def get_authorization_url(self) -> Dict[str, str]:
+    async def get_authorization_url(self, mode: Optional[str] = None) -> Dict[str, str]:
         """구글 로그인 URL 생성 (State 및 PKCE 지원)"""
-        # 1. State 생성 및 저장
-        state = await self.state_service.generate_and_store_state()
+        # 1. State 생성 및 저장 (mode 정보 포함)
+        state = await self.state_service.generate_and_store_state(mode=mode)
         
         # 2. PKCE Code Verifier & Challenge 생성
         code_verifier = self.pkce_service.generate_code_verifier()
@@ -125,15 +125,22 @@ class GoogleOAuthService:
     
     async def process_oauth(self, code: str, state: str) -> Dict[str, Any]:
         """전체 OAuth 플로우 실행 (State 검증 및 PKCE 지원)"""
-        # 1. State 검증
-        if not await self.state_service.validate_and_remove_state(state):
+        # 1. State 검증 및 mode 정보 추출
+        state_data = await self.state_service.validate_and_remove_state(state)
+        if not state_data:
             raise RuntimeError("State 검증 실패: CSRF 공격 가능성")
+        
+        mode = state_data.get("mode")
         
         # 2. 토큰 발급 (PKCE code_verifier 포함)
         token_response = await self.get_access_token(code, state)
         
         # 3. 사용자 정보 조회
         user_info = await self.get_user_info(token_response["access_token"])
+        
+        # mode 정보를 user_info에 추가
+        if mode:
+            user_info["_mode"] = mode
         
         return user_info
 

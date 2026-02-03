@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Domain imports
-from domain.oauth.config.database import get_db
+from domain.oauth.base.database import get_db
 from domain.oauth.service.user_service import UserService
 from domain.oauth.util.jwt import JWTService
 
@@ -98,24 +98,36 @@ async def update_current_user(
 ):
     """현재 로그인한 사용자 프로필 정보 업데이트"""
     try:
+        logger.info(f"[백엔드 API] PUT /api/user/me 요청 수신 - userId={user_id}")
+        logger.info(f"[백엔드 API] 요청 파라미터 - name={name}, profileImage={'있음' if profileImage else '없음'}")
+        
         user_service = services["user_service"]
         
         # 사용자 정보 조회
+        logger.info(f"[백엔드 API] DB에서 사용자 정보 조회 시작 - userId={user_id}")
         user = await user_service.find_by_id(user_id)
         
         if not user:
+            logger.error(f"[백엔드 API] 사용자를 찾을 수 없음 - userId={user_id}")
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
         
+        logger.info(f"[백엔드 API] 사용자 정보 조회 완료 - userId={user_id}, 현재 name={user.name}, 현재 nickname={user.nickname}")
+        
         # 정보 업데이트
+        # name 파라미터는 nickname 컬럼에 저장 (name은 OAuth 초기 정보로 유지)
         if name is not None:
-            user.name = name
+            logger.info(f"[백엔드 API] nickname 컬럼 업데이트 - 기존: {user.nickname} → 새로운: {name}")
+            user.nickname = name
         if profileImage is not None:
+            logger.info(f"[백엔드 API] profile_image 컬럼 업데이트 - 기존: {user.profile_image} → 새로운: {profileImage}")
             user.profile_image = profileImage
         
         # 저장
+        logger.info(f"[백엔드 API] DB 저장 시작 - userId={user_id}")
         updated_user = await user_service.save(user)
+        logger.info(f"[백엔드 API] DB 저장 완료 - userId={user_id}, 저장된 nickname={updated_user.nickname}, 저장된 name={updated_user.name}")
         
-        logger.info(f"사용자 정보 업데이트 성공: userId={user_id}")
+        logger.info(f"[백엔드 API] 사용자 정보 업데이트 성공: userId={user_id}")
         
         return {
             "id": updated_user.id,
@@ -129,6 +141,6 @@ async def update_current_user(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"사용자 정보 업데이트 실패: userId={user_id}, error={e}", exc_info=True)
+        logger.error(f"[백엔드 API] 사용자 정보 업데이트 실패: userId={user_id}, error={e}", exc_info=True)
         raise HTTPException(status_code=500, detail="사용자 정보 업데이트 중 오류가 발생했습니다.")
 

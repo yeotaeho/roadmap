@@ -223,7 +223,7 @@ pip install -r ../../requirements.txt
 from domain.oauth.service.google_oauth_service import GoogleOAuthService
 from domain.oauth.service.user_service import UserService
 from domain.oauth.util.jwt import JWTService
-from domain.oauth.config.database import get_db
+from domain.oauth.base.database import get_db
 
 # 의존성 주입
 async def get_services(db: AsyncSession = Depends(get_db)):

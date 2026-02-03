@@ -1,84 +1,65 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useStore';
+import React, { useState } from 'react';
 
 export default function SignupPage() {
-    const searchParams = useSearchParams();
-    const router = useRouter();
-    const { login } = useAuth();
+    // 나이와 관심분야 상태 관리
+    const [age, setAge] = useState<number | ''>('');
+    const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+    const [customInterest, setCustomInterest] = useState<string>('');
 
-    // 회원가입 토큰 (URL 파라미터에서 가져옴)
-    const signupToken = searchParams.get('token');
+    // 관심분야 옵션
+    const interestOptions = [
+        { value: 'economy', label: '경제' },
+        { value: 'politics', label: '정치' },
+        { value: 'society', label: '사회' },
+        { value: 'culture', label: '문화' },
+        { value: 'world', label: '세계' },
+        { value: 'it-science', label: 'IT/과학' },
+        { value: 'sports', label: '스포츠' },
+        { value: 'entertainment', label: '연예' },
+    ];
 
-    const [isOAuthSignup, setIsOAuthSignup] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [signupStatus, setSignupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    // 관심분야 선택 핸들러
+    const handleInterestToggle = (value: string) => {
+        setSelectedInterests(prev =>
+            prev.includes(value)
+                ? prev.filter(item => item !== value)
+                : [...prev, value]
+        );
+    };
 
-    const handleOAuthSignup = async () => {
-        if (isProcessing) return;
-
-        setIsProcessing(true);
-        setSignupStatus('loading');
-        setErrorMessage(null);
-
-        try {
-            const response = await fetch('http://localhost:8000/api/oauth/signup', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    signupToken: signupToken || '',
-                }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Signup successful:', data);
-                setSignupStatus('success');
-
-                // JWT 토큰 저장
-                if (data.accessToken) {
-                    login(data.accessToken);
-                }
-
-                // 회원가입 성공 후 메인 페이지로 리디렉션
-                setTimeout(() => {
-                    router.push('/');
-                }, 1500);
-            } else {
-                const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
-                console.error('Signup failed:', errorData);
-                setSignupStatus('error');
-                setErrorMessage(errorData.message || response.statusText);
-                setIsProcessing(false);
-            }
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
-            console.error('Error during signup:', error);
-            setSignupStatus('error');
-            setErrorMessage(`연결 오류: ${msg}`);
-            setIsProcessing(false);
+    // 커스텀 관심분야 추가 핸들러
+    const handleAddCustomInterest = () => {
+        if (customInterest.trim() && !selectedInterests.includes(customInterest.trim())) {
+            setSelectedInterests(prev => [...prev, customInterest.trim()]);
+            setCustomInterest('');
         }
     };
 
-    useEffect(() => {
-        // OAuth 토큰이 있으면 자동 회원가입 처리
-        if (signupToken && signupStatus === 'idle') {
-            setIsOAuthSignup(true);
-            handleOAuthSignup();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [signupToken, signupStatus]);
+    // 커스텀 관심분야 제거 핸들러
+    const handleRemoveInterest = (value: string) => {
+        setSelectedInterests(prev => prev.filter(item => item !== value));
+    };
 
-    // 소셜 로그인 핸들러
+    // 소셜 로그인 핸들러 (회원가입 모드)
     const handleSocialLogin = async (provider: 'kakao' | 'naver' | 'google') => {
+        // 필수 입력 검증
+        if (!age || age < 1 || age > 120) {
+            alert('나이를 입력해주세요. (1-120)');
+            return;
+        }
+
+        if (selectedInterests.length === 0) {
+            alert('최소 1개 이상의 관심분야를 선택해주세요.');
+            return;
+        }
+
+        // 입력한 정보를 localStorage에 저장 (콜백에서 사용하기 위해)
+        localStorage.setItem('signup_age', age.toString());
+        localStorage.setItem('signup_interests', JSON.stringify(selectedInterests));
         try {
-            const response = await fetch(`http://localhost:8000/api/oauth/${provider}/login`, {
+            const response = await fetch(`http://localhost:8000/api/oauth/${provider}/login?mode=signup`, {
                 method: 'GET',
                 credentials: 'include',
                 headers: {
@@ -116,54 +97,6 @@ export default function SignupPage() {
         }
     };
 
-    // OAuth 회원가입 처리 중일 때
-    if (isOAuthSignup) {
-        return (
-            <div className="min-h-screen bg-white flex items-center justify-center px-4">
-                <div className="w-full max-w-md text-center">
-                    {signupStatus === 'loading' && (
-                        <>
-                            <div className="mb-4">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
-                            </div>
-                            <h2 className="text-2xl font-bold text-black mb-2">회원가입 처리 중...</h2>
-                            <p className="text-gray-600">잠시만 기다려주세요.</p>
-                        </>
-                    )}
-
-                    {signupStatus === 'success' && (
-                        <>
-                            <div className="mb-4">
-                                <svg className="mx-auto h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                            </div>
-                            <h2 className="text-2xl font-bold text-black mb-2">회원가입 성공!</h2>
-                            <p className="text-gray-600 mb-4">잠시 후 메인 페이지로 이동합니다...</p>
-                        </>
-                    )}
-
-                    {signupStatus === 'error' && (
-                        <>
-                            <div className="mb-4">
-                                <svg className="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </div>
-                            <h2 className="text-2xl font-bold text-black mb-2">회원가입 실패</h2>
-                            <p className="text-gray-600 mb-4">{errorMessage}</p>
-                            <button
-                                onClick={() => router.push('/login')}
-                                className="px-6 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition"
-                            >
-                                로그인 페이지로 돌아가기
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-white flex items-center justify-center px-4 py-12">
@@ -177,10 +110,100 @@ export default function SignupPage() {
                     <p>오프라인 매장에서 다양한 혜택이 제공됩니다.</p>
                 </div>
 
-                {/* Primary Sign Up Button */}
-                <button className="w-full bg-black text-white py-4 rounded-lg font-medium hover:bg-gray-800 transition mb-8 text-lg">
-                    회원가입
-                </button>
+                {/* 나이 입력 */}
+                <div className="mb-6">
+                    <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-2">
+                        나이 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        id="age"
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={age}
+                        onChange={(e) => setAge(e.target.value === '' ? '' : parseInt(e.target.value))}
+                        placeholder="나이를 입력하세요"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                    />
+                </div>
+
+                {/* 관심분야 선택 */}
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                        관심분야 (복수 선택 가능) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        {interestOptions.map((option) => (
+                            <label
+                                key={option.value}
+                                className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${selectedInterests.includes(option.value)
+                                    ? 'border-black bg-black text-white'
+                                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                                    }`}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={selectedInterests.includes(option.value)}
+                                    onChange={() => handleInterestToggle(option.value)}
+                                    className="sr-only"
+                                />
+                                <span className="text-sm font-medium">{option.label}</span>
+                            </label>
+                        ))}
+                    </div>
+
+                    {/* 커스텀 관심분야 입력 */}
+                    <div className="flex gap-2 mb-3">
+                        <input
+                            type="text"
+                            value={customInterest}
+                            onChange={(e) => setCustomInterest(e.target.value)}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddCustomInterest();
+                                }
+                            }}
+                            placeholder="직접 입력하세요"
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleAddCustomInterest}
+                            disabled={!customInterest.trim()}
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-black transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            추가
+                        </button>
+                    </div>
+
+                    {/* 선택된 관심분야 표시 */}
+                    {selectedInterests.length > 0 && (
+                        <div className="mt-3">
+                            <p className="text-xs text-gray-500 mb-2">선택된 관심분야:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {selectedInterests.map((interest) => {
+                                    const option = interestOptions.find(opt => opt.value === interest);
+                                    return (
+                                        <span
+                                            key={interest}
+                                            className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                                        >
+                                            {option ? option.label : interest}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveInterest(interest)}
+                                                className="ml-1 text-gray-500 hover:text-black"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {/* Divider */}
                 <div className="border-t border-gray-300 mb-6"></div>
