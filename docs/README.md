@@ -1,26 +1,44 @@
 # 프로젝트 문서
 
-이 디렉토리는 AI 기반 청년 글로벌 통찰력 서비스 프로젝트의 전체 문서를 포함합니다.
+이 디렉토리는 **AI 기반 청년 글로벌 통찰력 서비스** 프로젝트의 전체 문서를 포함합니다.
 
 ## 📚 문서 목록
 
-### 1. [프로젝트 개요](./PROJECT_OVERVIEW.md)
+### 핵심 문서
+
+#### 1. [프로젝트 개요](./PROJECT_OVERVIEW.md)
 - 프로젝트 목표 및 배경
 - 서비스 핵심 기능 구성
 - 데이터 수집 및 분석 전략
 - 개발 계획 (4개월 로드맵)
 - 기대 효과
 
-### 2. [트렌드 분석 전략](./TREND_ANALYSIS.md)
+#### 2. [AI 파이프라인 아키텍처](./ARCHITECTURE.md) ⭐ NEW
+- RTX 4070 Super 기반 하드웨어 환경
+- Llama-3.1-8B-Korean-Bllossom 모델 및 QLoRA 튜닝
+- GRU/Time-Series Transformer 예측 모델
+- AI 서비스 로직 파이프라인 (온보딩 → 매칭 → 예측)
+- 마이크로서비스 아키텍처
+
+#### 3. [데이터베이스 스키마 설계](./DB_SCHEMA.md) ⭐ NEW
+- 핵심 테이블 설계 (users, user_competency, user_roadmap_status)
+- JSONB 및 VECTOR 타입 활용
+- 인덱스 전략 및 성능 최적화
+- pgvector 확장 계획
+
+#### 4. [데이터 전략](./DATA_STRATEGY.md) ⭐ NEW
+- 선행 지표 수집 전략 (5대 핵심 지표)
+- Velocity Score 계산 로직
+- Y값 (Target) 계산 및 시계열 예측
+- 데이터 수집 주기 및 품질 관리
+
+### 보조 문서
+
+#### 5. [트렌드 분석 전략](./TREND_ANALYSIS.md)
 - 핵심 목표 및 차별점 (후행 지표 → 선행 지표)
 - 트렌드 분석을 위한 데이터 전략
 - 개인화 및 데이터 모델링 (ERD)
 - 머신러닝 학습 피처
-
-### 3. [기술 아키텍처 전략](./ARCHITECTURE_STRATEGY.md)
-- SimpleDiscoveryClient 채택 이유
-- Eureka vs SimpleDiscoveryClient 비교
-- 마이그레이션 전략
 
 ## 🎯 프로젝트 핵심 가치
 
@@ -44,6 +62,20 @@
 ## 🔄 데이터 전략
 
 - **선행 지표 중심**: 후행 지표가 아닌 사람들의 행동 데이터 분석
-- **3대 핵심 지표**: 돈의 흐름, 혁신의 흐름, 역량의 흐름
+- **5대 핵심 지표**: 돈의 흐름, 혁신의 흐름, 역량의 흐름, 수요 포착, 거시/정책
+- **Velocity Score**: 종합 트렌드 속도 점수 계산
 - **피드백 루프**: 사용자 행동 데이터를 통한 지속적인 개인화 개선
 
+## 🤖 AI 기술 스택
+
+- **하드웨어**: RTX 4070 Super (VRAM 12GB)
+- **언어 모델**: Llama-3.1-8B-Korean-Bllossom (QLoRA 튜닝)
+- **예측 모델**: GRU / Time-Series Transformer
+- **벡터 검색**: pgvector (PostgreSQL 확장)
+
+## 📊 데이터베이스
+
+- **PostgreSQL**: 메인 데이터베이스
+- **JSONB**: 유연한 스키마 (관심사, 설정 등)
+- **VECTOR**: AI 임베딩 벡터 저장 (사용자-트렌드 매칭)
+- **Alembic**: 데이터베이스 마이그레이션 관리

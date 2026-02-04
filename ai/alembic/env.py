@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 import asyncio
 
 from alembic import context
@@ -19,6 +19,10 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 from domain.oauth.base.database import Base
 from domain.oauth.model.user import User  # Import all models here
+
+# User domain models
+from domain.user.model.user_competency import UserCompetency
+from domain.user.model.user_roadmap_status import UserRoadmapStatus
 
 target_metadata = Base.metadata
 
@@ -70,13 +74,28 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
 
     """
-    configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = get_url()
+    database_url = get_url()
     
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
+    # SSL 설정 추가 (database.py와 동일한 설정)
+    connect_args = {}
+    
+    # Neon PostgreSQL의 경우 기본적으로 SSL 필요
+    if 'neon.tech' in database_url or 'neon' in database_url.lower():
+        connect_args['ssl'] = True
+    else:
+        # 일반 PostgreSQL의 경우도 SSL 활성화 (보안을 위해)
+        connect_args['ssl'] = True
+    
+    # InvalidCachedStatementError 방지: prepared statement 캐시 비활성화
+    connect_args['server_settings'] = {
+        'statement_cache_size': '0'
+    }
+    
+    # create_async_engine을 직접 사용하여 connect_args 전달
+    connectable = create_async_engine(
+        database_url,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:
