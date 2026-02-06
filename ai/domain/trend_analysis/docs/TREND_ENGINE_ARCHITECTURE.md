@@ -1,15 +1,36 @@
-## 🌍 글로벌 트렌드 분석 및 예측 엔진 아키텍처
+## 🇰🇷 한국 트렌드 분석 및 예측 엔진 아키텍처
 
 ### 1. 개요
 
-이 문서는 `trend_analysis` 도메인에서 동작하는 **글로벌 트렌드 분석 및 예측 엔진**의 역할과 워크플로우, 기술 스택을 정의합니다.  
-`user` 도메인의 대화형 에이전트가 **“사용자와 소통하는 프론트엔드 직원”**이라면, 이 엔진은 **“백엔드에서 데이터를 씹어먹고 분석하는 연구소”**에 해당합니다.
+이 문서는 `trend_analysis` 도메인에서 동작하는 **한국 트렌드 분석 및 예측 엔진**의 역할과 워크플로우, 기술 스택을 정의합니다.  
+`user` 도메인의 대화형 에이전트가 **"사용자와 소통하는 프론트엔드 직원"**이라면, 이 엔진은 **"백엔드에서 데이터를 씹어먹고 분석하는 연구소"**에 해당합니다.
 
-- **목표**: 외부 데이터 소스(뉴스, 정책, 투자, 검색량 등)를 주기적으로 수집·분석하여 `EXTERNAL_TREND_DATA` 등 트렌드 관련 테이블에 **정제된 지표와 인사이트를 저장**하는 것
+- **목표**: 한국 시장 중심의 외부 데이터 소스(뉴스, 정책, 투자, 검색량 등)를 주기적으로 수집·분석하여 `EXTERNAL_TREND_DATA` 등 트렌드 관련 테이블에 **정제된 지표와 인사이트를 저장**하는 것
 - **특징**:
   - 사용자의 질문에 맞춰 반응하는 챗봇이 아니라, **스케줄러에 의해 자동 실행되는 배치 파이프라인**
   - 텍스트(뉴스/정책) + 수치(투자금, 검색량) 등 **멀티모달 데이터**를 동시에 처리
   - 최종 산출물은 `Trend_Analyst`/`Insight_Coach` 등 **사용자 에이전트가 소비하는 데이터 레이어**
+
+#### 1.1. 한국 트렌드 분석으로의 전환 배경
+
+초기 설계에서는 **글로벌 트렌드 분석**을 목표로 했으나, 실제 데이터 수집 과정에서 다음과 같은 제약사항을 발견했습니다:
+
+- **글로벌 API 접근성 문제**:
+  - 대부분의 글로벌 데이터 소스(예: Crunchbase, Bloomberg, LinkedIn 등)는 **유료 API**를 요구하거나 **무료 티어의 Rate Limit이 매우 제한적**
+  - 지역별 데이터 접근 제한(예: 일부 API는 특정 국가 IP 차단)
+  - API 키 발급 및 인증 프로세스의 복잡성
+
+- **한국 시장 특화 데이터의 필요성**:
+  - 한국 사용자에게는 **국내 시장 트렌드**가 더 실용적이고 즉시 활용 가능
+  - 한국어 데이터 소스(뉴스, 채용 공고, 검색 트렌드)의 품질과 접근성이 우수
+  - 한국 정부/공공기관의 **무료 공개 API** 활용 가능(예: KIPRIS, 기획재정부, Naver DataLab)
+
+- **데이터 수집 효율성**:
+  - 한국 중심 데이터 소스는 **RSS 피드, 웹 스크래핑, 공개 API** 등 다양한 방식으로 접근 가능
+  - 언어 일관성(한국어)으로 인한 NLP 처리 품질 향상
+  - 초기 MVP 구축 시 **빠른 프로토타이핑** 가능
+
+따라서 본 엔진은 **한국 트렌드 분석 및 예측**에 집중하며, 필요 시 선택적으로 글로벌 소스(예: GitHub, arXiv 등 접근성이 좋은 소스)를 보조적으로 활용합니다.
 
 ---
 
@@ -60,26 +81,123 @@ RTX 4070 Super (12GB) 환경에서, 이 파이프라인은 **사용자 트래픽
 #### 4.1. `Data_Collector` 노드
 
 - **역할**:
-  - 프로젝트의 `docs/DATA_STRATEGY.md`에서 정의한 **5대 선행 지표** 소스에서 전일(based on UTC/KST) 데이터를 가져옵니다.
-    - 돈의 흐름: VC/벤처투자 API, 스타트업 뉴스 RSS 등
-    - 혁신의 흐름: 특허 API(KIPRIS 등)
-    - 역량의 흐름: 검색량/강의 랭킹/도서 판매 데이터
-    - 거시/정책: 중앙은행, 정부 부처 RSS 등
+  - 한국 시장 중심의 **5대 선행 지표** 소스에서 전일(based on KST) 데이터를 가져옵니다.
+    - **돈의 흐름**: 
+      - RSS 피드: [스타트업레시피](https://startuprecipe.co.kr/feed) (스타트업 투자 뉴스), [와우테일](https://wowtale.net/feed/) (스타트업/벤처 투자 정보)
+      - 공공데이터: 공공데이터포털(data.go.kr)의 투자/경제 통계 데이터셋 (예산, R&D 투자, 벤처투자 통계 등)
+      - **기획재정부 예산안 PDF**: 연도별 예산안 PDF 다운로드 → `pdfplumber`/`PyPDF2`로 텍스트/표 추출 → R&D 투자액, 분야별 예산 배분(AI, 반도체, 바이오 등), 증가율 추출 → Pandas로 시계열 데이터 변환 → `Trend_Forecaster_TS` 입력 (연도별 R&D 투자 Velocity Score 예측)
+      - 글로벌 ETF 자금 흐름 (보조 데이터): [Yahoo Finance ETF](https://finance.yahoo.com/markets/etfs/most-active/) - `yfinance` 라이브러리 활용, 테마별 ETF(예: AI, 바이오) 거래량/자금 유입 추적, 한국 관련 ETF 티커(예: `091220.KS`) 모니터링
+      - 데이터 형태: 텍스트(투자 뉴스, 기업 정보) + 수치(투자액, 예산 배분, ETF 거래량, R&D 투자 시계열)
+    - **혁신의 흐름**: 
+      - 한국 특허 API([KIPRIS](https://plus.kipris.or.kr/portal/data/util/DBII_000000000000001/view.do)) - API 키 필요, 키워드별 특허 출원 추이, 연도별/분기별 출원 수 시계열 데이터 추출
+      - 국내 연구 논문 데이터, GitHub 오픈소스 활동(글로벌이지만 접근성 우수)
+    - **역량의 흐름**: Naver DataLab 검색량, 인프런/강의 플랫폼 랭킹, 국내 도서 판매 데이터
+    - **담론의 흐름**: 한국 IT/기술 뉴스 RSS(테크크런치, 스타트업레시피), 커뮤니티(레딧 기술 서브레딧, 접근 가능한 글로벌 소스)
+    - **거시/정책**: 기획재정부 예산 데이터, 한국은행 정책 발표, 정부 부처 RSS
   - 텍스트/수치 데이터를 **Raw 형태로 저장** (`raw_trend_logs` 또는 파일/객체 스토리지)
+  - 상세한 데이터 출처 목록은 `docs/DATA_COLLECTION_SOURCES.md` 참조
 
 - **기술 스택**:
   - Python + `requests`, `feedparser`, `BeautifulSoup` 등
+  - ETF 데이터 수집: `yfinance` 라이브러리 활용
+  - PDF 파싱: `pdfplumber` (표 추출에 유리), `PyPDF2` (대안)
+  - 특허 데이터 수집: KIPRIS OpenAPI (`requests`로 REST API 호출)
+  - 데이터 처리: `pandas` (시계열 변환), `numpy` (수치 연산)
   - 필요 시, 간단한 **리트라이/백오프 로직** 포함
 
 - **출력 형태 예시**:
   - 텍스트 데이터:
     - 기사 제목, 본문, 출처, 카테고리, 발행일시
   - 수치 데이터:
-    - 날짜별 투자액, 검색량, 특허 출원 수 등 (Time-Series 포맷)
+    - 날짜별 투자액, 검색량, 특허 출원 수, ETF 거래량/자금 흐름, 연도별 R&D 투자액/증가율, 분야별 예산 배분 등 (Time-Series 포맷)
+
+- **데이터 처리 프로세스 (예산안 PDF 예시)**:
+  1. **PDF 다운로드**: 기획재정부 예산안 PDF 다운로드 (연도별, 보통 8-9월 발표)
+  2. **PDF 파싱**: `pdfplumber`로 텍스트 및 표 추출
+     - R&D 투자액, 분야별 예산 배분(AI, 반도체, 바이오 등), 증가율 추출
+     - 표 구조 파싱 및 데이터 정제
+  3. **시계열 변환**: `pandas`로 연도별 데이터 정리
+     - 연도별 R&D 투자액 시계열 생성
+     - 분야별 예산 비중 계산
+     - 증가율 및 추세 분석
+  4. **전처리**: 정규화 및 `Trend_Forecaster_TS` 입력 형식으로 변환
+     - `[t-N, ..., t-1]` 형식의 시계열 데이터 준비
+     - Velocity Score 예측을 위한 정규화
+
+- **예산안 PDF 자동화 전략**:
+  - **완전 자동화는 권장하지 않음**: PDF 구조가 연도별로 변경될 수 있어 파싱 로직이 깨질 위험이 있음
+  - **반자동화 전략 (권장)**:
+    1. **PDF 다운로드 자동화**:
+       - 기획재정부 웹사이트 모니터링 (월 1회, 8-9월 집중 체크)
+       - 새 PDF 감지 시 자동 다운로드
+       - 다운로드 완료 알림 발송
+    2. **파싱은 검증 후 실행**:
+       - 첫 실행 시 수동 검증 필수 (PDF 구조 확인)
+       - 파싱 로직 안정화 후 자동화 전환
+       - PDF 구조 변경 감지 시 알림 및 수동 조정 필요
+    3. **데이터 검증**: 추출된 데이터의 정확성 수동 확인, 이상치 감지 시 수동 조정
+  - **스케줄링**: 
+     - 8-9월: 주 1회 체크 (예산안 발표 시기)
+     - 나머지 달: 월 1회 체크
+     - `APScheduler` 또는 `Crontab` 활용
+  - **구현 예시**:
+```python
+# 예산안 PDF 자동 수집 예시
+from apscheduler.schedulers.blocking import BlockingScheduler
+import requests
+from bs4 import BeautifulSoup
+from pathlib import Path
+import pdfplumber
+
+def check_and_download_budget_pdf(year):
+    """새 예산안 PDF 확인 및 다운로드"""
+    base_url = "https://www.moef.go.kr/nw/nes/detailNesDtaView.do"
+    response = requests.get(base_url, params={"menuNo": "4010100"})
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    # PDF 링크 찾기 (구조에 맞게 수정 필요)
+    pdf_links = soup.find_all('a', href=lambda x: x and '.pdf' in x.lower())
+    
+    for link in pdf_links:
+        if f"{year}년" in link.text:
+            pdf_url = link['href']
+            save_path = Path(f"data/budget_pdfs/budget_{year}.pdf")
+            
+            if not save_path.exists():
+                response = requests.get(pdf_url)
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
+                print(f"다운로드 완료: {save_path}")
+                # 알림 발송 (이메일, 슬랙 등)
+            
+            return save_path
+    return None
+
+# 스케줄러 설정
+scheduler = BlockingScheduler()
+# 8-9월: 매주 월요일 9시 체크
+scheduler.add_job(
+    lambda: check_and_download_budget_pdf(2026),
+    'cron', month='8-9', day_of_week='mon', hour=9
+)
+# 나머지 달: 매월 1일 9시 체크
+scheduler.add_job(
+    lambda: check_and_download_budget_pdf(2026),
+    'cron', month='1-7,10-12', day=1, hour=9
+)
+```
 
 - **주의사항**:
-  - API Rate Limit 고려
+  - **RSS 피드**: `feedparser`로 파싱 시 업데이트 주기 확인 (스타트업레시피, 와우테일은 hourly 업데이트)
+  - **공공데이터**: 파일 다운로드 기반일 경우 주기적 배치 작업으로 처리, API 제공 시 Rate Limit 고려
+  - **예산안 PDF**: 반자동화 전략 권장 (위 "예산안 PDF 자동화 전략" 참조), PDF 구조 변화에 대비한 유연한 파싱 로직 필요, 연도별 데이터 누적하여 시계열 분석 가능하도록 저장, 첫 실행 시 수동 검증 필수
+  - **ETF 데이터**: `yfinance` 라이브러리 사용 시 Yahoo Finance Rate Limit 고려, 한국 관련 ETF 티커 우선 추적, 테마별 ETF(예: AI, 바이오) 자금 흐름 모니터링
+  - **KIPRIS API**: API 키 필요 (KIPRIS Plus 포털에서 발급), 환경변수 `KIPRIS_API_KEY`에 저장, 키워드별 특허 출원 검색 시 쿼리 최적화 필요, 월간 API 호출 제한 확인
+  - API Rate Limit 고려 (한국 공공 API는 상대적으로 여유 있으나, 일부 소스는 제한적)
   - 동일 데이터 중복 수집 방지(날짜+소스 기준 dedup)
+  - 한국어 인코딩 처리 (UTF-8 일관성 유지)
+  - 웹 스크래핑 시 robots.txt 및 이용약관 준수
 
 ---
 
@@ -222,8 +340,11 @@ Data_Collector의 결과는 **텍스트 트랙(A)**과 **수치 트랙(B)**으�
 ### 9. 다음 단계 제안
 
 1. **최소 기능 파이프라인(MVP) 정의**
-   - 가장 수집·파싱이 쉬운 소스 1개 선택 (예: 특정 뉴스 RSS 또는 Google Trends 한 카테고리)
+   - **돈의 흐름** 데이터 소스 우선 구현:
+     - RSS 피드: [스타트업레시피](https://startuprecipe.co.kr/feed), [와우테일](https://wowtale.net/feed/) (feedparser로 간단히 파싱 가능)
+     - 공공데이터: 공공데이터포털 투자/경제 통계 데이터셋 (파일 다운로드 또는 API 활용)
    - `Data_Collector → Issue_Analyst_NLP → DB_Writer`의 3단계 미니 파이프라인부터 구현
+   - 한국어 텍스트 처리에 최적화된 NLP 모델 활용
 
 2. **스키마 정교화**
    - `EXTERNAL_TREND_DATA` 및 관련 테이블의 컬럼/인덱스 설계 보완 (`docs/DB_SCHEMA.md`와 연동)
@@ -234,4 +355,7 @@ Data_Collector의 결과는 **텍스트 트랙(A)**과 **수치 트랙(B)**으�
 
 이 문서는 `trend_analysis` 도메인의 구현 기준점이 되는 상위 설계서로,  
 구현이 진행되면서 `agent/`, `service/`, `model/` 구조와 함께 지속적으로 업데이트하는 것을 권장합니다.
+
+**관련 문서**:
+- `docs/DATA_COLLECTION_SOURCES.md`: 한국 트렌드 분석을 위한 구체적인 데이터 출처 및 수집 방법 가이드
 
