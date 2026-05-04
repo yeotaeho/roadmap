@@ -33,7 +33,13 @@ const refreshAccessToken = async (): Promise<string | null> => {
       getStore().getState().logout();
       return null;
     }
-    
+
+    // 네트워크 단절(백엔드 미실행/주소 불일치/방화벽 등): 응답 자체가 없으면 AxiosError가 발생
+    // 개발 환경에서는 흔한 케이스이므로 과도한 로그/로그아웃을 피한다.
+    if (!error?.response) {
+      return null;
+    }
+
     // 그 외의 에러는 로그 출력
     console.error('Silent refresh 실패:', error);
     getStore().getState().logout();
@@ -58,7 +64,9 @@ export const scheduleSilentRefresh = (token: string | null): void => {
   
   // 이미 만료되었으면 즉시 리프레시
   if (timeRemaining === 0) {
-    refreshAccessToken();
+    void refreshAccessToken().catch(() => {
+      // handled in refreshAccessToken
+    });
     return;
   }
 

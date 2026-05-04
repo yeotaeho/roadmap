@@ -1,0 +1,73 @@
+# EC2 일괄 설치용 통합 의존성
+# 병합 출처: domain/v1/esg_data, disclosure, data_integration, ghg_calculation, ifrs_agent,
+#           domain/shared/auth 의 requirement.txt (합집합, 버전 충돌 시 상위 요구 반영)
+
+# Core
+langgraph>=0.0.40
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-groq>=0.0.3
+langchain-openai>=0.2.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+
+# MCP (Model Context Protocol) — MCP 1.26+ 요구: anyio>=4.5
+anyio>=4.5
+mcp>=0.1.0
+fastmcp>=0.1.0
+duckduckgo-search>=4.0.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+pgvector>=0.2.0
+
+# LLM
+groq>=0.4.0
+openai>=1.0.0
+transformers>=4.36.0
+langchain-google-genai>=0.0.5
+google-genai>=0.1.0
+google-generativeai>=0.3.0
+
+# Embedding
+sentence-transformers>=2.2.0
+FlagEmbedding>=1.2.0
+
+# Vector DB
+chromadb>=0.4.0
+
+# PDF Processing
+PyMuPDF>=1.23.0
+docling>=2.0.0
+llama-parse>=0.4.0
+unstructured[pdf]>=0.10.0
+
+# Image Processing
+Pillow>=10.0.0
+torch>=2.0.0
+
+# Crawling / HTTP
+playwright>=1.40.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+httpx>=0.27.0
+aiohttp>=3.9.0
+requests>=2.31.0
+
+# Data Processing
+numpy>=1.24.0
+
+# API Server (anyio 4 호환: starlette 0.31+, fastapi 0.115+)
+starlette>=0.31
+fastapi>=0.115
+uvicorn[standard]>=0.27.0
+
+# Object storage (SR_IMAGE_STORAGE=s3 등)
+boto3>=1.34.0
+
+# Utils
+python-dotenv>=1.0.0
+loguru>=0.7.0

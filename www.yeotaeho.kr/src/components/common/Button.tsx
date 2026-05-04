@@ -22,7 +22,7 @@ export const Button: React.FC<ButtonProps> = ({
   const baseStyles = 'font-medium transition rounded-full';
   
   const variantStyles = {
-    primary: 'bg-red-600 text-white hover:bg-red-700',
+    primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
     secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
     outline: 'border border-gray-300 text-gray-700 hover:bg-gray-100',
   };
