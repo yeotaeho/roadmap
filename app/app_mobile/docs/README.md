@@ -5,5 +5,6 @@
 | 문서 | 설명 |
 |------|------|
 | [구현_상세.md](./구현_상세.md) | 프로젝트 생성, 패키지, **Monorepo 루트 `.env`**, **TokenStorage↔Dio**, `flutter_markdown_plus`, 라우팅, 테마, 테스트 등 **한 파일에 통합** |
+| [dashboard-insight-tabs.md](./dashboard-insight-tabs.md) | **인사이트 대시보드 L2 4탭**(펄스·블루오션·싱크·찬스) — 색상·레이아웃·목 데이터·라우트·위젯 구조 |
 
 빠른 참고만 필요하면 `구현_상세.md`의 **요약** 절과 **파일·경로 매핑** 표를 보면 됩니다.

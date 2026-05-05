@@ -41,6 +41,9 @@ importers:
       recharts:
         specifier: ^3.8.1
         version: 3.8.1(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react-is@16.13.1)(react@19.2.3)(redux@5.0.1)
+      styled-jsx:
+        specifier: 5.1.6
+        version: 5.1.6(@babel/core@7.28.5)(react@19.2.3)
       superjson:
         specifier: ^2.2.5
         version: 2.2.5

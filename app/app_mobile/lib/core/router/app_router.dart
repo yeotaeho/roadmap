@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/coach/presentation/coach_page.dart';
 import '../../features/consult/presentation/consult_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
+import '../../features/dashboard/presentation/detail/chance_detail_page.dart';
+import '../../features/dashboard/presentation/detail/gap_issue_detail_page.dart';
+import '../../features/dashboard/presentation/detail/sector_detail_page.dart';
 import '../../features/roadmap/presentation/roadmap_page.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -27,6 +30,29 @@ final GoRouter appRouter = GoRouter(
               pageBuilder: (context, state) => const NoTransitionPage<void>(
                 child: DashboardPage(),
               ),
+              routes: [
+                GoRoute(
+                  path: 'pulse/sectors/:slug',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (context, state) => SectorDetailPage(
+                    slug: state.pathParameters['slug']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'gap/issues/:issueId',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (context, state) => GapIssueDetailPage(
+                    issueId: state.pathParameters['issueId']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'chance/opportunities/:opportunityId',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (context, state) => ChanceDetailPage(
+                    opportunityId: state.pathParameters['opportunityId']!,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

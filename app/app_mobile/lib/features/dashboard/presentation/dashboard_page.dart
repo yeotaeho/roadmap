@@ -1,18 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// 인사이트 대시보드 (실시간 펄스·블루오션·싱크·찬스 L2 탭은 추후 세분화).
-class DashboardPage extends StatelessWidget {
+import 'tabs/chance_tab.dart';
+import 'tabs/gap_tab.dart';
+import 'tabs/pulse_tab.dart';
+import 'tabs/sync_tab.dart';
+
+/// 인사이트 대시보드 — L2 4탭(설계서: pulse / gap / sync / chance).
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('인사이트 대시보드')),
-      body: const Center(
-        child: Text(
-          '실시간 펄스 · 블루오션 · 싱크로율 · 다이렉트 찬스',
-          textAlign: TextAlign.center,
+      appBar: AppBar(
+        title: const Text('인사이트 대시보드'),
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: '펄스'),
+            Tab(text: '블루오션'),
+            Tab(text: '싱크'),
+            Tab(text: '찬스'),
+          ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          PulseTab(),
+          GapTab(),
+          SyncTab(),
+          ChanceTab(),
+        ],
       ),
     );
   }
