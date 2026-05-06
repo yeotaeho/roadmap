@@ -1,146 +1,130 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
-from typing import Optional, Dict, Any
 import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Domain imports
-from domain.oauth.base.database import get_db
-from domain.oauth.service.user_service import UserService
-from domain.oauth.util.jwt import JWTService
+from core.database import get_db
+from domain.auth.hub.security.services.jwt import JWTService
+from domain.auth.hub.services.auth_profile_service import AuthProfileService
+from domain.auth.hub.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 
-# Dependency: Services
-async def get_user_services(
-    db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
-    """사용자 서비스 의존성 주입"""
-    user_service = UserService(db)
-    jwt_service = JWTService()
-    
+class SyncProfileUpsertRequest(BaseModel):
+    targetJob: Optional[str] = None
+    interestKeywords: List[str] = Field(default_factory=list)
+
+
+async def get_user_services(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     return {
-        "user_service": user_service,
-        "jwt_service": jwt_service
+        "user_service": UserService(db),
+        "auth_profile_service": AuthProfileService(db),
+        "jwt_service": JWTService(),
+        "db": db,
     }
 
 
-# Dependency: Current User (JWT 토큰에서 사용자 ID 추출)
 async def get_current_user_id(
     authorization: Optional[str] = Header(None),
-    services: Dict[str, Any] = Depends(get_user_services)
-) -> int:
-    """JWT 토큰에서 사용자 ID 추출"""
+    services: Dict[str, Any] = Depends(get_user_services),
+) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="인증 토큰이 없습니다.")
-    
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="잘못된 인증 토큰 형식입니다.")
-    
-    token = authorization[7:]  # "Bearer " 제거
-    jwt_service = services["jwt_service"]
-    
-    # 토큰 검증 및 사용자 ID 추출
+
+    token = authorization[7:]
+    jwt_service: JWTService = services["jwt_service"]
     user_id = jwt_service.extract_user_id(token)
-    
     if not user_id:
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
-    
-    # 토큰 만료 확인
     if jwt_service.is_token_expired(token):
         raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
-    
     return user_id
 
 
-# ========== User Info ==========
 @router.get("/me")
 async def get_current_user(
-    user_id: int = Depends(get_current_user_id),
-    services: Dict[str, Any] = Depends(get_user_services)
+    user_id: str = Depends(get_current_user_id),
+    services: Dict[str, Any] = Depends(get_user_services),
 ):
-    """현재 로그인한 사용자 정보 조회"""
-    try:
-        user_service = services["user_service"]
-        
-        # 사용자 정보 조회
-        user = await user_service.find_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-        
-        logger.info(f"사용자 정보 조회 성공: userId={user_id}")
-        
-        return {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "nickname": user.nickname,
-            "profileImage": user.profile_image,
-            "provider": user.provider
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"사용자 정보 조회 실패: userId={user_id}, error={e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="사용자 정보 조회 중 오류가 발생했습니다.")
+    user_service: UserService = services["user_service"]
+    user = await user_service.find_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "nickname": user.nickname,
+        "profileImage": user.profile_image_url,
+        "provider": user.auth_provider,
+        "isActive": user.is_active,
+    }
 
 
 @router.put("/me")
 async def update_current_user(
     name: Optional[str] = None,
     profileImage: Optional[str] = None,
-    user_id: int = Depends(get_current_user_id),
-    services: Dict[str, Any] = Depends(get_user_services)
+    user_id: str = Depends(get_current_user_id),
+    services: Dict[str, Any] = Depends(get_user_services),
 ):
-    """현재 로그인한 사용자 프로필 정보 업데이트"""
+    auth_profile_service: AuthProfileService = services["auth_profile_service"]
     try:
-        logger.info(f"[백엔드 API] PUT /api/user/me 요청 수신 - userId={user_id}")
-        logger.info(f"[백엔드 API] 요청 파라미터 - name={name}, profileImage={'있음' if profileImage else '없음'}")
-        
-        user_service = services["user_service"]
-        
-        # 사용자 정보 조회
-        logger.info(f"[백엔드 API] DB에서 사용자 정보 조회 시작 - userId={user_id}")
-        user = await user_service.find_by_id(user_id)
-        
-        if not user:
-            logger.error(f"[백엔드 API] 사용자를 찾을 수 없음 - userId={user_id}")
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-        
-        logger.info(f"[백엔드 API] 사용자 정보 조회 완료 - userId={user_id}, 현재 name={user.name}, 현재 nickname={user.nickname}")
-        
-        # 정보 업데이트
-        # name 파라미터는 nickname 컬럼에 저장 (name은 OAuth 초기 정보로 유지)
-        if name is not None:
-            logger.info(f"[백엔드 API] nickname 컬럼 업데이트 - 기존: {user.nickname} → 새로운: {name}")
-            user.nickname = name
-        if profileImage is not None:
-            logger.info(f"[백엔드 API] profile_image 컬럼 업데이트 - 기존: {user.profile_image} → 새로운: {profileImage}")
-            user.profile_image = profileImage
-        
-        # 저장
-        logger.info(f"[백엔드 API] DB 저장 시작 - userId={user_id}")
-        updated_user = await user_service.save(user)
-        logger.info(f"[백엔드 API] DB 저장 완료 - userId={user_id}, 저장된 nickname={updated_user.nickname}, 저장된 name={updated_user.name}")
-        
-        logger.info(f"[백엔드 API] 사용자 정보 업데이트 성공: userId={user_id}")
-        
-        return {
-            "id": updated_user.id,
-            "name": updated_user.name,
-            "email": updated_user.email,
-            "nickname": updated_user.nickname,
-            "profileImage": updated_user.profile_image,
-            "provider": updated_user.provider
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[백엔드 API] 사용자 정보 업데이트 실패: userId={user_id}, error={e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="사용자 정보 업데이트 중 오류가 발생했습니다.")
+        updated_user = await auth_profile_service.update_basic_profile(
+            user_id,
+            nickname=name,
+            profile_image_url=profileImage,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    return {
+        "id": str(updated_user.id),
+        "email": updated_user.email,
+        "nickname": updated_user.nickname,
+        "profileImage": updated_user.profile_image_url,
+        "provider": updated_user.auth_provider,
+        "isActive": updated_user.is_active,
+    }
 
+
+@router.get("/sync-profile")
+async def get_sync_profile(
+    user_id: str = Depends(get_current_user_id),
+    services: Dict[str, Any] = Depends(get_user_services),
+):
+    auth_profile_service: AuthProfileService = services["auth_profile_service"]
+    profile = await auth_profile_service.get_sync_profile(user_id)
+    if not profile:
+        return {"userId": user_id, "targetJob": None, "interestKeywords": []}
+    return {
+        "userId": str(profile.user_id),
+        "targetJob": profile.target_job,
+        "interestKeywords": profile.interest_keywords or [],
+    }
+
+
+@router.put("/sync-profile")
+async def upsert_sync_profile(
+    request: SyncProfileUpsertRequest,
+    user_id: str = Depends(get_current_user_id),
+    services: Dict[str, Any] = Depends(get_user_services),
+):
+    auth_profile_service: AuthProfileService = services["auth_profile_service"]
+    profile = await auth_profile_service.upsert_sync_profile(
+        user_id,
+        target_job=request.targetJob,
+        interest_keywords=request.interestKeywords or [],
+    )
+
+    return {
+        "userId": str(profile.user_id),
+        "targetJob": profile.target_job,
+        "interestKeywords": profile.interest_keywords or [],
+    }

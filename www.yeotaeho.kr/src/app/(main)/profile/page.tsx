@@ -19,6 +19,8 @@ import { getUserName, getUserEmail, getUserId } from "@/utils/tokenStorage";
 import {
   getCurrentUser,
   UserInfo,
+  getSyncProfile,
+  upsertSyncProfile,
   updateUserProfile,
   uploadProfileImage,
 } from "@/lib/api/user";
@@ -37,6 +39,9 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [targetJob, setTargetJob] = useState<string>("");
+  const [interestKeywords, setInterestKeywords] = useState<string[]>([]);
+  const [newKeyword, setNewKeyword] = useState<string>("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -58,6 +63,12 @@ export default function ProfilePage() {
           setUserName(getUserName(token));
           setUserEmail(getUserEmail(token));
           setUserId(getUserId(token));
+        }
+
+        const syncProfile = await getSyncProfile();
+        if (syncProfile) {
+          setTargetJob(syncProfile.targetJob || "");
+          setInterestKeywords(syncProfile.interestKeywords || []);
         }
       } catch (error) {
         console.error("사용자 정보 조회 실패:", error);
@@ -135,10 +146,17 @@ export default function ProfilePage() {
         profileImage: imageUrl,
       };
       const updatedUser = await updateUserProfile(updateData);
-      if (updatedUser) {
+      const updatedSyncProfile = await upsertSyncProfile({
+        targetJob: targetJob.trim() || null,
+        interestKeywords,
+      });
+
+      if (updatedUser && updatedSyncProfile) {
         const displayName = updatedUser.nickname || updatedUser.name;
         setUserName(displayName || null);
         setProfileImage(updatedUser.profileImage || null);
+        setTargetJob(updatedSyncProfile.targetJob || "");
+        setInterestKeywords(updatedSyncProfile.interestKeywords || []);
         setSelectedFile(null);
         setPreviewUrl(null);
         setIsEditing(false);
@@ -152,6 +170,17 @@ export default function ProfilePage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleAddKeyword = () => {
+    const value = newKeyword.trim();
+    if (!value || interestKeywords.includes(value)) return;
+    setInterestKeywords((prev) => [...prev, value]);
+    setNewKeyword("");
+  };
+
+  const handleRemoveKeyword = (keyword: string) => {
+    setInterestKeywords((prev) => prev.filter((item) => item !== keyword));
   };
 
   const handleLogout = async () => {
@@ -326,6 +355,77 @@ export default function ProfilePage() {
           </div>
 
           <div className="pt-4 space-y-3">
+            <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+              <p className="text-sm text-gray-500 mb-1">목표 직무</p>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={targetJob}
+                  onChange={(e) => setTargetJob(e.target.value)}
+                  placeholder="예) 백엔드 엔지니어"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              ) : (
+                <p className="text-gray-800 font-medium">
+                  {targetJob || "아직 설정되지 않았습니다."}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+              <p className="text-sm text-gray-500 mb-2">관심 키워드</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {interestKeywords.length > 0 ? (
+                  interestKeywords.map((keyword) => (
+                    <span
+                      key={keyword}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white border border-gray-300 text-sm text-gray-700"
+                    >
+                      {keyword}
+                      {isEditing && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKeyword(keyword)}
+                          className="text-gray-500 hover:text-red-600"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    아직 등록된 키워드가 없습니다.
+                  </p>
+                )}
+              </div>
+
+              {isEditing && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newKeyword}
+                    onChange={(e) => setNewKeyword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddKeyword();
+                      }
+                    }}
+                    placeholder="키워드 추가"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddKeyword}
+                    className="px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+                  >
+                    추가
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"

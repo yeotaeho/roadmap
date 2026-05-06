@@ -1,34 +1,65 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Cookie, Path, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import httpx
 import redis.asyncio as redis
 import logging
+import json
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Domain imports
-from domain.oauth.config.settings import settings
-from domain.oauth.base.database import get_db
-from domain.oauth.service.google_oauth_service import GoogleOAuthService
-from domain.oauth.service.kakao_oauth_service import KakaoOAuthService
-from domain.oauth.service.naver_oauth_service import NaverOAuthService
-from domain.oauth.service.user_service import UserService
-from domain.oauth.service.refresh_token_service import RefreshTokenService
-from domain.oauth.util.jwt import JWTService
-from domain.oauth.util.signup_token import SignupTokenService
-from domain.oauth.util.state import OAuthStateService
-from domain.oauth.util.pkce import PKCEService
-from domain.oauth.model.user import User
+from core.config.settings import settings
+from core.database import get_db
+from domain.auth.hub.services.google_oauth_service import GoogleOAuthService
+from domain.auth.hub.services.kakao_oauth_service import KakaoOAuthService
+from domain.auth.hub.services.naver_oauth_service import NaverOAuthService
+from domain.auth.hub.services.user_service import UserService
+from domain.auth.hub.services.refresh_token_service import RefreshTokenService
+from domain.auth.hub.services.auth_profile_service import AuthProfileService
+from domain.auth.hub.security.services.jwt import JWTService
+from domain.auth.hub.security.services.signup_token import SignupTokenService
+from domain.auth.spokes.infra.oauth.state import OAuthStateService
+from domain.auth.spokes.infra.oauth.pkce import PKCEService
+from domain.auth.models.bases.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
+MOBILE_BRIDGE_PREFIX = "oauth:mobile:bridge:"
+MOBILE_BRIDGE_TTL_SECONDS = 120
 
 # Request Models
 class OAuthCallbackRequest(BaseModel):
     code: str
     state: Optional[str] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refreshToken: Optional[str] = None
+
+
+class MobileBridgeExchangeRequest(BaseModel):
+    bridgeToken: str
+
+
+class GoogleNativeLoginRequest(BaseModel):
+    idToken: str
+    deviceId: Optional[str] = None
+    deviceName: Optional[str] = None
+
+
+class KakaoNativeLoginRequest(BaseModel):
+    accessToken: str
+    deviceId: Optional[str] = None
+    deviceName: Optional[str] = None
+
+
+class NaverNativeLoginRequest(BaseModel):
+    accessToken: str
+    deviceId: Optional[str] = None
+    deviceName: Optional[str] = None
 
 
 class SignupRequest(BaseModel):
@@ -42,9 +73,11 @@ class UpdateProfileRequest(BaseModel):
 
 
 class UpdateSignupInfoRequest(BaseModel):
-    userId: int
+    userId: str
     age: Optional[int] = None
     interests: Optional[list] = None
+    targetJob: Optional[str] = None
+    interestKeywords: Optional[list[str]] = None
 
 
 # Dependency: Redis Client
@@ -78,6 +111,7 @@ async def get_services(
     signup_token_service = SignupTokenService()
     refresh_token_service = RefreshTokenService(redis_client)
     user_service = UserService(db)
+    auth_profile_service = AuthProfileService(db)
     
     google_service = GoogleOAuthService(state_service, pkce_service, http_client)
     kakao_service = KakaoOAuthService(state_service, pkce_service, http_client)
@@ -88,6 +122,7 @@ async def get_services(
         "kakao_service": kakao_service,
         "naver_service": naver_service,
         "user_service": user_service,
+        "auth_profile_service": auth_profile_service,
         "refresh_token_service": refresh_token_service,
         "jwt_service": jwt_service,
         "signup_token_service": signup_token_service
@@ -118,26 +153,28 @@ async def generate_tokens_and_set_cookie(
     name: Optional[str],
     jwt_service: JWTService,
     refresh_token_service: RefreshTokenService,
-    response: Response
+    response: Response,
+    set_cookie: bool = True,
 ) -> Dict[str, str]:
     """JWT 토큰 생성 및 쿠키 설정 헬퍼 함수"""
     # JWT 토큰 생성
-    access_token = jwt_service.generate_token(user.id, provider, email, name, user.age)
-    refresh_token = jwt_service.generate_refresh_token(user.id, provider, email, name, user.age)
+    access_token = jwt_service.generate_token(str(user.id), provider, email, name)
+    refresh_token = jwt_service.generate_refresh_token(str(user.id), provider, email, name)
     
     # 리프레시 토큰 저장
-    await refresh_token_service.save_refresh_token(user.id, refresh_token)
+    await refresh_token_service.save_refresh_token(str(user.id), refresh_token)
     
     # 쿠키 설정
-    response.set_cookie(
-        key="refreshToken",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=settings.jwt_refresh_expiration // 1000
-    )
+    if set_cookie:
+        response.set_cookie(
+            key="refreshToken",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            path="/",
+            max_age=settings.jwt_refresh_expiration // 1000
+        )
     
     return {
         "accessToken": access_token,
@@ -145,11 +182,29 @@ async def generate_tokens_and_set_cookie(
     }
 
 
+async def _create_mobile_bridge_token(
+    refresh_token_service: RefreshTokenService,
+    payload: Dict[str, Any],
+) -> str:
+    bridge_token = str(uuid.uuid4())
+    key = f"{MOBILE_BRIDGE_PREFIX}{bridge_token}"
+    await refresh_token_service.redis.setex(
+        key,
+        MOBILE_BRIDGE_TTL_SECONDS,
+        json.dumps(payload, ensure_ascii=False),
+    )
+    return bridge_token
+
+
+def _build_mobile_app_redirect(bridge_token: str) -> str:
+    return f"roadmapapp://auth-callback?bridgeToken={bridge_token}"
+
+
 # Dependency: Current User (JWT 토큰에서 사용자 ID 추출)
 async def get_current_user_id(
     authorization: Optional[str] = Header(None),
     services: Dict[str, Any] = Depends(get_services)
-) -> int:
+) -> str:
     """JWT 토큰에서 사용자 ID 추출"""
     if not authorization:
         raise HTTPException(status_code=401, detail="인증 토큰이 없습니다.")
@@ -177,11 +232,17 @@ async def get_current_user_id(
 @router.get("/google/login")
 async def get_google_login_url(
     mode: Optional[str] = None,
+    client: Optional[str] = None,
+    redirectUri: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """구글 로그인 URL 요청 (State 및 PKCE 포함)"""
     google_service = services["google_service"]
-    auth_data = await google_service.get_authorization_url(mode=mode)
+    auth_data = await google_service.get_authorization_url(
+        mode=mode,
+        client=client,
+        redirect_uri=redirectUri,
+    )
     
     return {
         "authUrl": auth_data["authUrl"],
@@ -194,6 +255,7 @@ async def get_google_login_url(
 async def google_callback(
     request: OAuthCallbackRequest,
     response: Response,
+    client: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """구글 로그인 콜백 처리"""
@@ -212,6 +274,8 @@ async def google_callback(
         
         # mode 정보 추출 (회원가입 모드인지 확인)
         mode = user_info.get("_mode")
+        client_type = (client or user_info.get("_client") or "").lower()
+        is_mobile = client_type == "mobile"
         
         # 사용자 정보 추출
         provider_id = user_info.get("id")
@@ -242,8 +306,7 @@ async def google_callback(
                     email=email,
                     name=name,
                     nickname=None,
-                    profile_image=profile_image,
-                    age=None
+                    profile_image=profile_image
                 )
                 
                 logger.info(f"구글 회원가입 완료: userId={user.id}")
@@ -287,9 +350,17 @@ async def google_callback(
         
         # JWT 토큰 생성 및 쿠키 설정
         tokens = await generate_tokens_and_set_cookie(
-            user, "google", email, name, jwt_service, refresh_token_service, response
+            user,
+            "google",
+            email,
+            name,
+            jwt_service,
+            refresh_token_service,
+            response,
+            set_cookie=not is_mobile,
         )
         access_token = tokens["accessToken"]
+        refresh_token = tokens["refreshToken"]
         
         logger.info(f"구글 로그인 성공: userId={user.id}")
         return {
@@ -302,6 +373,7 @@ async def google_callback(
             "name": name,
             "profileImage": profile_image,
             "accessToken": access_token,
+            "refreshToken": refresh_token if is_mobile else None,
             "tokenType": "Bearer"
         }
         
@@ -315,15 +387,178 @@ async def google_callback(
         )
 
 
+@router.get("/{provider}/mobile/callback")
+async def mobile_oauth_callback(
+    provider: str = Path(..., description="google | kakao | naver"),
+    code: str = "",
+    state: str = "",
+    services: Dict[str, Any] = Depends(get_services),
+):
+    """모바일 전용 OAuth 콜백: 백엔드에서 코드 교환 후 앱 딥링크로 브릿지 토큰 전달."""
+    try:
+        provider_key = provider.lower().strip()
+        if provider_key not in {"google", "kakao", "naver"}:
+            raise HTTPException(status_code=400, detail="지원하지 않는 provider입니다.")
+        if not code:
+            raise HTTPException(status_code=400, detail="OAuth code가 누락되었습니다.")
+        if not state:
+            raise HTTPException(status_code=400, detail="OAuth state가 누락되었습니다.")
+
+        provider_service = services[f"{provider_key}_service"]
+        user_service = services["user_service"]
+        jwt_service = services["jwt_service"]
+        signup_token_service = services["signup_token_service"]
+        refresh_token_service = services["refresh_token_service"]
+
+        user_info = await provider_service.process_oauth(code, state)
+        mode = user_info.get("_mode")
+
+        if provider_key == "google":
+            provider_id = str(user_info.get("id") or "")
+            email = user_info.get("email")
+            name = user_info.get("name")
+            nickname = None
+            profile_image = user_info.get("picture")
+        elif provider_key == "kakao":
+            provider_id = str(user_info.get("id") or "")
+            kakao_account = user_info.get("kakao_account", {})
+            email = kakao_account.get("email")
+            profile = kakao_account.get("profile", {})
+            nickname = profile.get("nickname")
+            name = None
+            profile_image = profile.get("profile_image_url")
+        else:
+            response_data = user_info.get("response", {})
+            provider_id = str(response_data.get("id") or "")
+            email = response_data.get("email")
+            name = response_data.get("name")
+            nickname = response_data.get("nickname")
+            profile_image = response_data.get("profile_image")
+
+        if not provider_id:
+            raise HTTPException(status_code=400, detail="OAuth 사용자 ID를 가져오지 못했습니다.")
+
+        existing_user = await user_service.find_user(provider_key, provider_id)
+
+        payload: Dict[str, Any]
+        if not existing_user:
+            if mode == "signup":
+                user = await user_service.find_or_create_user(
+                    provider=provider_key,
+                    provider_id=provider_id,
+                    email=email,
+                    name=name,
+                    nickname=nickname,
+                    profile_image=profile_image,
+                )
+                payload = {
+                    "success": True,
+                    "isNewUser": False,
+                    "isSignupComplete": True,
+                    "message": "회원가입이 완료되었습니다. 로그인해주세요.",
+                    "userId": str(user.id),
+                }
+            else:
+                signup_token = signup_token_service.generate_signup_token(
+                    provider_key,
+                    provider_id,
+                    email,
+                    name,
+                    nickname,
+                    profile_image,
+                )
+                payload = {
+                    "success": False,
+                    "isNewUser": True,
+                    "message": "회원가입이 필요합니다.",
+                    "signupToken": signup_token,
+                }
+        else:
+            if mode == "signup":
+                raise HTTPException(
+                    status_code=400,
+                    detail="이미 가입된 사용자입니다. 로그인을 진행해주세요.",
+                )
+
+            user = existing_user
+            user.email = email
+            if name is not None:
+                user.name = name
+            if nickname is not None:
+                user.nickname = nickname
+            if profile_image is not None:
+                user.profile_image_url = profile_image
+            user = await user_service.save(user)
+
+            tokens = await generate_tokens_and_set_cookie(
+                user,
+                provider_key,
+                email,
+                name,
+                jwt_service,
+                refresh_token_service,
+                Response(),
+                set_cookie=False,
+            )
+            payload = {
+                "success": True,
+                "isNewUser": False,
+                "message": f"{provider_key} 로그인 성공",
+                "userId": str(user.id),
+                "accessToken": tokens["accessToken"],
+                "refreshToken": tokens["refreshToken"],
+                "tokenType": "Bearer",
+            }
+
+        bridge_token = await _create_mobile_bridge_token(refresh_token_service, payload)
+        return RedirectResponse(
+            url=_build_mobile_app_redirect(bridge_token),
+            status_code=307,
+        )
+    except HTTPException as exc:
+        bridge_token = await _create_mobile_bridge_token(
+            services["refresh_token_service"],
+            {
+                "success": False,
+                "isNewUser": False,
+                "message": exc.detail,
+            },
+        )
+        return RedirectResponse(
+            url=_build_mobile_app_redirect(bridge_token),
+            status_code=307,
+        )
+    except Exception as e:
+        logger.error("모바일 OAuth 콜백 처리 실패: %s", e, exc_info=True)
+        bridge_token = await _create_mobile_bridge_token(
+            services["refresh_token_service"],
+            {
+                "success": False,
+                "isNewUser": False,
+                "message": "모바일 OAuth 처리 중 오류가 발생했습니다.",
+            },
+        )
+        return RedirectResponse(
+            url=_build_mobile_app_redirect(bridge_token),
+            status_code=307,
+        )
+
+
 # ========== Kakao OAuth ==========
 @router.get("/kakao/login")
 async def get_kakao_login_url(
     mode: Optional[str] = None,
+    client: Optional[str] = None,
+    redirectUri: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """카카오 로그인 URL 요청 (State 및 PKCE 포함)"""
     kakao_service = services["kakao_service"]
-    auth_data = await kakao_service.get_authorization_url(mode=mode)
+    auth_data = await kakao_service.get_authorization_url(
+        mode=mode,
+        client=client,
+        redirect_uri=redirectUri,
+    )
     
     return {
         "authUrl": auth_data["authUrl"],
@@ -336,6 +571,7 @@ async def get_kakao_login_url(
 async def kakao_callback(
     request: OAuthCallbackRequest,
     response: Response,
+    client: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """카카오 로그인 콜백 처리"""
@@ -354,6 +590,8 @@ async def kakao_callback(
         
         # mode 정보 추출 (회원가입 모드인지 확인)
         mode = user_info.get("_mode")
+        client_type = (client or user_info.get("_client") or "").lower()
+        is_mobile = client_type == "mobile"
         
         # 사용자 정보 추출
         provider_id = user_info.get("id")
@@ -386,8 +624,7 @@ async def kakao_callback(
                     email=email,
                     name=None,
                     nickname=nickname,
-                    profile_image=profile_image,
-                    age=None
+                    profile_image=profile_image
                 )
                 
                 logger.info(f"카카오 회원가입 완료: userId={user.id}")
@@ -431,9 +668,17 @@ async def kakao_callback(
         
         # JWT 토큰 생성 및 쿠키 설정
         tokens = await generate_tokens_and_set_cookie(
-            user, "kakao", email, user.name, jwt_service, refresh_token_service, response
+            user,
+            "kakao",
+            email,
+            user.name,
+            jwt_service,
+            refresh_token_service,
+            response,
+            set_cookie=not is_mobile,
         )
         access_token = tokens["accessToken"]
+        refresh_token = tokens["refreshToken"]
         
         logger.info(f"카카오 로그인 성공: userId={user.id}")
         return {
@@ -446,6 +691,7 @@ async def kakao_callback(
             "nickname": nickname,
             "profileImage": profile_image,
             "accessToken": access_token,
+            "refreshToken": refresh_token if is_mobile else None,
             "tokenType": "Bearer"
         }
         
@@ -463,11 +709,17 @@ async def kakao_callback(
 @router.get("/naver/login")
 async def get_naver_login_url(
     mode: Optional[str] = None,
+    client: Optional[str] = None,
+    redirectUri: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """네이버 로그인 URL 요청 (State 검증 지원)"""
     naver_service = services["naver_service"]
-    auth_data = await naver_service.get_authorization_url(mode=mode)
+    auth_data = await naver_service.get_authorization_url(
+        mode=mode,
+        client=client,
+        redirect_uri=redirectUri,
+    )
     
     return {
         "authUrl": auth_data["authUrl"],
@@ -480,6 +732,7 @@ async def get_naver_login_url(
 async def naver_callback(
     request: OAuthCallbackRequest,
     response: Response,
+    client: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """네이버 로그인 콜백 처리"""
@@ -498,6 +751,8 @@ async def naver_callback(
         
         # mode 정보 추출 (회원가입 모드인지 확인)
         mode = user_info.get("_mode")
+        client_type = (client or user_info.get("_client") or "").lower()
+        is_mobile = client_type == "mobile"
         
         # 사용자 정보 추출
         response_data = user_info.get("response", {})
@@ -530,8 +785,7 @@ async def naver_callback(
                     email=email,
                     name=name,
                     nickname=nickname,
-                    profile_image=profile_image,
-                    age=None
+                    profile_image=profile_image
                 )
                 
                 logger.info(f"네이버 회원가입 완료: userId={user.id}")
@@ -577,9 +831,17 @@ async def naver_callback(
         
         # JWT 토큰 생성 및 쿠키 설정
         tokens = await generate_tokens_and_set_cookie(
-            user, "naver", email, name, jwt_service, refresh_token_service, response
+            user,
+            "naver",
+            email,
+            name,
+            jwt_service,
+            refresh_token_service,
+            response,
+            set_cookie=not is_mobile,
         )
         access_token = tokens["accessToken"]
+        refresh_token = tokens["refreshToken"]
         
         logger.info(f"네이버 로그인 성공: userId={user.id}")
         return {
@@ -593,6 +855,7 @@ async def naver_callback(
             "name": name,
             "profileImage": profile_image,
             "accessToken": access_token,
+            "refreshToken": refresh_token if is_mobile else None,
             "tokenType": "Bearer"
         }
         
@@ -611,6 +874,7 @@ async def naver_callback(
 async def oauth_signup(
     request: SignupRequest,
     response: Response,
+    client: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """OAuth 회원가입 처리 (토큰 기반)"""
@@ -636,7 +900,6 @@ async def oauth_signup(
         name = oauth_info["name"]
         nickname = oauth_info["nickname"]
         profile_image = oauth_info["profileImage"]
-        age = request.age or oauth_info.get("age")
         
         # 사용자 조회 (이미 존재하는지 확인)
         existing_user = await user_service.find_user(provider, provider_id)
@@ -655,15 +918,25 @@ async def oauth_signup(
             email=email,
             name=name,
             nickname=nickname,
-            profile_image=profile_image,
-            age=age
+            profile_image=profile_image
         )
         
+        client_type = (client or "").lower()
+        is_mobile = client_type == "mobile"
+
         # JWT 토큰 생성 및 쿠키 설정
         tokens = await generate_tokens_and_set_cookie(
-            user, provider, email, name, jwt_service, refresh_token_service, response
+            user,
+            provider,
+            email,
+            name,
+            jwt_service,
+            refresh_token_service,
+            response,
+            set_cookie=not is_mobile,
         )
         access_token = tokens["accessToken"]
+        refresh_token = tokens["refreshToken"]
         
         logger.info(f"OAuth 회원가입 성공: userId={user.id}, provider={provider}")
         return {
@@ -675,6 +948,7 @@ async def oauth_signup(
             "nickname": nickname,
             "profileImage": profile_image,
             "accessToken": access_token,
+            "refreshToken": refresh_token if is_mobile else None,
             "tokenType": "Bearer"
         }
         
@@ -688,7 +962,7 @@ async def oauth_signup(
 # ========== User Profile ==========
 @router.get("/me")
 async def get_current_user(
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
     services: Dict[str, Any] = Depends(get_services)
 ):
     """현재 로그인한 사용자 정보 조회"""
@@ -704,12 +978,12 @@ async def get_current_user(
         logger.info(f"사용자 정보 조회 성공: userId={user_id}")
         
         return {
-            "id": user.id,
+            "id": str(user.id),
             "name": user.name,
             "email": user.email,
             "nickname": user.nickname,
-            "profileImage": user.profile_image,
-            "provider": user.provider
+            "profileImage": user.profile_image_url,
+            "provider": user.auth_provider
         }
         
     except HTTPException:
@@ -722,7 +996,7 @@ async def get_current_user(
 @router.put("/me")
 async def update_current_user(
     request: UpdateProfileRequest,
-    user_id: int = Depends(get_current_user_id),
+    user_id: str = Depends(get_current_user_id),
     services: Dict[str, Any] = Depends(get_services)
 ):
     """현재 로그인한 사용자 프로필 정보 업데이트"""
@@ -751,8 +1025,8 @@ async def update_current_user(
             logger.info(f"[백엔드 API] nickname 컬럼 업데이트 - 기존: {user.nickname} → 새로운: {name}")
             user.nickname = name
         if profileImage is not None:
-            logger.info(f"[백엔드 API] profile_image 컬럼 업데이트 - 기존: {user.profile_image} → 새로운: {profileImage}")
-            user.profile_image = profileImage
+            logger.info(f"[백엔드 API] profile_image_url 컬럼 업데이트 - 기존: {user.profile_image_url} → 새로운: {profileImage}")
+            user.profile_image_url = profileImage
         
         # 저장
         logger.info(f"[백엔드 API] DB 저장 시작 - userId={user_id}")
@@ -762,12 +1036,12 @@ async def update_current_user(
         logger.info(f"[백엔드 API] 사용자 정보 업데이트 성공: userId={user_id}")
         
         return {
-            "id": updated_user.id,
+            "id": str(updated_user.id),
             "name": updated_user.name,
             "email": updated_user.email,
             "nickname": updated_user.nickname,
-            "profileImage": updated_user.profile_image,
-            "provider": updated_user.provider
+            "profileImage": updated_user.profile_image_url,
+            "provider": updated_user.auth_provider
         }
         
     except HTTPException:
@@ -778,13 +1052,271 @@ async def update_current_user(
 
 
 # ========== Refresh Token ==========
+@router.post("/mobile/exchange")
+async def exchange_mobile_bridge_token(
+    request: MobileBridgeExchangeRequest,
+    services: Dict[str, Any] = Depends(get_services),
+):
+    """모바일 딥링크 bridge token을 실제 인증 응답으로 교환(1회성)."""
+    key = f"{MOBILE_BRIDGE_PREFIX}{request.bridgeToken}"
+    refresh_token_service = services["refresh_token_service"]
+    raw = await refresh_token_service.redis.get(key)
+    if not raw:
+        raise HTTPException(status_code=401, detail="bridge token이 유효하지 않거나 만료되었습니다.")
+    await refresh_token_service.redis.delete(key)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail="bridge payload 파싱 실패") from e
+    return payload
+
+
+@router.post("/google/native-login")
+async def google_native_login(
+    request: GoogleNativeLoginRequest,
+    response: Response,
+    services: Dict[str, Any] = Depends(get_services),
+):
+    """Flutter google_sign_in idToken을 검증하고 자체 JWT를 발급한다."""
+    try:
+        if not request.idToken:
+            raise HTTPException(status_code=400, detail="idToken이 필요합니다.")
+
+        http_client: httpx.AsyncClient = services["google_service"].http_client
+        user_service: UserService = services["user_service"]
+        jwt_service: JWTService = services["jwt_service"]
+        refresh_token_service: RefreshTokenService = services["refresh_token_service"]
+
+        token_info_res = await http_client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": request.idToken},
+        )
+        if token_info_res.status_code != 200:
+            raise HTTPException(status_code=401, detail="유효하지 않은 Google idToken입니다.")
+        token_info = token_info_res.json()
+
+        aud = token_info.get("aud")
+        allowed_aud = {settings.google_client_id}
+        if settings.google_android_client_id:
+            allowed_aud.add(settings.google_android_client_id)
+        if aud not in allowed_aud:
+            raise HTTPException(status_code=401, detail="Google 토큰 aud 검증 실패")
+
+        issuer = token_info.get("iss")
+        if issuer not in {"https://accounts.google.com", "accounts.google.com"}:
+            raise HTTPException(status_code=401, detail="Google 토큰 iss 검증 실패")
+
+        provider_id = token_info.get("sub")
+        email = token_info.get("email")
+        name = token_info.get("name")
+        profile_image = token_info.get("picture")
+        if not provider_id or not email:
+            raise HTTPException(status_code=400, detail="Google 사용자 정보가 불완전합니다.")
+
+        user = await user_service.find_or_create_user(
+            provider="google",
+            provider_id=str(provider_id),
+            email=email,
+            name=name,
+            nickname=name,
+            profile_image=profile_image,
+        )
+
+        tokens = await generate_tokens_and_set_cookie(
+            user=user,
+            provider="google",
+            email=email,
+            name=name,
+            jwt_service=jwt_service,
+            refresh_token_service=refresh_token_service,
+            response=response,
+            set_cookie=False,
+        )
+        return {
+            "success": True,
+            "message": "구글 네이티브 로그인 성공",
+            "userId": str(user.id),
+            "accessToken": tokens["accessToken"],
+            "refreshToken": tokens["refreshToken"],
+            "tokenType": "Bearer",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("구글 네이티브 로그인 실패: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="구글 네이티브 로그인 처리 중 오류가 발생했습니다.")
+
+
+def _kakao_profile_from_user_me(user_info: Dict[str, Any]) -> tuple[str, str, Optional[str], Optional[str]]:
+    """/v2/user/me 응답 → (provider_id, email, display_name, profile_image)"""
+    provider_id = str(user_info.get("id") or "")
+    kakao_account = user_info.get("kakao_account") or {}
+    email = kakao_account.get("email")
+    profile = kakao_account.get("profile") or {}
+    nickname = profile.get("nickname")
+    profile_image = profile.get("profile_image_url")
+    if not email:
+        if not provider_id:
+            raise HTTPException(
+                status_code=400, detail="카카오 사용자 식별 정보를 가져오지 못했습니다."
+            )
+        email = f"kakao_{provider_id}@users.local"
+    display = nickname or (email.split("@")[0] if email else None)
+    return provider_id, email, display, profile_image
+
+
+def _naver_profile_from_user_me(user_info: Dict[str, Any]) -> tuple[str, str, Optional[str], Optional[str]]:
+    """/v1/nid/me 응답 → (provider_id, email, display_name, profile_image)"""
+    response = user_info.get("response") or {}
+    provider_id = str(response.get("id") or "")
+    email = response.get("email")
+    profile_image = response.get("profile_image")
+    name = response.get("name")
+    nickname = response.get("nickname")
+    if not email:
+        if not provider_id:
+            raise HTTPException(
+                status_code=400, detail="네이버 사용자 식별 정보를 가져오지 못했습니다."
+            )
+        email = f"naver_{provider_id}@users.local"
+    display = name or nickname or (email.split("@")[0] if email else None)
+    return provider_id, email, display, profile_image
+
+
+@router.post("/kakao/native-login")
+async def kakao_native_login(
+    request: KakaoNativeLoginRequest,
+    response: Response,
+    services: Dict[str, Any] = Depends(get_services),
+):
+    """Flutter kakao_flutter_sdk accessToken으로 사용자 확인 후 자체 JWT 발급."""
+    if not request.accessToken or not request.accessToken.strip():
+        raise HTTPException(status_code=400, detail="accessToken이 필요합니다.")
+    kakao_service: KakaoOAuthService = services["kakao_service"]
+    user_service: UserService = services["user_service"]
+    jwt_service: JWTService = services["jwt_service"]
+    refresh_token_service: RefreshTokenService = services["refresh_token_service"]
+    try:
+        user_info = await kakao_service.get_user_info(request.accessToken.strip())
+    except Exception as e:
+        logger.error("카카오 accessToken 검증 실패: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=401, detail="유효하지 않은 카카오 accessToken입니다."
+        ) from e
+    try:
+        provider_id, email, display_name, profile_image = _kakao_profile_from_user_me(
+            user_info
+        )
+        if not provider_id:
+            raise HTTPException(status_code=400, detail="카카오 사용자 ID가 없습니다.")
+        user = await user_service.find_or_create_user(
+            provider="kakao",
+            provider_id=provider_id,
+            email=email,
+            name=display_name,
+            nickname=display_name,
+            profile_image=profile_image,
+        )
+        tokens = await generate_tokens_and_set_cookie(
+            user=user,
+            provider="kakao",
+            email=email,
+            name=display_name,
+            jwt_service=jwt_service,
+            refresh_token_service=refresh_token_service,
+            response=response,
+            set_cookie=False,
+        )
+        return {
+            "success": True,
+            "message": "카카오 네이티브 로그인 성공",
+            "userId": str(user.id),
+            "accessToken": tokens["accessToken"],
+            "refreshToken": tokens["refreshToken"],
+            "tokenType": "Bearer",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("카카오 네이티브 로그인 실패: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="카카오 네이티브 로그인 처리 중 오류가 발생했습니다."
+        ) from e
+
+
+@router.post("/naver/native-login")
+async def naver_native_login(
+    request: NaverNativeLoginRequest,
+    response: Response,
+    services: Dict[str, Any] = Depends(get_services),
+):
+    """Flutter 네이버 SDK accessToken으로 사용자 확인 후 자체 JWT 발급."""
+    if not request.accessToken or not request.accessToken.strip():
+        raise HTTPException(status_code=400, detail="accessToken이 필요합니다.")
+    naver_service: NaverOAuthService = services["naver_service"]
+    user_service: UserService = services["user_service"]
+    jwt_service: JWTService = services["jwt_service"]
+    refresh_token_service: RefreshTokenService = services["refresh_token_service"]
+    try:
+        user_info = await naver_service.get_user_info(request.accessToken.strip())
+    except Exception as e:
+        logger.error("네이버 accessToken 검증 실패: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=401, detail="유효하지 않은 네이버 accessToken입니다."
+        ) from e
+    try:
+        provider_id, email, display_name, profile_image = _naver_profile_from_user_me(
+            user_info
+        )
+        if not provider_id:
+            raise HTTPException(status_code=400, detail="네이버 사용자 ID가 없습니다.")
+        user = await user_service.find_or_create_user(
+            provider="naver",
+            provider_id=provider_id,
+            email=email,
+            name=display_name,
+            nickname=display_name,
+            profile_image=profile_image,
+        )
+        tokens = await generate_tokens_and_set_cookie(
+            user=user,
+            provider="naver",
+            email=email,
+            name=display_name,
+            jwt_service=jwt_service,
+            refresh_token_service=refresh_token_service,
+            response=response,
+            set_cookie=False,
+        )
+        return {
+            "success": True,
+            "message": "네이버 네이티브 로그인 성공",
+            "userId": str(user.id),
+            "accessToken": tokens["accessToken"],
+            "refreshToken": tokens["refreshToken"],
+            "tokenType": "Bearer",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("네이버 네이티브 로그인 실패: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="네이버 네이티브 로그인 처리 중 오류가 발생했습니다."
+        ) from e
+
+
 @router.post("/refresh")
 async def refresh_token(
+    request_body: Optional[RefreshTokenRequest] = None,
     refreshToken: Optional[str] = Cookie(None),
+    client: Optional[str] = None,
     authorization: Optional[str] = None,
     services: Dict[str, Any] = Depends(get_services)
 ):
     """리프레시 토큰으로 새 액세스 토큰 발급"""
+    if not refreshToken and request_body and request_body.refreshToken:
+        refreshToken = request_body.refreshToken
+
     if not refreshToken:
         # Authorization 헤더에서도 시도
         if authorization and authorization.startswith("Bearer "):
@@ -825,32 +1357,35 @@ async def refresh_token(
         if redis_user_id != user_id:
             raise HTTPException(status_code=401, detail="리프레시 토큰이 유효하지 않습니다.")
         
-        # 사용자 정보 조회 (name, age 추출)
+        # 사용자 정보 조회 (name 추출)
         user = await user_service.find_by_id(user_id)
         name = user.name if user else None
-        age = user.age if user else None
         
         # 새 토큰 생성 및 로테이션
-        new_access_token = jwt_service.generate_token(user_id, provider, email, name, age)
-        new_refresh_token = jwt_service.generate_refresh_token(user_id, provider, email, name, age)
+        new_access_token = jwt_service.generate_token(user_id, provider, email, name)
+        new_refresh_token = jwt_service.generate_refresh_token(user_id, provider, email, name)
         await refresh_token_service.rotate_refresh_token(user_id, refreshToken, new_refresh_token)
         
+        is_mobile = (client or "").lower() == "mobile"
+
         response = JSONResponse({
             "success": True,
             "accessToken": new_access_token,
+            "refreshToken": new_refresh_token if is_mobile else None,
             "tokenType": "Bearer"
         })
         
         # 새 리프레시 토큰 쿠키 설정
-        response.set_cookie(
-            key="refreshToken",
-            value=new_refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="none",
-            path="/",
-            max_age=settings.jwt_refresh_expiration // 1000
-        )
+        if not is_mobile:
+            response.set_cookie(
+                key="refreshToken",
+                value=new_refresh_token,
+                httponly=True,
+                secure=True,
+                samesite="none",
+                path="/",
+                max_age=settings.jwt_refresh_expiration // 1000
+            )
         
         return response
         
@@ -915,7 +1450,7 @@ async def logout(
 
 @router.post("/force-logout/{user_id}")
 async def force_logout(
-    user_id: int = Path(..., description="무효화할 사용자 ID"),
+    user_id: str = Path(..., description="무효화할 사용자 ID"),
     services: Dict[str, Any] = Depends(get_services)
 ):
     """강제 로그아웃 (관리자 또는 해킹 위험 감지 시)"""
@@ -942,9 +1477,10 @@ async def update_signup_info(
     request: UpdateSignupInfoRequest,
     services: Dict[str, Any] = Depends(get_services)
 ):
-    """회원가입 완료 후 나이와 관심분야 업데이트"""
+    """회원가입 완료 후 추가 프로필 정보 업데이트"""
     try:
         user_service = services["user_service"]
+        auth_profile_service = services["auth_profile_service"]
         
         # 사용자 조회
         user = await user_service.find_by_id(request.userId)
@@ -952,22 +1488,27 @@ async def update_signup_info(
         if not user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
         
-        # 나이와 관심분야 업데이트
-        if request.age:
-            user.age = request.age
-            logger.info(f"회원가입 정보 업데이트: userId={request.userId}, age={request.age}")
-        
-        if request.interests and len(request.interests) > 0:
-            # 관심분야를 JSON 형태로 저장
-            user.pref_domain_json = {"interests": request.interests}
-            logger.info(f"회원가입 정보 업데이트: userId={request.userId}, interests={request.interests}")
-        
-        await user_service.save(user)
+        # users 스키마에는 age / interests 컬럼이 없어 저장하지 않음
+        if request.age is not None:
+            logger.info(f"users 스키마상 age 저장 생략: userId={request.userId}, age={request.age}")
+        if request.interests:
+            logger.info(f"users 스키마상 interests 저장 생략: userId={request.userId}, interests={request.interests}")
+
+        target_job = request.targetJob.strip() if request.targetJob else None
+        interest_keywords = request.interestKeywords or []
+        if target_job or interest_keywords:
+            await auth_profile_service.upsert_sync_profile(
+                user_id=request.userId,
+                target_job=target_job,
+                interest_keywords=interest_keywords,
+            )
         
         return {
             "success": True,
             "message": "회원가입 정보가 업데이트되었습니다.",
-            "userId": request.userId
+            "userId": request.userId,
+            "targetJob": target_job,
+            "interestKeywords": interest_keywords,
         }
     except HTTPException:
         raise

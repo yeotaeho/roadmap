@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/auth_service.dart';
 import '../auth/token_storage.dart';
 import '../config/app_env.dart';
 import '../network/dio_client.dart';
@@ -14,6 +15,11 @@ final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(tokenStorageProvider);
   return DioClient.create(
     baseUrl: AppEnv.apiBaseUrl,
-    getAccessToken: storage.readAccessToken,
+    tokenStorage: storage,
   );
+});
+
+final authServiceProvider = Provider<AuthService>((ref) {
+  final storage = ref.watch(tokenStorageProvider);
+  return AuthService(storage: storage);
 });

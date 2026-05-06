@@ -17,12 +17,9 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from domain.oauth.base.database import Base
-from domain.oauth.model.user import User  # Import all models here
-
-# User domain models
-from domain.user.model.user_competency import UserCompetency
-from domain.user.model.user_roadmap_status import UserRoadmapStatus
+from core.database import Base
+from domain.auth.models.bases.user import User  # Import all models here
+from domain.auth.models.bases.user_sync_profile import UserSyncProfile
 
 target_metadata = Base.metadata
 
@@ -34,7 +31,7 @@ target_metadata = Base.metadata
 
 def get_url():
     """Get database URL from settings"""
-    from domain.oauth.config.settings import settings
+    from core.config.settings import settings
     return settings.database_url
 
 

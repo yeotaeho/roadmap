@@ -57,11 +57,11 @@ function KakaoCallbackContent() {
                         setMessage(data.message || '회원가입이 완료되었습니다.');
                         console.log('Signup complete:', data);
 
-                        // localStorage에서 나이와 관심분야 읽어서 백엔드로 전달
-                        const signupAge = localStorage.getItem('signup_age');
-                        const signupInterests = localStorage.getItem('signup_interests');
+                        // localStorage에서 목표 직무/관심 키워드 읽어서 백엔드로 전달
+                        const signupTargetJob = localStorage.getItem('signup_target_job');
+                        const signupInterestKeywords = localStorage.getItem('signup_interest_keywords');
 
-                        if (signupAge && signupInterests && data.userId) {
+                        if (signupTargetJob && signupInterestKeywords && data.userId) {
                             try {
                                 await fetch('http://localhost:8000/api/oauth/update-signup-info', {
                                     method: 'POST',
@@ -71,14 +71,14 @@ function KakaoCallbackContent() {
                                     },
                                     body: JSON.stringify({
                                         userId: data.userId,
-                                        age: parseInt(signupAge),
-                                        interests: JSON.parse(signupInterests)
+                                        targetJob: signupTargetJob,
+                                        interestKeywords: JSON.parse(signupInterestKeywords)
                                     }),
                                 });
 
                                 // localStorage 정리
-                                localStorage.removeItem('signup_age');
-                                localStorage.removeItem('signup_interests');
+                                localStorage.removeItem('signup_target_job');
+                                localStorage.removeItem('signup_interest_keywords');
                             } catch (error) {
                                 console.error('회원가입 정보 업데이트 실패:', error);
                             }

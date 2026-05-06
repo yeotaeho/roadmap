@@ -7,7 +7,7 @@ import 'package:app_mobile/main.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('앱 기동 및 인사이트 탭 라벨 노출', (WidgetTester tester) async {
+  testWidgets('앱 기동 후 비로그인 시 로그인 화면 도달', (WidgetTester tester) async {
     await AppEnv.load();
     await tester.pumpWidget(
       const ProviderScope(
@@ -16,6 +16,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('인사이트'), findsOneWidget);
+    expect(find.textContaining('청년 인사이트 로그인'), findsOneWidget);
   });
 }

@@ -4,12 +4,17 @@ import { apiClient } from './client';
  * 사용자 정보 인터페이스
  */
 export interface UserInfo {
-  id: number;
+  id: string;
   name: string | null;
   email: string | null;
   nickname: string | null;
   profileImage: string | null;
   provider: string;
+}
+
+export interface UserSyncProfile {
+  targetJob: string | null;
+  interestKeywords: string[];
 }
 
 /**
@@ -91,6 +96,31 @@ export const uploadProfileImage = async (file: File): Promise<string | null> => 
     return response.data.url;
   } catch (error: any) {
     console.error('프로필 이미지 업로드 실패:', error);
+    return null;
+  }
+};
+
+export const getSyncProfile = async (): Promise<UserSyncProfile | null> => {
+  try {
+    const response = await apiClient.get<UserSyncProfile>('/api/user/sync-profile');
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401 || error.response?.status === 404) {
+      return null;
+    }
+    console.error('싱크 프로필 조회 실패:', error);
+    return null;
+  }
+};
+
+export const upsertSyncProfile = async (
+  data: UserSyncProfile
+): Promise<UserSyncProfile | null> => {
+  try {
+    const response = await apiClient.put<UserSyncProfile>('/api/user/sync-profile', data);
+    return response.data;
+  } catch (error: any) {
+    console.error('싱크 프로필 저장 실패:', error);
     return null;
   }
 };

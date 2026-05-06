@@ -47,3 +47,4 @@ app.*.map.json
 # app_mobile 전용 로컬 env (선택). API URL은 Monorepo 루트 `.env`를 사용합니다.
 .env
 .env.local
+dart_defines/local.env

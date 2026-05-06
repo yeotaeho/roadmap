@@ -3,8 +3,7 @@
 import React, { useState } from 'react';
 
 export default function SignupPage() {
-    // 나이와 관심분야 상태 관리
-    const [age, setAge] = useState<number | ''>('');
+    const [targetJob, setTargetJob] = useState<string>('');
     const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
     const [customInterest, setCustomInterest] = useState<string>('');
 
@@ -45,8 +44,8 @@ export default function SignupPage() {
     // 소셜 로그인 핸들러 (회원가입 모드)
     const handleSocialLogin = async (provider: 'kakao' | 'naver' | 'google') => {
         // 필수 입력 검증
-        if (!age || age < 1 || age > 120) {
-            alert('나이를 입력해주세요. (1-120)');
+        if (!targetJob.trim()) {
+            alert('목표 직무를 입력해주세요.');
             return;
         }
 
@@ -56,8 +55,8 @@ export default function SignupPage() {
         }
 
         // 입력한 정보를 localStorage에 저장 (콜백에서 사용하기 위해)
-        localStorage.setItem('signup_age', age.toString());
-        localStorage.setItem('signup_interests', JSON.stringify(selectedInterests));
+        localStorage.setItem('signup_target_job', targetJob.trim());
+        localStorage.setItem('signup_interest_keywords', JSON.stringify(selectedInterests));
         try {
             const response = await fetch(`http://localhost:8000/api/oauth/${provider}/login?mode=signup`, {
                 method: 'GET',
@@ -110,19 +109,17 @@ export default function SignupPage() {
                     <p>오프라인 매장에서 다양한 혜택이 제공됩니다.</p>
                 </div>
 
-                {/* 나이 입력 */}
+                {/* 목표 직무 입력 */}
                 <div className="mb-6">
-                    <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-2">
-                        나이 <span className="text-red-500">*</span>
+                    <label htmlFor="targetJob" className="block text-sm font-medium text-gray-700 mb-2">
+                        목표 직무 <span className="text-red-500">*</span>
                     </label>
                     <input
-                        id="age"
-                        type="number"
-                        min="1"
-                        max="120"
-                        value={age}
-                        onChange={(e) => setAge(e.target.value === '' ? '' : parseInt(e.target.value))}
-                        placeholder="나이를 입력하세요"
+                        id="targetJob"
+                        type="text"
+                        value={targetJob}
+                        onChange={(e) => setTargetJob(e.target.value)}
+                        placeholder="예) 백엔드 엔지니어, 데이터 분석가"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                     />
                 </div>
@@ -130,7 +127,7 @@ export default function SignupPage() {
                 {/* 관심분야 선택 */}
                 <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-3">
-                        관심분야 (복수 선택 가능) <span className="text-red-500">*</span>
+                        관심 키워드 (복수 선택 가능) <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-2 gap-3 mb-4">
                         {interestOptions.map((option) => (
@@ -177,10 +174,10 @@ export default function SignupPage() {
                         </button>
                     </div>
 
-                    {/* 선택된 관심분야 표시 */}
+                    {/* 선택된 관심 키워드 표시 */}
                     {selectedInterests.length > 0 && (
                         <div className="mt-3">
-                            <p className="text-xs text-gray-500 mb-2">선택된 관심분야:</p>
+                            <p className="text-xs text-gray-500 mb-2">선택된 관심 키워드:</p>
                             <div className="flex flex-wrap gap-2">
                                 {selectedInterests.map((interest) => {
                                     const option = interestOptions.find(opt => opt.value === interest);

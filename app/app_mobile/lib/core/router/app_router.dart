@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth_service.dart';
+import '../auth/token_storage.dart';
+import '../../features/auth/presentation/auth_gate_page.dart';
+import '../../features/auth/presentation/login_page.dart';
 import '../../features/coach/presentation/coach_page.dart';
 import '../../features/consult/presentation/consult_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
@@ -15,8 +19,22 @@ final GlobalKey<NavigatorState> rootNavigatorKey =
 /// Next.js 메인 탭과 동일한 경로: `/`, `/consult`, `/roadmap`, `/coach`
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
-  initialLocation: '/',
+  initialLocation: '/auth-gate',
   routes: [
+    GoRoute(
+      path: '/auth-gate',
+      name: 'auth-gate',
+      pageBuilder: (context, state) => const NoTransitionPage<void>(
+        child: AuthGatePage(),
+      ),
+    ),
+    GoRoute(
+      path: '/login',
+      name: 'login',
+      pageBuilder: (context, state) => const NoTransitionPage<void>(
+        child: LoginPage(),
+      ),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return MainTabScaffold(navigationShell: navigationShell);
@@ -94,7 +112,7 @@ final GoRouter appRouter = GoRouter(
   ],
 );
 
-class MainTabScaffold extends StatelessWidget {
+class MainTabScaffold extends StatefulWidget {
   const MainTabScaffold({
     required this.navigationShell,
     super.key,
@@ -102,10 +120,51 @@ class MainTabScaffold extends StatelessWidget {
 
   final StatefulNavigationShell navigationShell;
 
+  @override
+  State<MainTabScaffold> createState() => _MainTabScaffoldState();
+}
+
+class _MainTabScaffoldState extends State<MainTabScaffold> {
+  final TokenStorage _tokenStorage = TokenStorage();
+  late final AuthService _authService = AuthService(storage: _tokenStorage);
+  bool _hasSession = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshAuthState();
+  }
+
+  Future<void> _refreshAuthState() async {
+    final access = await _tokenStorage.readAccessToken();
+    final refresh = await _tokenStorage.readRefreshToken();
+    if (!mounted) return;
+    setState(() {
+      _hasSession =
+          (access != null && access.isNotEmpty) ||
+          (refresh != null && refresh.isNotEmpty);
+    });
+  }
+
+  Future<void> _logout() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await _authService.logout();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _hasSession = false;
+    });
+    if (mounted) {
+      context.go('/login');
+    }
+  }
+
   void _onTap(int index) {
-    navigationShell.goBranch(
+    widget.navigationShell.goBranch(
       index,
-      initialLocation: index == navigationShell.currentIndex,
+      initialLocation: index == widget.navigationShell.currentIndex,
     );
   }
 
@@ -113,9 +172,81 @@ class MainTabScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: navigationShell,
+      body: widget.navigationShell,
+      floatingActionButton: FloatingActionButton.small(
+        heroTag: 'auth-status-fab',
+        onPressed: () {
+          showModalBottomSheet<void>(
+            context: context,
+            backgroundColor: theme.colorScheme.surface,
+            builder: (ctx) {
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '인증 상태',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.circle,
+                            size: 10,
+                            color: _hasSession ? Colors.greenAccent : Colors.redAccent,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _hasSession ? '로그인됨' : '세션 없음',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: _busy ? null : _refreshAuthState,
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('새로고침'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: (_busy || !_hasSession)
+                              ? null
+                              : () async {
+                                  Navigator.of(ctx).pop();
+                                  await _logout();
+                                },
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.logout),
+                          label: const Text('로그아웃'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+        child: Icon(
+          _hasSession ? Icons.verified_user : Icons.person_off,
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
+        selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: _onTap,
         destinations: const [
           NavigationDestination(

@@ -19,8 +19,10 @@ Thumbs.db
 # Environment
 .env
 .env.local
-
+dart_defines/local.env
 # Temporary
 dummy
 *.tmp
 *.swp
+
+

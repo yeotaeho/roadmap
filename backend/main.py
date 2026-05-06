@@ -7,45 +7,25 @@ import sys
 import os
 from pathlib import Path
 
-# Configure logging first
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from core.logging_config import setup_logging
+
+setup_logging(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import routers
-# News router는 OAuth에 의존하지 않으므로 먼저 import
-news_router = None
-try:
-    from api.v1.news.news_routor import router as news_router
-    logger.info("News router imported successfully")
-except Exception as e:
-    logger.warning(f"News router import failed: {e}")
-    news_router = None
+# ---------------------------------------------------------------------------
+# API v1 라우터 (단일 진입점에서 명시 등록)
+# 각 APIRouter 에 이미 prefix=/oauth | /news | /user 가 있으므로
+# include_router(..., prefix="/api") 와 결합 시 최종 경로는 /api/oauth, ...
+# ---------------------------------------------------------------------------
+from api.v1.news.news_routor import router as news_v1_router
+from api.v1.oauth.oauth_routor import router as oauth_v1_router
+from api.v1.user.user_routor import router as user_v1_router
 
-# OAuth router는 settings에 의존하므로 환경 변수가 필요
-oauth_router = None
-try:
-    from api.v1.oauth.oauth_routor import router as oauth_router
-    logger.info("OAuth router imported successfully")
-except Exception as e:
-    logger.warning(f"OAuth router import failed: {e}")
-    logger.warning("OAuth router requires environment variables. Continuing without OAuth support.")
-    oauth_router = None
-
-# User router
-user_router = None
-try:
-    from api.v1.user.user_routor import router as user_router
-    logger.info("User router imported successfully")
-except Exception as e:
-    logger.warning(f"User router import failed: {e}")
-    user_router = None
+API_V1_PREFIX = "/api"
 
 # Create FastAPI app
 app = FastAPI(
@@ -91,18 +71,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": exc.errors()}
     )
 
-# Register routers
-if oauth_router:
-    app.include_router(oauth_router, prefix="/api")
-    logger.info("OAuth router registered")
-
-if news_router:
-    app.include_router(news_router, prefix="/api")
-    logger.info("News router registered")
-
-if user_router:
-    app.include_router(user_router, prefix="/api")
-    logger.info("User router registered")
+# Register routers (전 서비스 라우터 고정 연결)
+app.include_router(oauth_v1_router, prefix=API_V1_PREFIX)
+app.include_router(news_v1_router, prefix=API_V1_PREFIX)
+app.include_router(user_v1_router, prefix=API_V1_PREFIX)
+logger.info(
+    "Routers registered: %s/oauth, %s/news, %s/user",
+    API_V1_PREFIX,
+    API_V1_PREFIX,
+    API_V1_PREFIX,
+)
 
 
 @app.get("/")
