@@ -1,9 +1,10 @@
 # FastAPI and Server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# anyio>=4.5 / mcp / fastmcp 와 호환되는 버전 (구 0.104.1 은 anyio<4 강제로 충돌)
+fastapi>=0.115.0
+uvicorn[standard]>=0.27.0
 
-# HTTP Client
-httpx==0.25.1
+# HTTP Client (openai/groq 신버전과 호환되도록 핀 완화)
+httpx>=0.27.0
 
 # JWT and Security
 PyJWT==2.8.0
@@ -62,7 +63,21 @@ torch>=2.0.0
 playwright>=1.40.0
 aiohttp>=3.9.0
 requests>=2.31.0
+chompjs>=1.2.0
 numpy>=1.24.0
 starlette>=0.31
 boto3>=1.34.0
 loguru>=0.7.0
+
+# Bronze / 경제 데이터 수집 (DART → RSS/API → Yahoo 순 확장)
+dart-fss>=0.4.7
+xmltodict>=0.13.0
+yfinance>=0.2.40
+tenacity>=8.2.0
+
+pdfplumber>=0.10
+pandas>=2.2.0
+openpyxl>=3.1
+
+# 배치/스케줄러
+APScheduler>=3.10.4

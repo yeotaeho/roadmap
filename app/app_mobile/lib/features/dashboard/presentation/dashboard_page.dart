@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../menu/presentation/app_drawer.dart';
 import 'tabs/chance_tab.dart';
 import 'tabs/gap_tab.dart';
 import 'tabs/pulse_tab.dart';
@@ -16,6 +17,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -32,8 +34,18 @@ class _DashboardPageState extends State<DashboardPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      endDrawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('인사이트 대시보드'),
+        actions: [
+          IconButton(
+            tooltip: '메뉴 열기',
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+          const SizedBox(width: 4),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,

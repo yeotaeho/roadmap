@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,11 +22,24 @@ sys.path.insert(0, str(Path(__file__).parent))
 # 각 APIRouter 에 이미 prefix=/oauth | /news | /user 가 있으므로
 # include_router(..., prefix="/api") 와 결합 시 최종 경로는 /api/oauth, ...
 # ---------------------------------------------------------------------------
+from api.v1.master.master_routor import router as master_v1_router
 from api.v1.news.news_routor import router as news_v1_router
 from api.v1.oauth.oauth_routor import router as oauth_v1_router
 from api.v1.user.user_routor import router as user_v1_router
+from core.scheduler import start_scheduler, stop_scheduler
 
 API_V1_PREFIX = "/api"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI 라이프사이클 — APScheduler 자동 수집 스케줄러 시작/종료."""
+    start_scheduler()
+    try:
+        yield
+    finally:
+        stop_scheduler()
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -33,7 +47,8 @@ app = FastAPI(
     description="Python FastAPI Gateway for Spring Boot Services and OAuth",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -75,8 +90,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(oauth_v1_router, prefix=API_V1_PREFIX)
 app.include_router(news_v1_router, prefix=API_V1_PREFIX)
 app.include_router(user_v1_router, prefix=API_V1_PREFIX)
+app.include_router(master_v1_router, prefix=API_V1_PREFIX)
 logger.info(
-    "Routers registered: %s/oauth, %s/news, %s/user",
+    "Routers registered: %s/oauth, %s/news, %s/user, %s/master",
+    API_V1_PREFIX,
     API_V1_PREFIX,
     API_V1_PREFIX,
     API_V1_PREFIX,
@@ -93,7 +110,8 @@ async def root():
         "endpoints": {
             "oauth": "/api/oauth",
             "news": "/api/news",
-            "user": "/api/user"
+            "user": "/api/user",
+            "master": "/api/master",
         }
     }
 

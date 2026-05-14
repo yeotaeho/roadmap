@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, quote_plus, urlparse, urlunparse
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/core/config/settings.py 기준
@@ -145,6 +145,50 @@ class Settings(BaseSettings):
     naver_client_id: str
     naver_client_secret: str
     naver_redirect_uri: str
+
+    # Open DART (Bronze — raw_economic_data 등)
+    dart_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("DART_API_KEY", "OPENDART_API_KEY"),
+    )
+
+    # 중소벤처기업부 사업공고 OpenAPI (Bronze — raw_opportunity_data)
+    smes_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("SMES_SERVICE_KEY", "SMES_API_KEY"),
+    )
+
+    # ALIO 공공기관 사업정보 OpenAPI (Bronze — raw_economic_data)
+    alio_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("ALIO_SERVICE_KEY", "ALIO_API_KEY"),
+    )
+
+    # Bronze 자동 수집 스케줄러 (APScheduler 기반)
+    #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
+    #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡
+    scheduler_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("SCHEDULER_ENABLED", "BRONZE_SCHEDULER_ENABLED"),
+    )
+    scheduler_timezone: str = Field(
+        default="Asia/Seoul",
+        validation_alias=AliasChoices("SCHEDULER_TIMEZONE", "TZ_SCHEDULER"),
+    )
+    # 일일 잡(DART/MSIT/RSS/SMES) 트리거 시각 — 24h, "HH:MM"
+    scheduler_daily_at: str = Field(
+        default="09:00",
+        validation_alias=AliasChoices("SCHEDULER_DAILY_AT",),
+    )
+    # 주간 잡(ALIO/Yahoo) 요일 (0=Mon...6=Sun) + 시각
+    scheduler_weekly_dow: int = Field(
+        default=0,  # Monday
+        validation_alias=AliasChoices("SCHEDULER_WEEKLY_DOW",),
+    )
+    scheduler_weekly_at: str = Field(
+        default="09:00",
+        validation_alias=AliasChoices("SCHEDULER_WEEKLY_AT",),
+    )
 
     # Redis Key Prefixes
     redis_refresh_token_prefix: str = "refreshToken:"

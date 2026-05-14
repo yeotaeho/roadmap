@@ -25,7 +25,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final auth = ref.read(authServiceProvider);
       await auth.loginWithProvider(provider);
       if (!mounted) return;
-      context.go('/');
+      // 신규/미완성 사용자는 sync_profile 보충 입력 화면으로 보낸다.
+      final complete = await auth.isProfileComplete();
+      if (!mounted) return;
+      context.go(complete ? '/' : '/signup-complete');
     } catch (e) {
       setState(() => _error = '로그인 실패: $e');
     } finally {

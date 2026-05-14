@@ -5,13 +5,18 @@ import '../auth/auth_service.dart';
 import '../auth/token_storage.dart';
 import '../../features/auth/presentation/auth_gate_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/auth/presentation/signup_complete_page.dart';
 import '../../features/coach/presentation/coach_page.dart';
 import '../../features/consult/presentation/consult_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/dashboard/presentation/detail/chance_detail_page.dart';
 import '../../features/dashboard/presentation/detail/gap_issue_detail_page.dart';
 import '../../features/dashboard/presentation/detail/sector_detail_page.dart';
+import '../../features/help/presentation/help_page.dart';
+import '../../features/notice/presentation/notices_page.dart';
+import '../../features/profile/presentation/profile_page.dart';
 import '../../features/roadmap/presentation/roadmap_page.dart';
+import '../../features/settings/presentation/settings_page.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -34,6 +39,33 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => const NoTransitionPage<void>(
         child: LoginPage(),
       ),
+    ),
+    GoRoute(
+      path: '/signup-complete',
+      name: 'signup-complete',
+      pageBuilder: (context, state) => const NoTransitionPage<void>(
+        child: SignupCompletePage(),
+      ),
+    ),
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const ProfilePage(),
+    ),
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/notices',
+      name: 'notices',
+      builder: (context, state) => const NoticesPage(),
+    ),
+    GoRoute(
+      path: '/help',
+      name: 'help',
+      builder: (context, state) => const HelpPage(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import event
@@ -24,9 +25,12 @@ connect_args["server_settings"] = {
     "statement_cache_size": "0",
 }
 
+# SQL 에코는 기본 OFF. 디버깅 시 SQLALCHEMY_ECHO=1 로만 켠다.
+_ECHO = os.getenv("SQLALCHEMY_ECHO", "").strip().lower() in ("1", "true", "yes", "on")
+
 engine = create_async_engine(
     settings.database_url,
-    echo=True,
+    echo=_ECHO,
     future=True,
     connect_args=connect_args,
     pool_pre_ping=True,

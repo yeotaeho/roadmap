@@ -91,49 +91,147 @@ CREATE INDEX idx_sub_sectors_sector ON sub_sectors(sector_slug);
 ```sql
 CREATE TABLE raw_economic_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK
-    source_type VARCHAR(50) NOT NULL,        -- VC, ETF, Govt_Budget 등
-    source_url VARCHAR(255),                  -- 원문/출처 URL
-    target_company_or_fund VARCHAR(100),      -- 투자 대상 기업/펀드
-    investment_amount BIGINT,                 -- 투자/유입 금액
-    collected_at TIMESTAMPTZ DEFAULT now()    -- 수집 시각
+    source_type VARCHAR(50) NOT NULL,         -- DART_API, VC_NEWS, GOVT_BUDGET 등
+    source_url TEXT,                          -- 원문/출처 URL (길이 제한 해제)
+    
+    -- 핵심 엔티티 정보
+    raw_title VARCHAR(500) NOT NULL,          -- 공시 제목, 뉴스 헤드라인 (필수)
+    investor_name VARCHAR(255),               -- 투자 주체 (예: 삼성전자, 소프트뱅크벤처스)
+    target_company_or_fund VARCHAR(255),      -- 투자 대상 (예: 레인보우로보틱스, TIGER AI반도체)
+    
+    -- 수치 정보
+    investment_amount BIGINT,                 -- 투자/유입 금액 (원 단위 통일 권장)
+    currency VARCHAR(10) DEFAULT 'KRW',       -- 통화 (USD 뉴스 등이 섞일 경우를 대비)
+    
+    -- 확장 정보 (Silver 계층의 LLM이 파싱할 먹잇감)
+    raw_metadata JSONB,                       -- 기타 추출된 원천 데이터 (투자 목적, 요약문, RSS 본문 등)
+    
+    -- 시간 정보
+    published_at TIMESTAMPTZ,                 -- 실제 공시일 / 기사 발행일 (시계열 분석의 핵심)
+    collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
 
 CREATE TABLE raw_innovation_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK
-    source_type VARCHAR(50) NOT NULL,        -- Patent, arXiv, GitHub 등
-    title VARCHAR(255) NOT NULL,              -- 문서/리포트 제목
-    abstract_text TEXT,                       -- 요약/본문 일부
-    published_at DATE,                        -- 원문 발행일
-    collected_at TIMESTAMPTZ DEFAULT now()    -- 수집 시각
+    source_type VARCHAR(50) NOT NULL,         -- PATENT, ARXIV, GITHUB 등
+    source_url TEXT,                          -- 원문/저장소 URL
+
+    -- 핵심 엔티티 정보
+    title VARCHAR(500) NOT NULL,              -- 논문/특허/리포지토리 제목
+    author_or_assignee VARCHAR(255),          -- 저자 또는 특허 출원인
+    abstract_text TEXT,                       -- 초록 또는 Readme 요약
+
+    -- 확장 정보 (Silver 계층 LLM 파싱용)
+    raw_metadata JSONB,                       -- 인용 수(Citations), Star 수, 언어, 키워드 등 부가정보
+
+    -- 시간 정보
+    published_at TIMESTAMPTZ,                 -- 출원일 / 논문 발행일 / 커밋일
+    collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
 
 CREATE TABLE raw_people_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK
-    source_type VARCHAR(50) NOT NULL,        -- GoogleTrends, LinkedIn 등
+    source_type VARCHAR(50) NOT NULL,         -- GOOGLE_TRENDS, NAVER_DATALAB, LINKEDIN 등
+    source_url TEXT,                          -- 쿼리 URL
+
+    -- 핵심 엔티티 정보
     keyword_or_job VARCHAR(100) NOT NULL,     -- 검색 키워드/채용 직무
     search_volume_or_count INT,               -- 검색량/건수
-    collected_at TIMESTAMPTZ DEFAULT now()    -- 수집 시각
+
+    -- 확장 정보 (Silver 계층 LLM 파싱용)
+    raw_metadata JSONB,                       -- 연관 검색어, 디바이스 비율, 지역별 분포 등 부가정보
+
+    -- 시간 정보
+    reference_date DATE,                      -- 해당 데이터가 가리키는 실제 기준 일자 (시계열 분석 핵심)
+    collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
 
 CREATE TABLE raw_discourse_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK
-    source_type VARCHAR(50) NOT NULL,        -- Reuters, Reddit, McKinsey 등
-    headline VARCHAR(255) NOT NULL,           -- 헤드라인
-    content_body TEXT,                        -- 본문 전문/요약 본문
-    published_at TIMESTAMPTZ,                 -- 원문 발행 시각
-    collected_at TIMESTAMPTZ DEFAULT now()    -- 수집 시각
+    source_type VARCHAR(50) NOT NULL,         -- NEWS, REDDIT, BLIND, REPORT, JOB_INFO, SKILL_INFO, SUCCESS_CASE 등
+    source_url TEXT,                          -- 뉴스/게시글 링크 또는 출처 URL
+
+    -- 핵심 엔티티 정보
+    headline VARCHAR(500) NOT NULL,           -- 헤드라인 / 게시글 제목 / 직업명 / 직무명
+    author_or_publisher VARCHAR(255),         -- 언론사명 / 작성자 ID / 발간 기관 / 정부 기관명
+    content_body TEXT,                        -- 본문 전문/요약 / 직업·직무 설명 / 우수사례 내용
+
+    -- 확장 정보 (Silver 계층 LLM 파싱용)
+    raw_metadata JSONB,                       -- 댓글 수, 좋아요 수, 감성 분석 점수, 카테고리
+                                              -- (REPORT 계열) 연봉 정보, 전망 점수, 요구 역량, 학습 경로
+                                              -- (SUCCESS_CASE 계열) 선정 기업명, 지원 금액, 성과 지표 등
+
+    -- 시간 정보
+    published_at TIMESTAMPTZ,                 -- 기사 송고 시각 / 게시글 작성 시각 / 발간일
+    collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
+-- 설명: 담론·정성적 데이터 수집 테이블
+--   - NEWS: 일반 뉴스 기사 (네이버, 구글 뉴스 등)
+--   - REDDIT, BLIND: 커뮤니티 게시글
+--   - REPORT: 정부 보고서, 업계 리포트
+--   - JOB_INFO: 워크넷 직업정보 (연봉, 전망, 업무 환경 등 구조화된 직업 설명)
+--   - SKILL_INFO: 워크넷 직무정보 (요구 스킬셋, 학습 경로, 자격증 등)
+--   - SUCCESS_CASE: 정부 지원사업 우수사례 (선정 기업의 성공 스토리)
 
 -- Chance 원천 수집 (채용/부트캠프/공모전/지원사업)
 CREATE TABLE raw_opportunity_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK
     source_type VARCHAR(50) NOT NULL,         -- JOB / BOOTCAMP / CONTEST / GRANT
-    source_url VARCHAR(500) NOT NULL,         -- 원본 공고 링크
+    source_url TEXT NOT NULL,                 -- 원본 공고 링크
+
+    -- 핵심 엔티티 정보
+    raw_title VARCHAR(500) NOT NULL,          -- 공고 제목
     host_name VARCHAR(150),                   -- 주최/주관 기관 또는 기업명
-    raw_title VARCHAR(255) NOT NULL,          -- 원문 제목
     raw_content TEXT,                         -- 원문 본문
-    collected_at TIMESTAMPTZ DEFAULT now()    -- 수집 시각
+
+    -- 확장 정보 (Silver 계층 LLM 파싱용)
+    raw_metadata JSONB,                       -- 지원 자격, 상금 규모, 근무지, 경력 요건 등 부가정보
+
+    -- 시간 정보
+    published_at TIMESTAMPTZ,                 -- 공고 게시일
+    deadline_at TIMESTAMPTZ,                  -- 지원 마감일시 (앱 알림 기능의 핵심)
+    collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
+
+-- 검증된 기업 마스터 (정부 인증·선정 기업 명단)
+CREATE TABLE verified_company_master (
+    id BIGSERIAL PRIMARY KEY,                 -- 기업 마스터 PK
+    source_type VARCHAR(50) NOT NULL,         -- KSTARTUP_PREUNICORN / VENTURE_CERTIFIED / INNOBIZ / MAINBIZ 등
+    
+    -- 핵심 식별 정보
+    company_name VARCHAR(255) NOT NULL,       -- 기업명 (필수)
+    business_number VARCHAR(20),              -- 사업자등록번호 (10자리)
+    corp_number VARCHAR(20),                  -- 법인등록번호 (13자리, 있는 경우)
+    ceo_name VARCHAR(100),                    -- 대표자명
+    
+    -- 인증/선정 정보
+    certification_type VARCHAR(100),          -- 인증·선정 명칭 (예: "K-예비유니콘", "벤처기업 인증")
+    certification_date DATE,                  -- 인증일자 또는 선정 발표일
+    expiry_date DATE,                         -- 인증 만료일 (해당 시)
+    certifying_agency VARCHAR(150),           -- 인증·선정 기관 (예: "중소벤처기업부")
+    
+    -- 기업 세부 정보
+    industry_sector VARCHAR(100),             -- 업종·분야 (예: "AI", "바이오", "핀테크")
+    establishment_date DATE,                  -- 설립일
+    address TEXT,                             -- 주소
+    
+    -- 확장 정보
+    raw_metadata JSONB,                       -- 원천 CSV/XLSX의 추가 필드 (투자 유치 이력, 특허 수 등)
+    
+    -- 데이터 출처 정보
+    source_file_url TEXT,                     -- 원본 파일 다운로드 URL
+    source_file_version VARCHAR(50),          -- 파일 버전 또는 배포 년월 (예: "2026-04")
+    
+    -- 시간 정보
+    collected_at TIMESTAMPTZ DEFAULT now(),   -- 최초 수집 시각
+    updated_at TIMESTAMPTZ DEFAULT now()      -- 갱신 시각 (재수집 시 덮어쓰기)
+);
+CREATE INDEX idx_verified_company_biz_num ON verified_company_master(business_number);
+CREATE INDEX idx_verified_company_name ON verified_company_master(company_name);
+CREATE INDEX idx_verified_company_source_type ON verified_company_master(source_type);
+CREATE UNIQUE INDEX uq_verified_company_source_biz ON verified_company_master(source_type, business_number) 
+    WHERE business_number IS NOT NULL;
+-- 설명: 동일 출처(source_type)에서 동일 사업자번호는 1개만 존재 (갱신 시 UPDATE)
 ```
 
 ---

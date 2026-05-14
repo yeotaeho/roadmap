@@ -22,11 +22,13 @@ class _AuthGatePageState extends ConsumerState<AuthGatePage> {
     final auth = ref.read(authServiceProvider);
     final ok = await auth.restoreSessionIfPossible();
     if (!mounted) return;
-    if (ok) {
-      context.go('/');
-    } else {
+    if (!ok) {
       context.go('/login');
+      return;
     }
+    final complete = await auth.isProfileComplete();
+    if (!mounted) return;
+    context.go(complete ? '/' : '/signup-complete');
   }
 
   @override

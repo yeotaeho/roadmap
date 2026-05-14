@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- 카카오 네이티브 앱 키 (콘솔의 Native 앱 키). dart-define KAKAO_NATIVE_APP_KEY와 동일 값으로 맞추세요. -->
-    <string name="kakao_native_app_key" translatable="false">REPLACE_KAKAO_NATIVE_APP_KEY</string>
-    <!-- 네이버 로그인 (flutter_naver_login README). NAVER_CLIENT_ID/SECRET과 동일 -->
-    <string name="client_id" translatable="false">REPLACE_NAVER_CLIENT_ID</string>
-    <string name="client_secret" translatable="false">REPLACE_NAVER_CLIENT_SECRET</string>
-    <string name="client_name" translatable="false">청년 인사이트</string>
-</resources>

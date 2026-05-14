@@ -20,6 +20,8 @@ if config.config_file_name is not None:
 from core.database import Base
 from domain.auth.models.bases.user import User  # Import all models here
 from domain.auth.models.bases.user_sync_profile import UserSyncProfile
+from domain.master.models.bases.raw_economic_data import RawEconomicData  # Bronze
+from domain.master.models.bases.raw_opportunity_data import RawOpportunityData  # Bronze
 
 target_metadata = Base.metadata
 
