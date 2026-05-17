@@ -876,6 +876,7 @@ params["corp_cls"] = "Y"  # 유가증권 상장법인만
 
 ## 🔗 관련 문서
 
+- `ECONOMIC_DATA_SOURCE_STATUS.md`: **NTIS·CB·네이버/The VC 제약, SMES·K-Startup·KVIC 구현 여부 (2026-05-17)**
 - `DATA_COLLECTION_SOURCES_GUIDE_V3.md`: 전체 데이터 소스 설계
 - `DART_ECONOMIC_ENHANCEMENT_STRATEGY.md`: DART 상세 파싱 전략 (작성 예정)
 - `ALIO_COLLECTION_STRATEGY.md`: ALIO API 통합 가이드

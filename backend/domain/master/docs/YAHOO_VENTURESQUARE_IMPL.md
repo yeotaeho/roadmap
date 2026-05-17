@@ -38,13 +38,20 @@
 | **벤처스퀘어 서비스 메서드** | `ingest_venturesquare()` | ✅ |
 | **벤처스퀘어 라우터** | `POST /bronze/economic/venturesquare` | ✅ |
 
-### 스킵 항목 (Phase 2B, 3C, 3D)
+### 스킵·보류 항목
 
-| 항목 | 사유 |
+| 항목 | 사유 | 비고 |
+|------|------|------|
+| 네이버 금융 크롤러 | 상업적 이용 법적 리스크 🔴 High | [ECONOMIC_DATA_SOURCE_STATUS.md](./ECONOMIC_DATA_SOURCE_STATUS.md) |
+| 크런치베이스 API | 유료 데이터 API 라이선스 | 동일 |
+| NTIS OpenAPI | 기관 소속·키 발급 | Held — MSIT·ALIO 우회 |
+
+### 이후 구현됨 (본 문서 초안 이후)
+
+| 항목 | 상태 |
 |------|------|
-| `raw_market_timeseries` 별도 테이블 | 규모 큼, Bronze 현재 `raw_economic_data` 단일 적재 정책 일관성 유지 |
-| 네이버 금융 크롤러 | 상업적 이용 법적 리스크 🔴 High |
-| 크런치베이스 API | 유료 API 키 필요 |
+| `raw_market_timeseries` + `yahoo_market_timeseries_collector.py` | ✅ 2026-05-17 — `POST /bronze/market-timeseries/yahoo`, 일 스케줄 `yahoo_market_ts` |
+| 벤처스퀘어 스케줄러 | ✅ `daily_venturesquare` |
 
 ---
 

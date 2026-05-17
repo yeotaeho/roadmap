@@ -3,6 +3,9 @@
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
 
+> **구현·제약 현황 (2026-05-17):** NTIS / 네이버 금융 / The VC / Crunchbase 보류 사유, SMES·K-Startup·KVIC 연동 여부는  
+> [`backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md`](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) 를 SSOT로 봅니다.
+
 ## ERD 매핑 (원천 테이블)
 
 아래 출처는 `backend/docs/erd.md`에 정의된 원천 테이블에 적재하는 것을 전제로 합니다.
@@ -21,20 +24,25 @@
 
 한국 투자 동향과 정부 예산 흐름을 파악하는 핵심 카테고리입니다.
 
-| 출처 | URL | 수집 방법 | 매핑 테이블 | 비고 |
-|------|-----|-----------|-------------|------|
-| **The VC** | https://thevc.kr/browse/investments | BeautifulSoup + 페이지네이션 | `raw_economic_data` | 한국 VC 투자 최신 리스트 (가장 실용적) |
-| **Wowtale** | https://wowtale.net/feed/ | RSS | `raw_economic_data` | **한국 스타트업 투자 뉴스 중 가장 빠른 업데이트** — **구현 완료** `wowtale_collector.py` |
-| **스타트업레시피** | https://startuprecipe.co.kr/feed | RSS | `raw_economic_data` | `[AI서머리]` 묶음글 위주 (digest) — **구현 완료** `startup_recipe_collector.py` |
-| **DART (전자공시시스템) OpenAPI** | https://opendart.fss.or.kr/ | 공식 Open API | `raw_economic_data` | 상장사 출자·R&D 투자 공시 (가장 선행적 지표) — **구현 완료** `dart_collector.py` |
-| **Yahoo Finance (Volume Surge)** | https://finance.yahoo.com/quote/091220.KS/history | yfinance 라이브러리 | `raw_economic_data` | 한국 ETF 5 + 한국 대형주 5 + 글로벌 ETF 6 = **16종** 거래량 급증 — **구현 완료** `yahoo_finance_collector.py` |
-| **Yahoo Macro (Price Surge)** | https://finance.yahoo.com/quote/USDKRW=X | yfinance 라이브러리 | `raw_economic_data` | 환율 3 + 미 국채금리 2 + 원자재 2 + 가상자산 1 = **8종** Z-score 이상치 — **구현 완료** `yahoo_macro_collector.py` |
-| **기획재정부** | https://www.moef.go.kr/ | **수동 다운로드 + 파일 업로드 API** (연 1~2회) | `raw_economic_data` | 예산안 및 국가재정운용계획 — **반자동화 전략** (하이브리드) |
-| **과기부 `mId=63` 예산/결산 (사전정보공표)** | https://www.msit.go.kr/publicinfo/detailList.do?sCode=user&mId=63&mPid=62&formMode=L&pageIndex=&publictSeqNo=295&searchSeCd=&searchMapngCd=&searchOpt=ALL&searchTxt=%EC%98%88%EC%82%B0 | **자동: 연도 상세 진입 → `ul.down_file` `.hwpx` POST 다운로드 → 비동기 파싱** (주 1회) | `raw_economic_data` (`GOVT_MSIT_RND`) | "20XX년 예산 및 기금운용계획 개요" 본문 |
-| **과기부 `mId=307` 보도자료** | https://www.msit.go.kr/bbs/list.do?sCode=user&mPid=208&mId=307 | **BeautifulSoup 크롤링** (일 1회, 증분) — **2026 + 제목 "시행"** | `raw_economic_data` (`GOVT_MSIT_PRESS`) | 시행계획·종합시행계획 보도 본문 |
-| **과기부 `mId=311` 사업공고** | https://www.msit.go.kr/bbs/list.do?sCode=user&mPid=121&mId=311 | **BeautifulSoup 크롤링** (일 1회, 증분) — **2026 + 제목 "모집"** | `raw_economic_data` (`GOVT_MSIT_BIZ`) | 모집공고·신규모집 본문·첨부 |
-| **NTIS (국가 R&D 통합) OpenAPI** | https://www.ntis.go.kr/ | 공식 Open API | `raw_economic_data` + `raw_innovation_data` | **정부 R&D 집행 팩트의 단일 진실원**(전 부처·과제·기관·금액·분야 구조화 데이터)으로 **핵심 경제 원천**이며, **분야별·연도별 자본 배분의 정량·다년 시계열 지표**이자 **민간 투자 통계의 거시 벤치마크 분모** — **과기부 발표 신호의 후행 팩트체크**(교차 검증) |
-| **공공기관 사업정보 조회 OpenAPI** | https://www.data.go.kr/data/15125286/openapi.do | 공식 Open API (REST/JSON+XML) | `raw_economic_data` | **ALIO 기반 공공기관이 운영하는 국가사업·공공서비스** — 정부 예산이 공공기관 통해 집행되는 사업 메타정보 (신청형 지원사업 ❌, 사업 운영 정보 ⭕) |
+| 출처 | URL | 수집 방법 | 매핑 테이블 | 구현 | 비고 |
+|------|-----|-----------|-------------|------|------|
+| **The VC** | https://thevc.kr/browse/investments | BeautifulSoup + 페이지네이션 | `raw_economic_data` | ⏸️ Skip | 법·ToS — RSS+DART 대체 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md)) |
+| **Wowtale** | https://wowtale.net/feed/ | RSS | `raw_economic_data` | ✅ | `wowtale_collector.py` · 아카이브 `wowtale_archive_crawler.py` |
+| **Platum** | https://platum.kr/archives/category/funding/feed | RSS | `raw_economic_data` | ✅ | `platum_collector.py` |
+| **벤처스퀘어** | https://www.venturesquare.net/category/funding/feed | RSS | `raw_economic_data` | ✅ | `venturesquare_collector.py` |
+| **스타트업레시피** | https://startuprecipe.co.kr/feed | RSS | `raw_economic_data` | ✅ | `startup_recipe_collector.py` — **`investment_amount` 미추출** |
+| **DART (전자공시시스템) OpenAPI** | https://opendart.fss.or.kr/ | 공식 Open API | `raw_economic_data` | ✅ | `dart_collector.py` — 금액 자동 추출 Phase 3 미완 |
+| **Yahoo Finance (Volume Surge)** | https://finance.yahoo.com/quote/091220.KS/history | yfinance | `raw_economic_data` | ✅ | 16종 급증일만 — `yahoo_finance_collector.py` |
+| **Yahoo Finance (일별 OHLCV)** | (동일 16티커) | yfinance | **`raw_market_timeseries`** | ✅ | 연속 시계열 — `yahoo_market_timeseries_collector.py` |
+| **Yahoo Macro (Price Surge)** | https://finance.yahoo.com/quote/USDKRW=X | yfinance | `raw_economic_data` | ✅ | 8종 Z-score — `yahoo_macro_collector.py` |
+| **기획재정부** | https://www.moef.go.kr/ | **수동 업로드 API** | `raw_economic_data` | ✅ | `moef_local_pdf_collector.py` |
+| **과기부 `mId=63` …** | (상동 URL) | HWPX 다운로드·파싱 | `raw_economic_data` | ✅ | `GOVT_MSIT_RND` |
+| **과기부 `mId=307` 보도자료** | … | BS4 증분 | `raw_economic_data` | ✅ | `GOVT_MSIT_PRESS` |
+| **과기부 `mId=311` 사업공고** | … | BS4 증분 | `raw_economic_data` | ✅ | `GOVT_MSIT_BIZ` |
+| **NTIS (국가 R&D 통합) OpenAPI** | https://www.ntis.go.kr/ | 공식 Open API | `raw_economic_*` | ⏸️ Held | **기관 소속·키 발급** 필요 — MSIT·ALIO로 우회 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md)) |
+| **ALIO 공공기관 사업정보** | https://www.data.go.kr/data/15125286/openapi.do | Open API | `raw_economic_data` | ✅ | `alio_public_inst_project_collector.py` — `investment_amount` 대부분 None |
+| **한국벤처투자 (KVIC)** | https://www.kvic.or.kr/ | 보고서 PDF / **펀드현황 Open API**(정보공개) | `raw_economic_data` | ❌ | **쓸 가치 중간** (Economic **보조** P1) — VC 시장 **전체 규모·추세**; 개별 라운드·섹터 해상도 ❌ ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) §3.3·§3.4) |
+| **크런치베이스 API** | https://www.crunchbase.com/ | 공식 API | `raw_economic_data` | ⏸️ Skip | 유료 라이선스 — RSS 3원 우선 |
 
 ---
 
@@ -101,8 +109,8 @@
 | **BOOTCAMP** | **워크넷 국가인적자원개발 컨소시엄 훈련과정 OpenAPI** | https://openapi.work.go.kr/ | 공식 Open API | 중소기업 대상 훈련 지원 |
 | **CONTEST** | 위비티 (Wevity) | https://www.wevity.com/ | 스크래핑 | 공모전·해커톤 최다 |
 | **CONTEST** | 데브이벤트 (DevEvent) | https://github.com/DevEvent | GitHub `.md` / JSON 파싱 | 개발자 행사·해커톤 일정 |
-| **GRANT** | **중소벤처기업부 사업공고 Open API** | https://www.data.go.kr/data/15113297/openapi.do | 공식 Open API | 정부 지원사업 공고 (창업·R&D·수출·스케일업 등) — **구현 완료** `smes_collector.py` |
-| **GRANT** | **K-Startup 통합공고 OpenAPI** | https://www.data.go.kr/data/15125364/openapi.do | 공식 Open API | **창업진흥원 지원사업 통합 (공고+선정결과 일부 포함)** — 우선 추천 |
+| **GRANT** | **중소벤처기업부 사업공고 Open API** | https://www.data.go.kr/data/15113297/openapi.do | 공식 Open API | ✅ **`smes_collector.py`** → `raw_opportunity_data` · `SMES_SERVICE_KEY` · 일 스케줄 — **쓸 가치 높음** (Chance). Economic 직접 축 ❌ |
+| **GRANT** | **K-Startup 통합공고 OpenAPI** | https://www.data.go.kr/data/15125364/openapi.do | 공식 Open API | ❌ 미구현 — **쓸 가치 높음** (Opportunity P0, SMES 보완). Economic은 정책 방향 **보조**만 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) §3.2·§3.4) |
 | **GRANT** | **과학기술정보통신부 사업공고 OpenAPI** | https://www.data.go.kr/data/15074634/openapi.do | 공식 Open API | **과기부 R&D·기술 지원사업 공고** |
 | **GRANT** | 기업마당 (Bizinfo) OpenAPI | https://www.bizinfo.go.kr/ | 공식 Open API | 중소벤처기업부 지원사업 종합 (개인 신청 제한) |
 | **BID** | **조달청 나라장터(KONEPS) 입찰공고정보 OpenAPI** (`3073756`) | https://www.data.go.kr/data/3073756/openapi.do | 공식 Open API — 키워드·업종 화이트리스트 + 일 1회 증분 수집 (`watermark` = `published_at` + 공고번호) | **`raw_opportunity_data`(메인)**, **`raw_economic_data`(부)** — `raw_metadata`에 입찰 예산·낙찰가 등 정량값 보존. 정부·지자체·공공기관의 **모든 입찰·수주 공고 통합 SoT**; 스타트업·중소기업 사용자에게 **"돈을 벌 기회"** 핵심 신호이자 **정부 자본이 민간 산업으로 흘러가는** 거시 지표. 화이트리스트 키워드 예: AI, 데이터, 소프트웨어, ESG, R&D. |
@@ -191,5 +199,6 @@ ALIO(https://opendata.alio.go.kr/)는 **청년 일자리 올인원 지원 서비
 
 ## 관련 문서
 
+- `backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md` — **제약·SMES/K-Startup/KVIC·구현 현황 (2026-05-17)**
 - `backend/docs/erd.md` — 원천 테이블 DDL 및 도메인 정의
 - `backend/docs/BACKEND_ARCHITECTURE_BLUEPRINT.md` — 백엔드 구조·역할 분리 참고
