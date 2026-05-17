@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -148,6 +149,59 @@ class BronzeEconomicIngestService:
             "skipped_noise": skipped_noise,
         }
         logger.info("Bronze economic Wowtale ingest: %s", result)
+        return result
+
+    async def ingest_wowtale_archive(
+        self,
+        *,
+        max_pages: int = 50,
+        from_date: datetime | None = None,
+        fetch_article_body: bool = True,
+        sleep_sec: float = 1.0,
+        categories: list[tuple[str, bool]] | None = None,
+    ) -> dict[str, Any]:
+        """Wowtale 카테고리 아카이브 크롤링 (Backfill 전용).
+
+        RSS 수집기(ingest_wowtale)가 최근 50건만 제공하는 한계를 보완.
+        기본 대상: funding, venture-capital, Global-news 카테고리.
+
+        Args:
+            max_pages: 카테고리당 최대 순회 페이지 수 (페이지당 ~20건).
+            from_date: 이 날짜 이전 기사에 도달하면 해당 카테고리 수집 중단.
+            fetch_article_body: True면 기사 상세 페이지를 추가 GET해 본문 추출.
+            sleep_sec: 페이지 요청 간 대기 시간(초).
+            categories: (slug, apply_investment_filter) 튜플 리스트.
+                        None이면 기본값(funding / venture-capital / Global-news).
+        """
+        from domain.master.hub.services.collectors.economic.wowtale_archive_crawler import (
+            WowtaleArchiveCrawler,
+        )
+
+        crawler = WowtaleArchiveCrawler(
+            sleep_sec=sleep_sec,
+            fetch_article_body=fetch_article_body,
+        )
+        dtos: list[EconomicCollectDto] = []
+        try:
+            dtos = await crawler.crawl_all(
+                categories=categories,
+                max_pages=max_pages,
+                from_date=from_date,
+            )
+        except Exception:
+            logger.exception("Wowtale 아카이브 크롤링 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+
+        type_counts = dict(Counter(d.source_type for d in dtos).most_common(20))
+        result: dict[str, Any] = {
+            "source": "wowtale_archive",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "source_type_counts": type_counts,
+        }
+        logger.info("Bronze economic Wowtale archive ingest: %s", result)
         return result
 
     async def ingest_platum(

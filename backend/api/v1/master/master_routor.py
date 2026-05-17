@@ -88,6 +88,95 @@ async def run_wowtale_economic_bronze(
         raise HTTPException(status_code=502, detail="Wowtale RSS 수집 중 오류가 발생했습니다.") from None
 
 
+class WowtaleArchiveRequest(BaseModel):
+    """Wowtale 아카이브 Backfill 요청 파라미터."""
+
+    max_pages: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="카테고리당 최대 페이지 수 (페이지당 ~20건, 기본 50 → ~1,000건)",
+    )
+    from_date: str | None = Field(
+        default=None,
+        description="이 날짜 이전 기사 수집 중단 (YYYY-MM-DD). 미입력 시 max_pages까지 전부 수집",
+    )
+    fetch_article_body: bool = Field(
+        default=True,
+        description="기사 상세 페이지 본문 크롤링 여부 (False면 제목·날짜만 수집, 빠름)",
+    )
+    categories: list[str] | None = Field(
+        default=None,
+        description=(
+            "크롤링 카테고리 slug 목록. 미입력 시 기본값: "
+            "['funding', 'venture-capital', 'Global-news']"
+        ),
+    )
+
+
+_ARCHIVE_INVESTMENT_FILTER_SLUGS: frozenset[str] = frozenset({"Global-news"})
+
+
+@router.post(
+    "/bronze/economic/wowtale-archive",
+    status_code=202,
+    summary="Wowtale 아카이브 Backfill (비동기)",
+)
+async def run_wowtale_archive_bronze(
+    body: WowtaleArchiveRequest,
+    background_tasks: BackgroundTasks,
+):
+    """Wowtale 카테고리 아카이브를 순회해 과거 기사를 `raw_economic_data`에 적재 (Backfill 전용).
+
+    RSS 수집기의 최근 50건 한계를 보완한다.
+    수집량에 따라 수십 분 소요될 수 있으므로 **202 Accepted** 로 즉시 응답하고
+    BackgroundTask에서 실행한다.
+    """
+    from datetime import timedelta, timezone
+
+    _KST = timezone(timedelta(hours=9))
+
+    from_date: datetime | None = None
+    if body.from_date:
+        try:
+            from_date = datetime.strptime(body.from_date, "%Y-%m-%d").replace(tzinfo=_KST)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="from_date 형식은 YYYY-MM-DD 입니다. 예: 2025-01-01",
+            ) from None
+
+    # (slug, apply_investment_filter) 변환
+    categories: list[tuple[str, bool]] | None = None
+    if body.categories:
+        categories = [
+            (slug, slug in _ARCHIVE_INVESTMENT_FILTER_SLUGS)
+            for slug in body.categories
+        ]
+
+    async def _run_backfill() -> None:
+        async with AsyncSessionLocal() as bg_session:
+            svc = BronzeEconomicIngestService(bg_session, None)
+            result = await svc.ingest_wowtale_archive(
+                max_pages=body.max_pages,
+                from_date=from_date,
+                fetch_article_body=body.fetch_article_body,
+                categories=categories,
+            )
+        logger.info("Wowtale archive backfill 완료: %s", result)
+
+    background_tasks.add_task(_run_backfill)
+
+    return {
+        "status": "accepted",
+        "message": (
+            f"Wowtale 아카이브 Backfill이 백그라운드에서 시작되었습니다. "
+            f"max_pages={body.max_pages}, from_date={body.from_date}, "
+            f"fetch_article_body={body.fetch_article_body}"
+        ),
+    }
+
+
 @router.post("/bronze/economic/platum")
 async def run_platum_economic_bronze(
     max_items: int = Query(50, ge=1, le=100, description="최대 수집 건수"),
