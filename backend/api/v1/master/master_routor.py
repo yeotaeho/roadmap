@@ -26,6 +26,9 @@ from core.database import AsyncSessionLocal, get_db
 from core.scheduler import list_jobs as scheduler_list_jobs
 from core.scheduler import run_job_now as scheduler_run_job_now
 from domain.master.hub.services.bronze_economic_ingest_service import BronzeEconomicIngestService
+from domain.master.hub.services.bronze_market_timeseries_ingest_service import (
+    BronzeMarketTimeseriesIngestService,
+)
 from domain.master.hub.services.bronze_opportunity_ingest_service import (
     BronzeOpportunityIngestService,
 )
@@ -247,6 +250,37 @@ async def run_yahoo_finance_economic_bronze(
         ) from None
 
 
+@router.post("/bronze/market-timeseries/yahoo")
+async def run_yahoo_market_timeseries_bronze(
+    period: str | None = Query(
+        None,
+        description="yfinance history period (예: 1mo, 1y). 생략 시 incremental 기본",
+    ),
+    incremental: bool = Query(
+        True,
+        description="True=1mo(일일), False=1y(초기 backfill)",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Yahoo Finance 16티커 일별 OHLCV → `raw_market_timeseries` upsert.
+
+    급증 신호(`raw_economic_data`)와 분리된 **연속 시계열** Bronze.
+    Silver에서 거래대금 추세·20일 평균 대비 비율·섹터 모멘텀 산출에 사용.
+    """
+    svc = BronzeMarketTimeseriesIngestService(db)
+    try:
+        return await svc.ingest_yahoo_timeseries(
+            period=period,
+            incremental=incremental,
+        )
+    except Exception:
+        logger.exception("Yahoo market timeseries Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502,
+            detail="Yahoo 시장 시계열 수집 중 오류가 발생했습니다.",
+        ) from None
+
+
 @router.post("/bronze/economic/yahoo-macro")
 async def run_yahoo_macro_economic_bronze(
     db: AsyncSession = Depends(get_db),
@@ -270,6 +304,62 @@ async def run_yahoo_macro_economic_bronze(
         raise HTTPException(
             status_code=502,
             detail="Yahoo Macro 수집 중 오류가 발생했습니다.",
+        ) from None
+
+
+@router.post("/bronze/economic/yahoo-macro-backfill", status_code=202)
+async def run_yahoo_macro_backfill_bronze(
+    background_tasks: BackgroundTasks,
+    period: str | None = Query(
+        None,
+        description="yfinance history period (예: 1y, 6mo). 생략 시 기본(1y)",
+    ),
+):
+    """Yahoo Macro 거시 지표 과거 급변동 이력 Backfill (비동기).
+
+    슬라이딩 윈도우로 `period` 기간 내 모든 거래일을 스캔해
+    Z-score 임계값 초과 일자를 누적 적재한다.
+    티커당 ~250일 × 8개 자산 = 최대 2,000건 예상.
+    **202 Accepted** 로 즉시 응답하고 BackgroundTask에서 실행한다.
+    """
+    async def _run_macro_backfill() -> None:
+        async with AsyncSessionLocal() as bg_session:
+            svc = BronzeEconomicIngestService(bg_session, None)
+            result = await svc.ingest_yahoo_macro_backfill(period=period)
+        logger.info("Yahoo Macro backfill 완료: %s", result)
+
+    background_tasks.add_task(_run_macro_backfill)
+
+    return {
+        "status": "accepted",
+        "message": (
+            f"Yahoo Macro Backfill이 백그라운드에서 시작되었습니다. "
+            f"period={period or 'default(1y)'}"
+        ),
+    }
+
+
+@router.post("/bronze/economic/venturesquare")
+async def run_venturesquare_economic_bronze(
+    max_items: int = Query(50, ge=1, le=100, description="최대 수집 건수"),
+    fetch_article_if_short: bool = Query(
+        True,
+        description="RSS 본문이 짧으면 기사 permalink 를 GET 해 보완",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """벤처스퀘어 펀딩 RSS 기반 스타트업 투자 뉴스를 `raw_economic_data`에 적재."""
+    svc = BronzeEconomicIngestService(db, None)
+    try:
+        return await svc.ingest_venturesquare(
+            max_items=max_items,
+            fetch_article_if_short=fetch_article_if_short,
+        )
+    except Exception:
+        logger.exception("Venturesquare Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502,
+            detail="Venturesquare RSS 수집 중 오류가 발생했습니다.",
         ) from None
 
 

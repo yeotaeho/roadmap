@@ -20,7 +20,7 @@ APScheduler ``AsyncIOScheduler`` 를 FastAPI 이벤트 루프 위에 띄워, ``B
 ========
 
 - **일일** (오전 9 시 KST):
-  DART · MSIT 보도자료/사업공고/R&D 예산 · Wowtale · Platum · StartupRecipe · SMES Opportunity
+  DART · MSIT 보도자료/사업공고/R&D 예산 · Wowtale · Platum · Venturesquare · StartupRecipe · Yahoo OHLCV 시계열 · SMES Opportunity
 - **주간** (월요일 오전 9 시 KST):
   ALIO 공공기관 사업정보 · Yahoo Finance ETF · Yahoo Macro
 
@@ -41,6 +41,9 @@ from core.config.settings import get_settings
 from core.database import AsyncSessionLocal
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
+)
+from domain.master.hub.services.bronze_market_timeseries_ingest_service import (
+    BronzeMarketTimeseriesIngestService,
 )
 from domain.master.hub.services.bronze_opportunity_ingest_service import (
     BronzeOpportunityIngestService,
@@ -115,10 +118,24 @@ async def _job_platum() -> dict[str, Any]:
         return await svc.ingest_platum(max_items=50, fetch_article_if_short=True)
 
 
+async def _job_venturesquare() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, None)
+        return await svc.ingest_venturesquare(
+            max_items=50, fetch_article_if_short=True
+        )
+
+
 async def _job_startup_recipe() -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         svc = BronzeEconomicIngestService(session, None)
         return await svc.ingest_startup_recipe(max_items=50)
+
+
+async def _job_yahoo_market_timeseries() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        svc = BronzeMarketTimeseriesIngestService(session)
+        return await svc.ingest_yahoo_timeseries(incremental=True)
 
 
 async def _job_msit_press() -> dict[str, Any]:
@@ -185,7 +202,9 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("wowtale",           _job_wowtale),
     ("platum",            _job_platum),
+    ("venturesquare",     _job_venturesquare),
     ("startup_recipe",    _job_startup_recipe),
+    ("yahoo_market_ts",   _job_yahoo_market_timeseries),
     ("msit_press",        _job_msit_press),
     ("msit_biz",          _job_msit_biz),
     ("msit_rnd_budget",   _job_msit_rnd_budget),

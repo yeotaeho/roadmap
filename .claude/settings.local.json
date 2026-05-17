@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:wowtale.net)",
       "Bash(Get-ChildItem -Path \"C:\\\\project\\\\roadmap\\\\backend\" -Recurse -File)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(python *)"
     ]
   }
 }

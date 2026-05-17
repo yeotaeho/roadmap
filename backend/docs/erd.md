@@ -44,6 +44,9 @@ sectors (1) ───< sub_sectors (N)
    └────< trending_keywords / economic_briefings / crossover_metrics (Gold)
 
 raw_* (Bronze) ───> refined_* (Silver) ───> *_log/*_issues (Gold)
+
+raw_economic_data     — 이벤트·신호 (뉴스, 거래량 급증, 공시)
+raw_market_timeseries — 티커×거래일 OHLCV 연속 시계열 (Yahoo 16종 등)
 ```
 
 ---
@@ -110,6 +113,43 @@ CREATE TABLE raw_economic_data (
     published_at TIMESTAMPTZ,                 -- 실제 공시일 / 기사 발행일 (시계열 분석의 핵심)
     collected_at TIMESTAMPTZ DEFAULT now()    -- 시스템 수집 시각
 );
+-- 설명: 경제·자본 **이벤트** 단위 (VC 뉴스, DART, Yahoo 거래량 **급증** 신호 등).
+--       일별 OHLCV 전량은 `raw_market_timeseries` 에 적재 (의미·grain 분리).
+
+-- 상장·ETF 일별 시계열 (Yahoo Finance / yfinance)
+CREATE TABLE raw_market_timeseries (
+    id BIGSERIAL PRIMARY KEY,
+    ticker VARCHAR(32) NOT NULL,              -- yfinance 심볼 (예: 091220.KS, SPY)
+    trade_date DATE NOT NULL,                 -- 거래일 (시장 기준일, KST 변환 후 date)
+
+    -- 자산 메타 (Yahoo 16종 모니터링 대상과 동일 네임스페이스)
+    source_type VARCHAR(50) NOT NULL,         -- YAHOO_ETF_AI, YAHOO_STOCK_KR_SAMSUNG, YAHOO_GLOBAL_SPY …
+    asset_name VARCHAR(255) NOT NULL,         -- 표시명 (예: TIGER 글로벌AI액티브)
+    theme VARCHAR(100),                       -- 테마 라벨 (예: AI/반도체)
+    currency VARCHAR(10) NOT NULL DEFAULT 'KRW', -- KRW | USD
+
+    -- OHLCV (Bronze 원본 — Silver에서 급증·Z-score·모멘텀 산출)
+    open_price NUMERIC(18, 6),
+    high_price NUMERIC(18, 6),
+    low_price NUMERIC(18, 6),
+    close_price NUMERIC(18, 6) NOT NULL,
+    volume BIGINT NOT NULL,                   -- 거래량(주)
+    turnover_amount BIGINT,                   -- 추정 거래대금 = volume × (H+L+C)/3
+
+    raw_metadata JSONB,                       -- data_provider, vwap_approx, turnover_calc 등
+    collected_at TIMESTAMPTZ DEFAULT now(),   -- 최초 적재·upsert 갱신 시각
+
+    CONSTRAINT uq_raw_market_timeseries_ticker_date UNIQUE (ticker, trade_date)
+);
+CREATE INDEX ix_raw_market_ts_ticker_date ON raw_market_timeseries(ticker, trade_date);
+CREATE INDEX ix_raw_market_ts_trade_date ON raw_market_timeseries(trade_date);
+CREATE INDEX ix_raw_market_ts_source_type ON raw_market_timeseries(source_type);
+-- 설명:
+--   - `raw_economic_data` 와 분리: 이벤트(URL unique) vs 시계열(ticker+date unique)
+--   - 수집: POST /api/master/bronze/market-timeseries/yahoo
+--   - 일일 스케줄: incremental period=1mo upsert / 초기 backfill: incremental=false (1y)
+--   - 규모 참고: 16 ticker × ~252 거래일/년 ≈ 4,000 rows/년 (티커 확장 시 선형 증가)
+--   - Silver 후보: 20일 평균 거래대금, 누적 추세, VC 뉴스 대비 2주 lag 상관
 
 CREATE TABLE raw_innovation_data (
     id BIGSERIAL PRIMARY KEY,                 -- 원천 데이터 PK

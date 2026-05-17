@@ -334,5 +334,67 @@ class YahooMacroCollector:
         )
         return out, skipped
 
-    async def collect(self) -> tuple[list[EconomicCollectDto], int]:
-        return await asyncio.to_thread(self.collect_sync)
+    def collect_macro_history_sync(
+        self, *, period: str | None = None
+    ) -> tuple[list[EconomicCollectDto], int]:
+        """기간 내 **모든 거래일**에 대해 Z-score 급변동 신호를 스캔 (시계열 Backfill).
+
+        `collect_sync` 는 최신 거래일 1건만 확인하지만, 본 메서드는
+        `_Z_WINDOW + 2` 행부터 마지막 행까지 슬라이딩 윈도우로 순회해
+        과거 급변동일을 `source_url` 기준으로 누적한다.
+
+        Returns:
+            (DTO 리스트, 티커 단위 완전 실패 수)
+        """
+        p = period or _HISTORY_PERIOD
+        out: list[EconomicCollectDto] = []
+        failed_tickers = 0
+
+        for i, target in enumerate(self._targets):
+            if i > 0 and self._sleep_sec > 0:
+                time.sleep(self._sleep_sec)
+
+            try:
+                hist = yf.Ticker(target.ticker).history(
+                    period=p,
+                    auto_adjust=False,
+                )
+            except Exception:
+                logger.exception(
+                    "Yahoo Macro[%s] history(backfill) 다운로드 실패", target.ticker
+                )
+                failed_tickers += 1
+                continue
+
+            hist = _drop_trailing_nan_close(hist)
+            if hist is None or hist.empty or len(hist) < _Z_WINDOW + 3:
+                failed_tickers += 1
+                continue
+
+            # 슬라이딩 윈도우: _Z_WINDOW+1 행부터 시작 (최소 _Z_WINDOW+2 행 보장)
+            for end_idx in range(_Z_WINDOW + 1, len(hist)):
+                sub = hist.iloc[: end_idx + 1]
+                try:
+                    dto = _compute_zscore_dto(target, sub)
+                except Exception:
+                    continue
+                if dto is not None:
+                    out.append(dto)
+
+        logger.info(
+            "Yahoo Macro **history** scan: %s signals, failed_tickers=%s period=%s",
+            len(out),
+            failed_tickers,
+            p,
+        )
+        return out, failed_tickers
+
+    async def collect(
+        self, *, backfill: bool = False, period: str | None = None
+    ) -> tuple[list[EconomicCollectDto], int]:
+        def _run() -> tuple[list[EconomicCollectDto], int]:
+            if backfill:
+                return self.collect_macro_history_sync(period=period)
+            return self.collect_sync()
+
+        return await asyncio.to_thread(_run)

@@ -38,6 +38,9 @@ from domain.master.hub.services.collectors.economic.startup_recipe_collector imp
 from domain.master.hub.services.collectors.economic.platum_collector import (
     PlatumEconomicCollector,
 )
+from domain.master.hub.services.collectors.economic.venturesquare_collector import (
+    VenturesquareEconomicCollector,
+)
 from domain.master.hub.services.collectors.economic.wowtale_collector import WowtaleEconomicCollector
 from domain.master.hub.services.collectors.economic.yahoo_finance_collector import (
     YahooFinanceEtfCollector,
@@ -330,6 +333,72 @@ class BronzeEconomicIngestService:
             "skipped_no_signal": skipped,
         }
         logger.info("Bronze economic YahooMacro ingest: %s", result)
+        return result
+
+    async def ingest_yahoo_macro_backfill(
+        self,
+        *,
+        period: str | None = None,
+    ) -> dict[str, Any]:
+        """Yahoo Macro 기간 내 전체 거래일 Z-score 급변동 스캔 (시계열 Backfill).
+
+        `ingest_yahoo_macro` 는 최신 거래일만 확인하지만,
+        본 메서드는 슬라이딩 윈도우로 과거 급변동일을 모두 누적한다.
+
+        Args:
+            period: yfinance history period (예: ``1y``, ``6mo``). None이면 기본(1y).
+        """
+        collector = YahooMacroCollector()
+        dtos: list[EconomicCollectDto] = []
+        failed = 0
+        try:
+            dtos, failed = await collector.collect(backfill=True, period=period)
+        except Exception:
+            logger.exception(
+                "Yahoo Macro Backfill 수집 실패. 빈 결과로 진행합니다."
+            )
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+
+        result = {
+            "source": "yahoo_macro_backfill",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "failed_tickers": failed,
+            "period": period or "default",
+        }
+        logger.info("Bronze economic YahooMacro backfill: %s", result)
+        return result
+
+    async def ingest_venturesquare(
+        self,
+        *,
+        max_items: int = 50,
+        fetch_article_if_short: bool = True,
+    ) -> dict[str, Any]:
+        """벤처스퀘어 RSS 기반 스타트업 투자 뉴스 수집."""
+        collector = VenturesquareEconomicCollector()
+        dtos: list[EconomicCollectDto] = []
+        skipped_noise = 0
+        try:
+            dtos, skipped_noise = await collector.collect(
+                max_items=max_items,
+                fetch_article_if_short=fetch_article_if_short,
+            )
+        except Exception:
+            logger.exception("Venturesquare 경제 Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+
+        result = {
+            "source": "venturesquare",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "skipped_noise": skipped_noise,
+        }
+        logger.info("Bronze economic Venturesquare ingest: %s", result)
         return result
 
     async def ingest_alio_projects(
