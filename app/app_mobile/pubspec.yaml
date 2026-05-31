@@ -76,6 +76,11 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # `flutter run` 시 빌드 타임에 APK/IPA에 포함 → [AppEnv.load] runtime dotenv.
+  # `dart_defines/local.env` 가 없으면 `example.env` 를 복사해 만든 뒤 빌드하세요.
+  assets:
+    - dart_defines/local.env
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

@@ -2,51 +2,57 @@
 
 청년 인사이트 Flutter 모바일 앱.
 
-## 환경 설정
+## 환경 설정 (SSOT: `dart_defines/local.env`)
 
 1. `dart_defines/example.env` 를 복사해 `dart_defines/local.env` 를 만들고 값을 채웁니다.
+2. **필수 키**
+   - `API_BASE_URL` — `adb reverse` 사용 시 `http://localhost:8000`
+   - `GOOGLE_SERVER_CLIENT_ID` — Google Cloud **Web** OAuth Client ID
    - `KAKAO_NATIVE_APP_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NAVER_CLIENT_NAME`
-   - `API_BASE_URL` (기본: `http://localhost:8000` — `adb reverse` 와 함께 사용)
-2. `local.env` 의 카카오/네이버 키는 Gradle 빌드시 안드로이드 string 리소스로 자동 주입됩니다.
 
-## 실행 (Windows / PowerShell)
+### env가 앱에 들어가는 방식
 
-`scripts/dev.ps1` 한 번으로 다음을 자동 처리합니다.
+| 방식 | 설명 |
+|------|------|
+| **Asset 번들** (기본) | `flutter run` / `flutter build` 시 `local.env` 가 APK에 포함 → `AppEnv.load()` |
+| `--dart-define-from-file` (선택) | compile-time 주입, IDE settings/launch.json 에서 자동 적용 |
+| Android Gradle | 카카오/네이버 네이티브 SDK string 리소스 |
 
-- 연결된 디바이스 감지 (1개면 자동 선택, 2개 이상이면 선택 메뉴)
-- 해당 디바이스에 `adb reverse tcp:8000 tcp:8000` 적용 (PC 백엔드를 폰의 `localhost:8000` 으로 노출)
-- `flutter run -d <device> --dart-define-from-file=dart_defines/local.env`
+> **env 변경 후** `flutter clean` 후 full rebuild 필요 (hot reload 불가).
+
+## 실행
+
+### 일반 CLI (권장)
 
 ```powershell
-# 기본 실행
-.\scripts\dev.ps1
+cd app/app_mobile
+flutter run -d emulator-5554
+```
 
-# 특정 디바이스 지정
+`local.env` 가 있으면 빌드 시 asset 으로 포함되어 Google 로그인 등에 사용됩니다.
+
+### adb reverse + dev 스크립트
+
+PC `localhost:8000` 백엔드에 붙을 때:
+
+```powershell
 .\scripts\dev.ps1 -Device emulator-5554
-
-# 다른 포트 추가
-.\scripts\dev.ps1 -Port 8000,8080
-
-# release 빌드
-.\scripts\dev.ps1 -Release
-
-# flutter run 에 추가 인자 전달
-.\scripts\dev.ps1 -- --verbose
 ```
 
-> 처음 실행 시 PowerShell 실행 정책 때문에 막히면:
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
+### VS Code / Cursor
 
-### `adb reverse` 만 따로 적용하고 싶을 때
+- 터미널 `flutter run`: asset 방식으로 동작
+- Run and Debug `app_mobile (debug)`: dart-define 추가 주입
 
-이미 다른 방식으로 `flutter run` 을 띄우고 있다면:
+### APK 빌드
 
 ```powershell
-.\scripts\adb-reverse.ps1                 # 모든 디바이스, 8000 포트
-.\scripts\adb-reverse.ps1 -Port 8000,8080 # 여러 포트
-.\scripts\adb-reverse.ps1 -Device RF9NC03G9VL
+.\scripts\build.ps1
 ```
 
-> `adb reverse` 는 USB 분리/재부팅/에뮬레이터 재기동 시 사라지므로 그때마다 다시 실행해야 합니다.
+### local.env 없을 때
+
+```powershell
+Copy-Item dart_defines/example.env dart_defines/local.env
+# 값 채운 뒤 빌드
+```

@@ -1,7 +1,8 @@
-# Economic / Opportunity 데이터 소스 — 제약·구현 현황 (2026-05-17)
+# Economic / Opportunity 데이터 소스 — 제약·구현 현황 (2026-05-31)
 
-Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스**와 **이미 코드로 연동된 소스**를 한곳에 정리합니다.  
-`DATA_COLLECTION_SOURCES_GUIDE_V3.md` §1·§5와 함께 보면 됩니다.
+Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스**, **P1 후보**, **이미 코드로 연동된 소스**를 한곳에 정리합니다.  
+출처 목록 SSOT: [`backend/docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md`](../../docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md) §1·§1-1·§1-2·§5.  
+**본 문서**는 구현·제약·우선순위 판단의 SSOT입니다.
 
 ---
 
@@ -32,10 +33,12 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 ### 2.1 공통 원칙
 
 - 막힌 소스 때문에 “돈의 흐름”을 포기하는 것이 아니라 **프록시 조합**으로 간다.  
-  - **이벤트(민간):** RSS  
-  - **정부:** MSIT·ALIO·MOEF  
-  - **시장:** Yahoo 급증 + `raw_market_timeseries`  
-- NTIS·Crunchbase는 **“있으면 게임이 바뀌는 업그레이드”**, 스타트업·1인 개발 MVP의 **필수 조건 아님**.
+  - **이벤트(민간):** RSS 3원 + DART(B·D)  
+  - **정부 정량:** MSIT·ALIO·MOEF · (P1) 보조금24  
+  - **정부 정성 보조:** 부처 보도자료 → `raw_economic_data` ([V3 §1-2](../../docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md))  
+  - **시장:** Yahoo 급증 + `raw_market_timeseries` · (P1) BOK ECOS  
+- NTIS·Crunchbase는 **“있으면 게임이 바뀌는 업그레이드”**, MVP **필수 조건 아님**.
+- **네이버 금융 뉴스**는 V3 §1 표에 **Skip** 등록 — [§2](#2-접근-제약-소스-held--skip)와 동일.
 
 ---
 
@@ -55,6 +58,19 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 | **트래픽** | 개발계정 일 100건 수준 ([포털 명세](https://www.data.go.kr/data/15113297/openapi.do)) — 페이지네이션·`max_items`로 관리 |
 
 **어떻게 보나:** Economic(자본 **흐름** 관측)보다 **Opportunity(돈을 받을 공고)** 에 가깝습니다. 다만 정부가 **어디에 예산을 쏟는지** 거시 신호로는 Silver에서 Economic과 교차 분석 가능.
+
+---
+
+### 3.1-b 중기부 지원사업 **선정·집행** API (15113297 확장)
+
+공고 API(`15113297`)만으로는 **“누가 실제로 받았는가”**·**“언제 지급됐는가”**를 알 수 없습니다. V3 §5 GRANT 보조 행 · [COLLECTOR_EXPANSION_REVIEW.md](./COLLECTOR_EXPANSION_REVIEW.md) §SMES 확장 참조.
+
+| API (후보) | 사용 여부 | 적재 | Economic? | 우선순위 |
+|------------|-----------|------|-----------|----------|
+| **선정 결과** (추정 `getSelectionResult` 등) | ❌ 미구현 | `raw_opportunity_data` + `raw_metadata` (`slctnAmt`, `slctnEntrpsNm`) | Silver에서 RSS·DART와 **교차** — “정부가 고른 기업” 시그널 | **P1** |
+| **집행(지급) 현황** (`exctnAmt`, `exctnDt`) | ❌ 미구현 | 테이블 Silver 설계 시 확정 (Opportunity 메타 또는 Economic 보조) | **실제 자본 집행** 추적 | **P2** |
+
+**구현 부담:** `smes_collector.py` 패턴 재사용 · data.go.kr 포털에서 API 명세·키 추가 신청 필요 (1~2영업일).
 
 ---
 
@@ -113,7 +129,7 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 
 ---
 
-## 3.4 K-Startup vs KVIC — Economic 관련 한눈에
+### 3.4 K-Startup vs KVIC — Economic 관련 한눈에
 
 ```
                     Economic 핵심도 ↑
@@ -132,7 +148,7 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 | **KVIC** | ✅ **중간** | backfill·Silver 여유 후 | **Economic 보조** (거시) | 시장 **전체 규모·추세** |
 | **SMES 15113297** | ✅ 높음 | ✅ 이미 구현 | **Opportunity** | (K-Startup과 유사) |
 
-**요약 (2026-05-17 판단):**
+**요약 (2026-05-31):**
 
 - 둘 다 **“Economic에 쓸모없다”가 아님**.
 - **K-Startup** → Economic보다 **Opportunity P0**가 맞고, **넣는 이득이 큼**.
@@ -140,21 +156,62 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 
 ---
 
-## 4. Economic Bronze — 구현 완료 vs 공백 (2026-05-17)
+### 3.5 Economic P1 후보 — 정량 거시 (미구현)
+
+[V3 §1-1](../../docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md) · `BRONZE_ARCHITECTURE_DECISION.md` §6대 핵심 소스. **금액·지급주체·수혜자**가 명시되는 “진짜 자본 흐름” 축.
+
+| 소스 | URL / API | 매핑 | `source_type` (안) | 상태 | 비고 |
+|------|-----------|------|----------------------|------|------|
+| **보조금24 통합조회** | [gov24.go.kr](https://www.gov24.go.kr/) Open API | `raw_economic_data` | `GOVT_SUBSIDY24_*` | ❌ P1 | 정부→기업/개인 보조금 · 월 ~2,000건+ 예상 |
+| **한국은행 ECOS** | [ecos.bok.or.kr/api](https://ecos.bok.or.kr/api/) | `raw_economic_data` | `BOK_ECOS_*` | ❌ P1 | FDI·통화량·금리 시계열 · `investment_amount`=None |
+| **FSS 사모펀드 공시** | [dis.fss.or.kr](https://dis.fss.or.kr/) | `raw_economic_data` | `FSS_PE_FUND_*` | ❌ P1 | PE/VC 펀드 결성·운용 · KVIC 거시와 보완 |
+
+**우선순위:** 보조금24 → BOK ECOS → FSS 사모펀드.
+
+---
+
+### 3.6 DART 확장 — 정기공시(A)
+
+| 항목 | 내용 |
+|------|------|
+| **현재 구현** | ✅ **주요사항보고(B)** + ✅ **지분공시(D)** — `dart_collector.py` + `dart_detail_fetcher.py` |
+| **미구현** | ❌ **정기공시(A)** — 사업·분기·반기보고서의 R&D비·CAPEX·해외출자 **계획** |
+| **B vs A** | B = **이미 결정된** M&A·증자·시설투자 / A = **향후 3~5년** 투자·R&D 계획 |
+| **우선순위** | **P1** — 별도 `DartRnDCollector` 검토 ([COLLECTOR_EXPANSION_REVIEW.md](./COLLECTOR_EXPANSION_REVIEW.md)) |
+| **품질 이슈** | B·D 상세 파싱 후에도 `investment_amount` **Phase 3 미완** — P2로 유지 |
+
+---
+
+### 3.7 정부 부처 보도자료 — Economic 보조축
+
+[V3 §1-2](../../docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md) · `GOVT_DOCS_COLLECTION_STRATEGY.md` · `BRONZE_ARCHITECTURE_DECISION.md` 두 축 전략.
+
+| 질문 | 결정 (2026-05-31) |
+|------|-------------------|
+| **§1 vs §4?** | **`raw_economic_data` Economic 보조축** — §4 Discourse(담론·커뮤니티) **아님** |
+| **역할** | “돈이 흐르기 **전**” 정책·산업 방향 신호 — Silver에서 MSIT/ALIO/KONEPS **정량과 시간 정렬** |
+| **선행 사례** | ✅ **`GOVT_MSIT_PRESS`** (`mId=307`, 연도+“시행” 필터) — 이미 일 스케줄 |
+| **범위** | 22개 부처 전체 ❌ — BOK·MFDS·KOCCA/KHIDI(P0), FSC·MOTIE·ME·MOHW·MOLIT(P1) 등 **7~8개만** |
+| **구현** | ❌ 전부 미구현 (보도자료 크롤러·`GOVT_*_PRESS` 템플릿) |
+| **중복 금지** | 동일 URL을 §4에 **이중 적재하지 않음** |
+
+---
+
+## 4. Economic Bronze — 구현 완료 vs 공백 (2026-05-31)
 
 ### 4.1 `raw_economic_data` — 구현됨
 
-| 소스 | 컬렉터 | 스케줄 |
-|------|--------|--------|
-| DART | `dart_collector.py` | 일 `dart` |
-| Wowtale / Platum / Venturesquare | `*_collector.py` | 일 |
-| Wowtale 아카이브 | `wowtale_archive_crawler.py` | 수동/backfill |
-| StartupRecipe | `startup_recipe_collector.py` | 일 (금액 추출 ❌) |
-| MSIT 보도/사업/R&D | `msit_*` | 일 |
-| ALIO 사업 | `alio_public_inst_project_collector.py` | 주 `alio_projects` |
-| MOEF PDF | `moef_local_pdf_collector.py` | 수동 업로드 |
-| Yahoo Volume Surge | `yahoo_finance_collector.py` | 주 |
-| Yahoo Macro | `yahoo_macro_collector.py` | 주 |
+| 소스 | 컬렉터 | 스케줄 | 비고 |
+|------|--------|--------|------|
+| DART **B·D** | `dart_collector.py` + `dart_detail_fetcher.py` | 일 `dart` | 지분공시(D) 기본 포함 · A(정기공시) ❌ |
+| Wowtale / Platum / Venturesquare | `*_collector.py` | 일 | RSS 금액 정규식 추출 ⭕ |
+| Wowtale 아카이브 | `wowtale_archive_crawler.py` | 수동/backfill | |
+| StartupRecipe | `startup_recipe_collector.py` | 일 | 금액 추출 ❌ |
+| MSIT 보도/사업/R&D | `msit_*` | 일 | 보도=부처 보조축 **선행 사례** |
+| ALIO 사업 | `alio_public_inst_project_collector.py` | 주 `alio_projects` | |
+| MOEF PDF | `moef_local_pdf_collector.py` | 수동 업로드 | `GOVT_MOEF_BUDGET` / `GOVT_MOEF_FISCAL` |
+| Yahoo Volume Surge | `yahoo_finance_collector.py` | 주 | |
+| Yahoo Macro | `yahoo_macro_collector.py` | 주 | |
 
 ### 4.2 `raw_market_timeseries` — 구현됨 (별 테이블)
 
@@ -165,39 +222,56 @@ Roadmap Bronze 수집 전략에서 **접근이 막히거나 비용이 큰 소스
 API: `POST /api/master/bronze/market-timeseries/yahoo`  
 DDL: `backend/docs/erd.md` §4
 
-### 4.3 Economic — 미구현·약함
+### 4.3 Economic / Opportunity — 미구현·약함
 
-| 항목 | 상태 |
-|------|------|
-| NTIS | Held (§2) |
-| The VC / 네이버 금융 / Crunchbase | Skip (§2) |
-| KONEPS 입찰 → economic 메타 | 미구현 |
-| KVIC 집계·Open API | 미구현 (§3.3) |
-| DART `investment_amount` Phase 3 | 미완 |
-| ALIO `investment_amount` | 대부분 `None` (NTIS/KONEPS 보완 예정) |
-| K-Startup API | 미구현 (§3.2) — Opportunity |
+| 항목 | 상태 | § 참조 |
+|------|------|--------|
+| NTIS | Held | §2 |
+| The VC / **네이버 금융** / Crunchbase | Skip | §2 · V3 §1 |
+| **보조금24 / BOK ECOS / FSS 사모펀드** | ❌ P1 미구현 | §3.5 · V3 §1-1 |
+| **DART 정기공시(A)** | ❌ P1 미구현 | §3.6 |
+| **부처 보도자료** (BOK·FSC·MOTIE 등) | ❌ 미구현 | §3.7 · V3 §1-2 |
+| KONEPS 입찰 → economic 메타 | ❌ 미구현 | V3 §5 BID |
+| KVIC 집계·Open API | ❌ P1 | §3.3 |
+| DART `investment_amount` Phase 3 | 🟡 미완 (B·D 상세 fetcher 있음) | §3.6 |
+| ALIO `investment_amount` | 대부분 `None` | NTIS/KONEPS 보완 예정 |
+| K-Startup API | ❌ Opportunity P0 | §3.2 |
+| **SMES 선정 결과 API** | ❌ P1 | §3.1-b |
+| **SMES 집행 현황 API** | ❌ P2 | §3.1-b |
 
 ---
 
-## 5. 우선순위 (제약을 고려한 로드맵)
+## 5. 우선순위 (제약을 고려한 로드맵, 2026-05-31)
 
-| 순위 | 작업 | 이유 |
-|------|------|------|
-| P0 | DB backfill + `SCHEDULER_ENABLED=true` | 코드만으로는 데이터 없음 |
-| P0 | **K-Startup 15125364** 컬렉터 | 공공 API·무료·SMES와 complementary |
-| P1 | **KVIC** 펀드 Open API 또는 MarketWatch PDF 파이프라인 | NTIS 대체 거시 민간·모태 지표 |
-| P1 | Silver: RSS dedup + 주간 섹터 건수/금액 | Bronze → “흐름” 가시화 |
-| P2 | DART 금액 필드 | 상장·M&A 정량 |
-| Held | NTIS | 키 확보 시 P0 승격 |
-| Held | Crunchbase | 예산·Silver 후 |
+| 순위 | 작업 | 축 | 이유 |
+|------|------|-----|------|
+| **P0** | DB backfill + `SCHEDULER_ENABLED=true` | 공통 | 코드만으로는 데이터 없음 |
+| **P0** | **K-Startup 15125364** 컬렉터 | Opportunity | SMES와 complementary · 일 10,000건 여유 |
+| **P1** | **보조금24 OpenAPI** | Economic 정량 | 6대 핵심 소스 · 월 ~2,000건+ |
+| **P1** | **BOK ECOS API** | Economic 정량 | 거시 FDI·통화량 선행 지표 |
+| **P1** | **FSS 사모펀드 공시** | Economic 정량 | PE/VC · KVIC 보완 |
+| **P1** | **DART 정기공시(A)** | Economic | R&D·CAPEX 계획 · B와 상호 보완 |
+| **P1** | **SMES 선정 결과 API** | Opportunity→Silver | “정부가 고른 기업” · 공고 JOIN |
+| **P1** | **KVIC** 펀드 Open API 또는 MarketWatch PDF | Economic 보조 | NTIS 대체 거시 VC 지표 |
+| **P1** | Silver: RSS dedup + 주간 섹터 건수/금액 | Silver | Bronze → “흐름” 가시화 |
+| **P1** | **부처 보도자료 P0** (BOK·MFDS·KOCCA/KHIDI) | Economic 보조 | MSIT_PRESS 템플릿 확장 |
+| **P2** | DART `investment_amount` Phase 3 완성 | Economic | B·D 상세 파싱 커버리지 확대 |
+| **P2** | **SMES 집행 현황 API** | Economic/Opportunity | 선정≠지급 · 실질 집행 추적 |
+| **P2** | 부처 보도자료 P1 (FSC·MOTIE·ME·MOHW·MOLIT) | Economic 보조 | 산업별 정책 신호 |
+| **Held** | NTIS | Economic | 키 확보 시 P0 승격 |
+| **Held** | Crunchbase | Economic | 예산·Silver 후 |
+| **Skip** | 네이버 금융·The VC | — | §2 · V3 §1 |
 
 ---
 
 ## 6. 관련 문서
 
-- `backend/docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md` — 출처 목록 SSOT
-- `WOWTALE_YAHOO_ENHANCEMENT_STRATEGY.md` — Wowtale/Yahoo 확충 (일부 상단 스냅샷 구버전 — 본 문서·IMPL 우선)
-- `YAHOO_VENTURESQUARE_IMPL.md` — Yahoo Macro backfill·벤처스퀘어
-- `WOWTALE_ARCHIVE_CRAWLER_IMPL.md` — 아카이브 backfill
-- `BRONZE_ARCHITECTURE_DECISION.md` — 초기 진단(건수·편중 — 운영 후 재평가)
-- `SMES_OPENAPI_COLLECTION_GUIDE.md` — 15113297 상세
+- [`backend/docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md`](../../docs/DATA_COLLECTION_SOURCES_GUIDE_V3.md) — 출처 목록 SSOT (§1-1 P1 후보 · §1-2 부처 보도 · §5 SMES 확장)
+- [`COLLECTOR_EXPANSION_REVIEW.md`](./COLLECTOR_EXPANSION_REVIEW.md) — DART(A)·SMES 선정/집행 API 확장 검토
+- [`GOVT_DOCS_COLLECTION_STRATEGY.md`](./GOVT_DOCS_COLLECTION_STRATEGY.md) — MOEF·MSIT·MOTIE·ME · `source_type` 정의
+- [`DART_ECONOMIC_ENHANCEMENT_STRATEGY.md`](./DART_ECONOMIC_ENHANCEMENT_STRATEGY.md) — DART B·D·A 로드맵
+- [`WOWTALE_YAHOO_ENHANCEMENT_STRATEGY.md`](./WOWTALE_YAHOO_ENHANCEMENT_STRATEGY.md) — Wowtale/Yahoo 확충 (상단 스냅샷 구버전 — 본 문서·IMPL 우선)
+- [`YAHOO_VENTURESQUARE_IMPL.md`](./YAHOO_VENTURESQUARE_IMPL.md) — Yahoo Macro backfill·벤처스퀘어
+- [`WOWTALE_ARCHIVE_CRAWLER_IMPL.md`](./WOWTALE_ARCHIVE_CRAWLER_IMPL.md) — 아카이브 backfill
+- [`BRONZE_ARCHITECTURE_DECISION.md`](./BRONZE_ARCHITECTURE_DECISION.md) — 6대 정량 소스·부처 매트릭스·품질 진단
+- [`SMES_OPENAPI_COLLECTION_GUIDE.md`](./SMES_OPENAPI_COLLECTION_GUIDE.md) — 15113297 상세

@@ -3,8 +3,9 @@
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
 
-> **구현·제약 현황 (2026-05-17):** NTIS / 네이버 금융 / The VC / Crunchbase 보류 사유, SMES·K-Startup·KVIC 연동 여부는  
-> [`backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md`](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) 를 SSOT로 봅니다.
+> **구현·제약 현황 (2026-05-31 갱신):** NTIS / 네이버 금융 / The VC / Crunchbase 보류 사유, SMES·K-Startup·KVIC·P1 후보(보조금24·BOK ECOS·FSS) 연동 여부는  
+> [`backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md`](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) 를 SSOT로 봅니다.  
+> 정부 부처 보도자료 매핑 정책은 본 문서 **§1-2** 참조.
 
 ## ERD 매핑 (원천 테이블)
 
@@ -27,11 +28,13 @@
 | 출처 | URL | 수집 방법 | 매핑 테이블 | 구현 | 비고 |
 |------|-----|-----------|-------------|------|------|
 | **The VC** | https://thevc.kr/browse/investments | BeautifulSoup + 페이지네이션 | `raw_economic_data` | ⏸️ Skip | 법·ToS — RSS+DART 대체 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md)) |
+| **네이버 금융 뉴스** | https://finance.naver.com/news/ | 스크래핑 (M&A·투자 섹션) | `raw_economic_data` | ⏸️ Skip | **상업적 이용·ToS 🔴** — Wowtale·Platum·벤처스퀘어 RSS + DART 대체 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) §2) |
 | **Wowtale** | https://wowtale.net/feed/ | RSS | `raw_economic_data` | ✅ | `wowtale_collector.py` · 아카이브 `wowtale_archive_crawler.py` |
 | **Platum** | https://platum.kr/archives/category/funding/feed | RSS | `raw_economic_data` | ✅ | `platum_collector.py` |
 | **벤처스퀘어** | https://www.venturesquare.net/category/funding/feed | RSS | `raw_economic_data` | ✅ | `venturesquare_collector.py` |
 | **스타트업레시피** | https://startuprecipe.co.kr/feed | RSS | `raw_economic_data` | ✅ | `startup_recipe_collector.py` — **`investment_amount` 미추출** |
-| **DART (전자공시시스템) OpenAPI** | https://opendart.fss.or.kr/ | 공식 Open API | `raw_economic_data` | ✅ | `dart_collector.py` — 금액 자동 추출 Phase 3 미완 |
+| **DART — 주요사항보고(B)·지분공시(D)** | https://opendart.fss.or.kr/ | 공식 Open API | `raw_economic_data` | ✅ | `dart_collector.py` + `dart_detail_fetcher.py` — B(M&A·증자·시설투자 등) + **D(대량보유·의결권)** 병행 · `investment_amount` Phase 3 미완 ([DART 전략](../domain/master/docs/DART_ECONOMIC_ENHANCEMENT_STRATEGY.md)) |
+| **DART — 정기공시(A)** | https://opendart.fss.or.kr/ | 공식 Open API (사업·분기·반기보고서) | `raw_economic_data` | ❌ P1 | **미구현** — R&D비·CAPEX·해외출자 등 **향후 3~5년 투자 계획** (B=결정된 투자 vs A=계획) · 별도 `DartRnDCollector` 검토 ([COLLECTOR_EXPANSION](../domain/master/docs/COLLECTOR_EXPANSION_REVIEW.md)) |
 | **Yahoo Finance (Volume Surge)** | https://finance.yahoo.com/quote/091220.KS/history | yfinance | `raw_economic_data` | ✅ | 16종 급증일만 — `yahoo_finance_collector.py` |
 | **Yahoo Finance (일별 OHLCV)** | (동일 16티커) | yfinance | **`raw_market_timeseries`** | ✅ | 연속 시계열 — `yahoo_market_timeseries_collector.py` |
 | **Yahoo Macro (Price Surge)** | https://finance.yahoo.com/quote/USDKRW=X | yfinance | `raw_economic_data` | ✅ | 8종 Z-score — `yahoo_macro_collector.py` |
@@ -43,6 +46,47 @@
 | **ALIO 공공기관 사업정보** | https://www.data.go.kr/data/15125286/openapi.do | Open API | `raw_economic_data` | ✅ | `alio_public_inst_project_collector.py` — `investment_amount` 대부분 None |
 | **한국벤처투자 (KVIC)** | https://www.kvic.or.kr/ | 보고서 PDF / **펀드현황 Open API**(정보공개) | `raw_economic_data` | ❌ | **쓸 가치 중간** (Economic **보조** P1) — VC 시장 **전체 규모·추세**; 개별 라운드·섹터 해상도 ❌ ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) §3.3·§3.4) |
 | **크런치베이스 API** | https://www.crunchbase.com/ | 공식 API | `raw_economic_data` | ⏸️ Skip | 유료 라이선스 — RSS 3원 우선 |
+
+### 1-1. Economic P1 후보 — 정량 거시 (미구현)
+
+`BRONZE_ARCHITECTURE_DECISION.md` §6대 핵심 소스 중, **금액·지급주체·수혜자가 명시**되는 정량 Economic 축 후보입니다. NTIS·KONEPS·DART(상세)와 **같은 “돈의 흐름” 핵심축**이며, 구현 시 §1 본표로 승격합니다.
+
+| 출처 | URL / API | 수집 방법 | 매핑 테이블 | 구현 | 비고 |
+|------|-----------|-----------|-------------|------|------|
+| **보조금24 통합조회** | https://www.gov24.go.kr/ (Open API) | 공식 Open API | `raw_economic_data` | ❌ P1 | 정부 → 기업/개인 **보조금 지급** · 전 산업 · 월 ~2,000건+ 예상 · `source_type` 예: `GOVT_SUBSIDY24_*` |
+| **한국은행 ECOS API** | https://ecos.bok.or.kr/api/ | 공식 Open API | `raw_economic_data` | ❌ P1 | **거시 자금 흐름** — FDI·통화량·금리 시계열 · `investment_amount`는 None, 정량은 `raw_metadata` · `source_type` 예: `BOK_ECOS_*` |
+| **금융감독원 사모펀드 공시** | https://dis.fss.or.kr/ | 전자공시 크롤/API | `raw_economic_data` | ❌ P1 | PE/VC **펀드 결성·운용** 분기 보고 · 민간→민간 자본 · `source_type` 예: `FSS_PE_FUND_*` · KVIC 거시 집계와 보완 |
+
+**우선순위**: 보조금24 → BOK ECOS → FSS 사모펀드 (공공 API 우선, 크롤링은 FSS만 해당).
+
+### 1-2. 정부 부처 보도자료 — Economic 보조축 (§4 Discourse 아님)
+
+#### 매핑 정책 (2026-05-31)
+
+| 질문 | 결정 |
+|------|------|
+| **§1 Economic vs §4 Discourse?** | **§1 Economic 보조축** — “돈이 흐르기 **전** 정책·산업 방향 신호” |
+| **§4에 두지 않는 이유** | §4는 청년 커리어·이슈·커뮤니티 **담론**(나무위키·Theqoo·네이버 뉴스 OpenAPI 등). 부처 보도자료는 **정부 정책 선행 지표**로 Economic과 교차 분석 |
+| **적재 테이블** | `raw_economic_data` (기본) — `investment_amount` 대부분 `None`, 본문·제목·`raw_metadata` 보존 |
+| **Silver 활용** | MSIT/ALIO/KONEPS 등 **정량 소스와 시간 정렬** — “정책 발표 → 예산·입찰·집행” 파이프라인 검증 |
+| **과기부 MSIT `mId=307`** | 이미 §1 본표 **`GOVT_MSIT_PRESS`** 로 Economic **정량 보조에 가깝게** 필터(연도+“시행”) 적용 — 일반 부처 보도자료 템플릿의 선행 사례 |
+
+**22개 부처 전체 크롤링은 하지 않습니다.** ROI 대비 `BRONZE_ARCHITECTURE_DECISION.md` 기준 **핵심 7~8개만 P0/P1** 선별합니다.
+
+| 우선순위 | 부처/기관 | URL (예) | `source_type` (안) | 신호 가치 | 구현 |
+|----------|-----------|----------|----------------------|-----------|------|
+| P0 | **한국은행 (BOK)** | bok.or.kr/portal/bbs/B0000220 | `GOVT_BOK_POLICY` | 금리·통화정책 → **선행 자금 흐름** | ❌ |
+| P0 | **식약처 (MFDS)** | mfds.go.kr | `GOVT_MFDS_APPROVAL` | 신약·허가 → 바이오 자금 | ❌ |
+| P0 | **KOCCA / KHIDI** | kocca.kr, khidi.or.kr | `GOVT_KOCCA_*`, `GOVT_KHIDI_*` | K-콘텐츠·헬스케어 정책 | ❌ |
+| P1 | **금융위 (FSC)** | fsc.go.kr/no010101 | `GOVT_FSC_POLICY` | 금융 규제 → 자본 시장 | ❌ |
+| P1 | **금융감독원 (FSS)** | fss.go.kr (보도자료) | `GOVT_FSS_PRESS` | 감독·공시 정책 (§1-1 사모펀드 공시와 별개) | ❌ |
+| P1 | **산업통상자원부 (MOTIE)** | motie.go.kr | `GOVT_MOTIE_POLICY` | 제조·에너지 산업 정책 · 수동 PDF 업로드도 가능 ([GOVT_DOCS](../domain/master/docs/GOVT_DOCS_COLLECTION_STRATEGY.md)) | ❌ |
+| P1 | **환경부 (ME)** | me.go.kr | `GOVT_ME_CARBON` | 탄소중립·녹색금융 · `GOVT_ME_PRESS` 보도자료 | ❌ |
+| P1 | **보건복지부 (MOHW)** | mohw.go.kr | `GOVT_MOHW_PRESS` | 바이오·헬스 정책 | ❌ |
+| P1 | **국토교통부 (MOLIT)** | molit.go.kr | `GOVT_MOLIT_PRESS` | SOC·부동산 정책 (시장 영향) | ❌ |
+| P2 | **문화체육관광부·농림부·해수부·방사청 등** | 각 부처 게시판 | `GOVT_*_PRESS` | 산업별 보조 신호 | ❌ 보류 |
+
+> **Discourse(§4)와의 경계**: 동일 기사 URL을 §4에 **중복 적재하지 않음**. 부처 보도는 Economic 보조축 단일 소스. 일반 경제 뉴스(연합·조선 등)는 §4 RSS 유지.
 
 ---
 
@@ -110,6 +154,8 @@
 | **CONTEST** | 위비티 (Wevity) | https://www.wevity.com/ | 스크래핑 | 공모전·해커톤 최다 |
 | **CONTEST** | 데브이벤트 (DevEvent) | https://github.com/DevEvent | GitHub `.md` / JSON 파싱 | 개발자 행사·해커톤 일정 |
 | **GRANT** | **중소벤처기업부 사업공고 Open API** | https://www.data.go.kr/data/15113297/openapi.do | 공식 Open API | ✅ **`smes_collector.py`** → `raw_opportunity_data` · `SMES_SERVICE_KEY` · 일 스케줄 — **쓸 가치 높음** (Chance). Economic 직접 축 ❌ |
+| **GRANT** | **중기부 지원사업 선정 결과 API** | data.go.kr (포털 검색: “중소벤처 선정”, “지원사업 선정 결과”) | 공식 Open API (추정 `getSelectionResult` 등) | ❌ P1 — **미구현** · 공고(`15113297`)와 `pblancId` JOIN · 선정 기업·금액 → Silver에서 Economic(RSS 투자) 교차 · ([COLLECTOR_EXPANSION](../domain/master/docs/COLLECTOR_EXPANSION_REVIEW.md) §SMES 확장 A) |
+| **GRANT** | **중기부 지원금 집행(지급) 현황 API** | data.go.kr (포털 검색: “집행”, “지급 현황”) | 공식 Open API | ❌ P2 — **미구현** · 선정 ≠ 지급 완료 · `exctnAmt`·`exctnDt` → **정부 자본 실제 집행** 추적 · Economic 보조 (`raw_economic_data` 또는 Opportunity `raw_metadata` — Silver 설계 시 확정) · ([COLLECTOR_EXPANSION](../domain/master/docs/COLLECTOR_EXPANSION_REVIEW.md) §SMES 확장 B) |
 | **GRANT** | **K-Startup 통합공고 OpenAPI** | https://www.data.go.kr/data/15125364/openapi.do | 공식 Open API | ❌ 미구현 — **쓸 가치 높음** (Opportunity P0, SMES 보완). Economic은 정책 방향 **보조**만 ([STATUS](../domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md) §3.2·§3.4) |
 | **GRANT** | **과학기술정보통신부 사업공고 OpenAPI** | https://www.data.go.kr/data/15074634/openapi.do | 공식 Open API | **과기부 R&D·기술 지원사업 공고** |
 | **GRANT** | 기업마당 (Bizinfo) OpenAPI | https://www.bizinfo.go.kr/ | 공식 Open API | 중소벤처기업부 지원사업 종합 (개인 신청 제한) |
@@ -199,6 +245,9 @@ ALIO(https://opendata.alio.go.kr/)는 **청년 일자리 올인원 지원 서비
 
 ## 관련 문서
 
-- `backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md` — **제약·SMES/K-Startup/KVIC·구현 현황 (2026-05-17)**
+- `backend/domain/master/docs/ECONOMIC_DATA_SOURCE_STATUS.md` — **제약·SMES/K-Startup/KVIC·구현 현황**
+- `backend/domain/master/docs/BRONZE_ARCHITECTURE_DECISION.md` — 6대 정량 소스·부처 보도자료 매트릭스·두 축 전략
+- `backend/domain/master/docs/COLLECTOR_EXPANSION_REVIEW.md` — DART(A)·SMES 선정/집행 API 확장 검토
+- `backend/domain/master/docs/GOVT_DOCS_COLLECTION_STRATEGY.md` — MOEF·MSIT·MOTIE·ME 정부 문서 수집
 - `backend/docs/erd.md` — 원천 테이블 DDL 및 도메인 정의
 - `backend/docs/BACKEND_ARCHITECTURE_BLUEPRINT.md` — 백엔드 구조·역할 분리 참고

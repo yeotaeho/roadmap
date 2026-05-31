@@ -3,13 +3,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'root_env_loader.dart';
 
 /// 환경 변수 해석 순서 (높은 우선순위 먼저):
-/// 1. `--dart-define=...`
-/// 2. 리포지토리 루트 — `docker-compose.yaml`(또는 `.yml`)과 같은 폴더의 `.env`
-///    (데스크톱/테스트 등에서 `Directory.current`가 호스트일 때만 동작)
-/// 3. 기본값
-///
-/// Android/iOS에서는 `--dart-define-from-file=dart_defines/local.env` 권장.
+/// 1. `--dart-define=...` / `--dart-define-from-file` (compile-time, 선택)
+/// 2. `dart_defines/local.env` asset (빌드 시 APK/IPA에 포함 → **plain `flutter run` OK**)
+/// 3. `dart_defines/local.env` / Monorepo 루트 `.env` (호스트 파일시스템, dev·test)
+/// 4. 기본값
 abstract final class AppEnv {
+  static const localEnvRelativePath = 'dart_defines/local.env';
+
   static var _loadAttempted = false;
 
   /// `main()`에서 `runApp` 전에 한 번 호출.
@@ -17,10 +17,24 @@ abstract final class AppEnv {
     if (_loadAttempted) return;
     _loadAttempted = true;
     try {
-      await loadRepoRootDotEnv();
+      await loadAppEnvFiles();
     } catch (_) {
       dotenv.loadFromString(envString: '', isOptional: true);
     }
+  }
+
+  /// compile-time dart-define + runtime dotenv 모두 비어 있으면 true.
+  static bool get isGoogleServerClientIdMissing {
+    const fromDefine = String.fromEnvironment(
+      'GOOGLE_SERVER_CLIENT_ID',
+      defaultValue: '',
+    );
+    if (fromDefine.isNotEmpty) return false;
+    if (dotenv.isInitialized) {
+      final fromFile = dotenv.env['GOOGLE_SERVER_CLIENT_ID']?.trim();
+      if (fromFile != null && fromFile.isNotEmpty) return false;
+    }
+    return true;
   }
 
   static String get apiBaseUrl {

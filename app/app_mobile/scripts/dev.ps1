@@ -40,6 +40,8 @@ $ErrorActionPreference = 'Stop'
 $repoMobile = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoMobile
 
+& (Join-Path $PSScriptRoot 'ensure_local_env.ps1')
+
 if (-not (Test-Path $EnvFile)) {
   Write-Warning "$EnvFile 가 없습니다. dart_defines/example.env 를 복사해 만들어주세요."
 }

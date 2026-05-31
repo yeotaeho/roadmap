@@ -6,5 +6,39 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(python *)"
     ]
+  },
+  "mcpServers": {
+    "mem0-memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "mem0ai/mem0-memory-mcp",
+        "--config",
+        "{\"mem0_api_key\":\"m0-BiyRsXZJdyPz4htU0lGFXh8Fx8CeoHmaUgHiSO9O\"}"
+      ]
+    },
+    "neon-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@neondatabase/mcp-server-neon"
+      ],
+      "env": {
+        "NEON_API_KEY": "napi_13h0kjijjbnmyh3a928dse81rq321gp8725wqjypr3w0ilgyv90dulnouyftfjmn",
+        "NEON_PROJECT_ID": "proud-smoke-91725056"
+      }
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "BSAdGwdluFuaiocSW3E4aEx9EW2VUsC"
+      }
+    }
   }
 }

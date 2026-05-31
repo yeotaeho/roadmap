@@ -142,9 +142,18 @@ class AuthService {
   }
 
   Future<void> loginWithGoogleNative() async {
+    final serverClientId = AppEnv.googleServerClientId;
+    if (serverClientId == null || serverClientId.isEmpty) {
+      throw Exception(
+        'GOOGLE_SERVER_CLIENT_ID가 설정되지 않았습니다. '
+        'dart_defines/local.env 에 값을 넣은 뒤 flutter clean && flutter run 으로 다시 빌드하세요. '
+        '(env 변경 후 hot reload 로는 반영되지 않습니다)',
+      );
+    }
+
     final googleSignIn = GoogleSignIn(
       scopes: const <String>['email', 'profile'],
-      serverClientId: AppEnv.googleServerClientId,
+      serverClientId: serverClientId,
     );
     await googleSignIn.signOut();
     final account = await googleSignIn.signIn();
