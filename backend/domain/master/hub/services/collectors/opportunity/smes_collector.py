@@ -1,6 +1,6 @@
 """중소벤처기업부 사업공고 OpenAPI 기반 Bronze 수집.
 
-가이드: `backend/domain/master/docs/SMES_OPENAPI_COLLECTION_GUIDE.md`
+가이드: `backend/domain/master/docs/economic/opportunity/SMES_OPENAPI_COLLECTION_GUIDE.md`
 
 공공 API 4대 함정 방어:
   1) xmltodict 의 List vs Dict 변환 함정 → `_ensure_list()`

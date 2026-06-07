@@ -44,7 +44,7 @@ class DartBronzeIngestRequest(BaseModel):
     bgn_de: str | None = Field(default=None, description="시작일 YYYYMMDD")
     end_de: str | None = Field(default=None, description="종료일 YYYYMMDD")
     include_ownership_disclosure: bool = Field(
-        default=True,
+        default=False,
         description="지분공시(pblntf_ty=D) 대량보유·의결권 대량보유 등 병행 수집 여부",
     )
 
@@ -446,6 +446,61 @@ async def run_msit_rnd_budget_bronze(
         ) from None
 
 
+@router.post("/bronze/economic/mfds-press")
+async def run_mfds_press_bronze(
+    max_pages: int = Query(5, ge=1, le=20, description="크롤링할 목록 페이지 수"),
+    max_items: int = Query(100, ge=1, le=500, description="최대 적재 건수"),
+    fetch_body: bool = Query(True, description="상세 본문 텍스트도 수집할지 여부"),
+    target_year: int | None = Query(
+        None, description="등록일 연도 필터(기본 2026). null 전달 시 컬렉터 기본"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """식약처 보도자료 (연도 + 허가/신약/임상 키워드) 자동 수집 → `raw_economic_data`.
+
+    바이오/헬스 선행 신호(GOVT_MFDS_APPROVAL). 키 불필요(공개 웹 정적 HTML).
+    """
+    svc = BronzeEconomicIngestService(db, None)
+    try:
+        return await svc.ingest_mfds_press(
+            max_pages=max_pages,
+            max_items=max_items,
+            fetch_body=fetch_body,
+            target_year=target_year,
+        )
+    except Exception:
+        logger.exception("MFDS 보도자료 Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502,
+            detail="MFDS 보도자료 수집 중 오류가 발생했습니다.",
+        ) from None
+
+
+@router.post("/bronze/economic/bok-ecos")
+async def run_bok_ecos_bronze(
+    start: str = Query(..., description="조회 시작(주기별): 월 YYYYMM / 연 YYYY / 일 YYYYMMDD"),
+    end: str = Query(..., description="조회 종료(주기별): start 와 동일 포맷"),
+    max_rows: int = Query(10000, ge=1, le=100000, description="통계표당 최대 행 수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """한국은행 ECOS 거시 시계열(FDI·통화량·기준금리) → `raw_economic_data`.
+
+    `BOK_ECOS_API_KEY` 필요. 통계표/항목 코드는 컬렉터 `_ECOS_TARGETS` 에서 관리(Probe 검증).
+    """
+    settings = get_settings()
+    svc = BronzeEconomicIngestService(db, None, bok_ecos_api_key=settings.bok_ecos_api_key)
+    try:
+        return await svc.ingest_bok_ecos(start=start, end=end, max_rows=max_rows)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("BOK ECOS Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502,
+            detail="BOK ECOS 수집 중 오류가 발생했습니다.",
+        ) from None
+
+
 @router.post("/bronze/economic/alio")
 async def run_alio_economic_bronze(
     max_items: int = Query(
@@ -670,6 +725,212 @@ async def run_smes_opportunity_bronze(
         raise HTTPException(
             status_code=502, detail="SMES 사업공고 수집 중 오류가 발생했습니다."
         ) from None
+
+
+@router.post("/bronze/economic/subsidy24")
+async def run_subsidy24_bronze(
+    max_items: int = Query(500, ge=1, le=2000, description="최대 수집 건수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """보조금24(gov24) 정부 지원 서비스 목록을 `raw_economic_data`에 적재.
+
+    증분: DB 최신 수정일시 이후 변경된 서비스만 수집 (최초 실행 시 전체).
+    """
+    settings = get_settings()
+    svc = BronzeEconomicIngestService(
+        db, None, subsidy24_service_key=settings.subsidy24_service_key
+    )
+    try:
+        return await svc.ingest_subsidy24(max_items=max_items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("보조금24 Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502, detail="보조금24 수집 중 오류가 발생했습니다."
+        ) from None
+
+
+@router.post("/bronze/economic/dart-periodic")
+async def run_dart_periodic_bronze(
+    bgn_de: str | None = Query(None, description="시작일 YYYYMMDD (미입력 시 최근 30일)"),
+    end_de: str | None = Query(None, description="종료일 YYYYMMDD"),
+    enrich_financials: bool = Query(True, description="R&D/CAPEX 재무 보강 여부 (KOSPI/KOSDAQ)"),
+    max_enrich: int = Query(200, ge=1, le=500, description="재무 보강 최대 건수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """DART 정기공시(A) 사업보고서·반기보고서를 `raw_economic_data`에 적재.
+
+    DART_API_KEY 필요. KOSPI/KOSDAQ 법인의 R&D·CAPEX 금액 보강 포함.
+    """
+    settings = get_settings()
+    svc = BronzeEconomicIngestService(db, settings.dart_api_key)
+    try:
+        return await svc.ingest_dart_periodic(
+            bgn_de=bgn_de,
+            end_de=end_de,
+            enrich_financials=enrich_financials,
+            max_enrich=max_enrich,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("DART 정기공시 Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502, detail="DART 정기공시 수집 중 오류가 발생했습니다."
+        ) from None
+
+
+@router.post("/bronze/economic/mss-press")
+async def run_mss_press_bronze(
+    max_items: int = Query(200, ge=1, le=1000, description="최대 수집 건수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """중소벤처기업부(MSS) 보도자료를 `raw_economic_data`에 적재.
+
+    API 키 불필요. 증분 수집 (bcIdx 워터마크).
+    """
+    svc = BronzeEconomicIngestService(db, None)
+    try:
+        return await svc.ingest_mss_press(max_items=max_items)
+    except Exception:
+        logger.exception("중기부 보도자료 Bronze ingest 실패")
+        raise HTTPException(
+            status_code=502, detail="중기부 보도자료 수집 중 오류가 발생했습니다."
+        ) from None
+
+
+@router.post("/bronze/economic/dart-ipo")
+async def run_dart_ipo_bronze(
+    bgn_de: str | None = Query(None, description="시작일 YYYYMMDD (기본: 오늘-7일, 최대 14일 범위 권장)"),
+    end_de: str | None = Query(None, description="종료일 YYYYMMDD (기본: 오늘)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """DART 발행공시(C)에서 증권신고서(주식) 등 IPO 선행 신호 → raw_economic_data 적재."""
+    settings = get_settings()
+    if not settings.dart_api_key:
+        raise HTTPException(status_code=422, detail="dart_api_key가 설정되지 않았습니다.")
+    svc = BronzeEconomicIngestService(db, settings.dart_api_key)
+    try:
+        return await svc.ingest_dart_ipo(bgn_de=bgn_de, end_de=end_de)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("DART IPO 발행공시 Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="DART IPO 발행공시 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/economic/nps-portfolio")
+async def run_nps_portfolio_bronze(
+    bgn_de: str | None = Query(None, description="시작일 YYYYMMDD (기본: 오늘-14일)"),
+    end_de: str | None = Query(None, description="종료일 YYYYMMDD (기본: 오늘)"),
+    max_pages: int = Query(30, ge=1, le=100, description="DART API 최대 페이지 수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """DART 지분공시(D)에서 국민연금공단 대량보유 변동 이력 → raw_economic_data 적재."""
+    settings = get_settings()
+    if not settings.dart_api_key:
+        raise HTTPException(status_code=422, detail="dart_api_key가 설정되지 않았습니다.")
+    svc = BronzeEconomicIngestService(db, settings.dart_api_key)
+    try:
+        return await svc.ingest_nps_portfolio(bgn_de=bgn_de, end_de=end_de, max_pages=max_pages)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("국민연금 포트폴리오 Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="국민연금 포트폴리오 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/economic/naver-datalab")
+async def run_naver_datalab_bronze(
+    start_date: str | None = Query(
+        None,
+        description="조회 시작일 YYYYMMDD (기본: 오늘-28일). 과거 날짜 지정 시 backfill.",
+    ),
+    end_date: str | None = Query(None, description="조회 종료일 YYYYMMDD (기본: 오늘)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """네이버 DataLab API로 분야별 주간 검색량 비율(0~100) 수집 → raw_economic_data 적재.
+
+    5개 핵심 경제 분야(AI·스타트업·바이오·에너지·핀테크) 검색 트렌드.
+    start_date를 과거로 지정하면 최대 1년치 backfill 가능.
+    """
+    settings = get_settings()
+    if not settings.naver_client_id or not settings.naver_client_secret:
+        raise HTTPException(
+            status_code=422,
+            detail="naver_client_id / naver_client_secret가 설정되지 않았습니다.",
+        )
+    svc = BronzeEconomicIngestService(
+        db, None,
+        naver_client_id=settings.naver_client_id,
+        naver_client_secret=settings.naver_client_secret,
+    )
+    try:
+        return await svc.ingest_naver_datalab(start_date=start_date, end_date=end_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("Naver DataLab Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="Naver DataLab 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/economic/naver-search")
+async def run_naver_search_bronze(
+    target_date: str | None = Query(
+        None,
+        description="수집 날짜 YYYYMMDD (기본: 어제). 과거 날짜 지정 시 backfill.",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """네이버 뉴스 API로 키워드별 일별 기사 수 수집 → raw_economic_data 적재.
+
+    7그룹 24개 키워드(AI·스타트업·이직·바이오·에너지·핀테크·정부지원) 각각의
+    당일 뉴스 기사 총 건수(total)를 수집하는 언론 공급(supply) 신호.
+    DataLab 주간 검색 수요와 교차 분석 시 "뉴스 급증→검색 급증" 패턴 포착 가능.
+    """
+    settings = get_settings()
+    if not settings.naver_client_id or not settings.naver_client_secret:
+        raise HTTPException(
+            status_code=422,
+            detail="naver_client_id / naver_client_secret가 설정되지 않았습니다.",
+        )
+    svc = BronzeEconomicIngestService(
+        db, None,
+        naver_client_id=settings.naver_client_id,
+        naver_client_secret=settings.naver_client_secret,
+    )
+    try:
+        return await svc.ingest_naver_search(target_date=target_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("Naver News Search Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="Naver 뉴스 검색 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/economic/kipris-patents")
+async def run_kipris_patents_bronze(
+    db: AsyncSession = Depends(get_db),
+):
+    """KIPRIS PLUS API로 기술 분야별 주간 특허 출원 건수 수집 → raw_economic_data 적재.
+
+    인증: KIPRIS_API_KEY 필요 (ServiceKey 파라미터).
+    수집 주기: 주 1회 (이번 주 이미 수집됐으면 skip).
+    대상 기술 키워드: AI·바이오·에너지·반도체·모빌리티·핀테크 (총 20개).
+    """
+    settings = get_settings()
+    kipris_key = getattr(settings, "kipris_api_key", None)
+    if not kipris_key:
+        raise HTTPException(status_code=422, detail="KIPRIS_API_KEY가 설정되지 않았습니다.")
+    svc = BronzeEconomicIngestService(db, None, kipris_api_key=kipris_key)
+    try:
+        return await svc.ingest_kipris_patents()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("KIPRIS 특허 트렌드 Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="KIPRIS 특허 수집 중 오류가 발생했습니다.") from None
 
 
 @router.delete("/bronze/opportunity/by-source-type/{source_type}")

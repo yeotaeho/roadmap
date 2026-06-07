@@ -19,14 +19,14 @@ _BACKEND = Path(__file__).resolve().parents[1]
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from domain.master.hub.services.collectors.economic._msit_common import (  # noqa: E402
+from domain.master.hub.services.collectors.economic.common._msit_common import (  # noqa: E402
     BASE_URL,
     extract_fn_detail_ntt_ids,
     get_html,
     make_session,
     parse_bbs_list_rows,
 )
-from domain.master.hub.services.collectors.economic.msit_bbs_collector import (  # noqa: E402
+from domain.master.hub.services.collectors.economic.msit.msit_bbs_collector import (  # noqa: E402
     BIZ_BOARD,
     PRESS_BOARD,
     MsitBbsCollector,

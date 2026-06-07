@@ -22,7 +22,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from domain.master.hub.services.collectors.economic.alio_public_inst_project_collector import (
+from domain.master.hub.services.collectors.economic.alio.alio_public_inst_project_collector import (
     AlioPublicInstProjectCollector,
 )
 

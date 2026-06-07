@@ -164,6 +164,27 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ALIO_SERVICE_KEY", "ALIO_API_KEY"),
     )
 
+    # 한국은행 ECOS OpenAPI (Bronze — raw_economic_data, 거시 자금 흐름)
+    #   발급: https://ecos.bok.or.kr/api/#/AuthKeyApply
+    bok_ecos_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("BOK_ECOS_API_KEY", "BOK_ECOS_SERVICE_KEY"),
+    )
+
+    # 보조금24/공공서비스 정보 OpenAPI (Bronze — raw_economic_data, 정부→민간 보조금)
+    #   발급: https://www.data.go.kr/data/15113968/openapi.do
+    subsidy24_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("SUBSIDY24_SERVICE_KEY", "SUBSIDY24_API_KEY"),
+    )
+
+    # KIPRIS PLUS 특허 검색 API (Bronze — raw_economic_data, 기술 분야별 특허 출원 트렌드)
+    #   발급: https://plus.kipris.or.kr → 서비스 신청 → ServiceKey 파라미터로 사용
+    kipris_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("KIPRIS_API_KEY", "KIPRIS_SERVICE_KEY"),
+    )
+
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)
     #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
     #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡

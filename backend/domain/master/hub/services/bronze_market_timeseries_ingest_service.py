@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from domain.master.hub.repositories.market_timeseries_repository import (
     MarketTimeseriesRepository,
 )
-from domain.master.hub.services.collectors.economic.yahoo_market_timeseries_collector import (
+from domain.master.hub.services.collectors.economic.yahoo.yahoo_market_timeseries_collector import (
     YahooMarketTimeseriesCollector,
 )
 from domain.master.models.transfer.market_timeseries_dto import MarketTimeseriesDto

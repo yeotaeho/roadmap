@@ -23,7 +23,7 @@ The VC 이용약관 정독 결과, 다음 조항이 본 Probe(및 향후 collect
   3) 코드는 추후 B2B 데이터 라이선스 계약이 성립할 경우 재사용할 수 있도록 보존.
 
 자세한 배경/의사결정 트레이스는:
-  backend/domain/master/docs/THEVC_COLLECTION_STRATEGY.md
+  backend/domain/master/docs/economic/startup_media/THEVC_COLLECTION_STRATEGY.md
   — 「📜 이용약관(ToS) 검토 결과」 섹션 참조.
 
 ================================================================================

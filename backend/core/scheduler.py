@@ -20,9 +20,10 @@ APScheduler ``AsyncIOScheduler`` 를 FastAPI 이벤트 루프 위에 띄워, ``B
 ========
 
 - **일일** (오전 9 시 KST):
-  DART · MSIT 보도자료/사업공고/R&D 예산 · Wowtale · Platum · Venturesquare · StartupRecipe · Yahoo OHLCV 시계열 · SMES Opportunity
+  DART B/IPO/NPS · MSIT 보도자료/사업공고/R&D 예산 · MFDS/MSS · 보조금24 ·
+  Wowtale/Platum/Venturesquare/StartupRecipe · Yahoo OHLCV · SMES Opportunity
 - **주간** (월요일 오전 9 시 KST):
-  ALIO 공공기관 사업정보 · Yahoo Finance ETF · Yahoo Macro
+  ALIO · Yahoo Finance ETF/Macro · BOK ECOS · DART 정기공시 · KIPRIS · Naver DataLab
 
 ALIO/Yahoo 는 데이터 자체가 일 단위로 빈번하게 변하지 않거나 API 쿼터 비용이 비싸므로 주간으로 분리.
 MOEF 로컬 PDF 는 **사용자 업로드** 시나리오라 스케줄링하지 않는다.
@@ -103,7 +104,7 @@ async def _job_dart() -> dict[str, Any] | None:
         return None
     async with AsyncSessionLocal() as session:
         svc = BronzeEconomicIngestService(session, settings.dart_api_key)
-        return await svc.ingest_dart()
+        return await svc.ingest_dart(include_ownership_disclosure=False)
 
 
 async def _job_wowtale() -> dict[str, Any]:
@@ -160,6 +161,129 @@ async def _job_msit_rnd_budget() -> dict[str, Any]:
         return await svc.ingest_msit_rnd_budget(max_pages=2, max_items=20)
 
 
+async def _job_mfds_press() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, None)
+        return await svc.ingest_mfds_press(max_pages=5, max_items=100, fetch_body=True)
+
+
+async def _job_bok_ecos() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.bok_ecos_api_key:
+        logger.warning("[scheduler] bok_ecos_api_key 없음 — BOK ECOS 잡 스킵")
+        return None
+    # 최근 13개월 월간 시계열 (증분은 source_url 유니크로 멱등 보장)
+    from datetime import datetime, timedelta, timezone
+
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(tz=kst)
+    start = (now - timedelta(days=400)).strftime("%Y%m")
+    end = now.strftime("%Y%m")
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, None, bok_ecos_api_key=settings.bok_ecos_api_key)
+        return await svc.ingest_bok_ecos(start=start, end=end)
+
+
+async def _job_subsidy24() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.subsidy24_service_key:
+        logger.warning("[scheduler] subsidy24_service_key 없음 — 보조금24 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(
+            session, None, subsidy24_service_key=settings.subsidy24_service_key
+        )
+        return await svc.ingest_subsidy24(max_items=500)
+
+
+async def _job_dart_periodic() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.dart_api_key:
+        logger.warning("[scheduler] dart_api_key 없음 — DART 정기공시 잡 스킵")
+        return None
+    from datetime import datetime, timedelta, timezone
+
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(tz=kst)
+    # 최근 35일 범위 (월간 수집 보장 — 분기보고서 접수 주기 커버)
+    bgn_de = (now - timedelta(days=35)).strftime("%Y%m%d")
+    end_de = now.strftime("%Y%m%d")
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, settings.dart_api_key)
+        return await svc.ingest_dart_periodic(
+            bgn_de=bgn_de, end_de=end_de, enrich_financials=True, max_enrich=200
+        )
+
+
+async def _job_mss_press() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, None)
+        return await svc.ingest_mss_press(max_items=200)
+
+
+async def _job_dart_ipo() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.dart_api_key:
+        logger.warning("[scheduler] dart_api_key 없음 — DART IPO 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, settings.dart_api_key)
+        return await svc.ingest_dart_ipo()
+
+
+async def _job_nps_portfolio() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.dart_api_key:
+        logger.warning("[scheduler] dart_api_key 없음 — 국민연금 포트폴리오 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, settings.dart_api_key)
+        return await svc.ingest_nps_portfolio(max_pages=30)
+
+
+async def _job_naver_search() -> dict[str, Any] | None:
+    settings = get_settings()
+    cid = getattr(settings, "naver_client_id", None)
+    csec = getattr(settings, "naver_client_secret", None)
+    if not cid or not csec:
+        logger.warning("[scheduler] naver_client_id/secret 없음 — Naver News Search 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(
+            session, None,
+            naver_client_id=cid,
+            naver_client_secret=csec,
+        )
+        return await svc.ingest_naver_search()
+
+
+async def _job_naver_datalab() -> dict[str, Any] | None:
+    settings = get_settings()
+    cid = getattr(settings, "naver_client_id", None)
+    csec = getattr(settings, "naver_client_secret", None)
+    if not cid or not csec:
+        logger.warning("[scheduler] naver_client_id/secret 없음 — Naver DataLab 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(
+            session, None,
+            naver_client_id=cid,
+            naver_client_secret=csec,
+        )
+        return await svc.ingest_naver_datalab()
+
+
+async def _job_kipris_patents() -> dict[str, Any] | None:
+    settings = get_settings()
+    kipris_key = getattr(settings, "kipris_api_key", None)
+    if not kipris_key:
+        logger.warning("[scheduler] kipris_api_key 없음 — KIPRIS 특허 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(session, None, kipris_api_key=kipris_key)
+        return await svc.ingest_kipris_patents()
+
+
 async def _job_smes_opportunity() -> dict[str, Any] | None:
     settings = get_settings()
     if not settings.smes_service_key:
@@ -208,13 +332,23 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("msit_press",        _job_msit_press),
     ("msit_biz",          _job_msit_biz),
     ("msit_rnd_budget",   _job_msit_rnd_budget),
+    ("mfds_press",        _job_mfds_press),
     ("smes_opportunity",  _job_smes_opportunity),
+    ("subsidy24",         _job_subsidy24),
+    ("mss_press",         _job_mss_press),
+    ("dart_ipo",          _job_dart_ipo),
+    ("nps_portfolio",     _job_nps_portfolio),
+    ("naver_search",      _job_naver_search),
 )
 
 _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
-    ("alio_projects",  _job_alio),
-    ("yahoo_finance",  _job_yahoo_finance),
-    ("yahoo_macro",    _job_yahoo_macro),
+    ("alio_projects",    _job_alio),
+    ("yahoo_finance",    _job_yahoo_finance),
+    ("yahoo_macro",      _job_yahoo_macro),
+    ("bok_ecos",         _job_bok_ecos),
+    ("dart_periodic",    _job_dart_periodic),
+    ("kipris_patents",   _job_kipris_patents),
+    ("naver_datalab",    _job_naver_datalab),
 )
 
 

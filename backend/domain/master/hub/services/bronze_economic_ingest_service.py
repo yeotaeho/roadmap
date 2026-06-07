@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,42 +13,83 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
 from domain.master.hub.repositories.economic_repository import EconomicRepository
-from domain.master.hub.services.collectors.economic.dart_collector import DartEconomicCollector
-from domain.master.hub.services.collectors.economic.moef_local_pdf_collector import (
+from domain.master.hub.services.collectors.economic.dart.dart_collector import DartEconomicCollector
+from domain.master.hub.services.collectors.economic.moef.moef_local_pdf_collector import (
     MoefLocalPdfCollector,
 )
-from domain.master.hub.services.collectors.economic.msit_bbs_collector import (
+from domain.master.hub.services.collectors.economic.msit.msit_bbs_collector import (
     BIZ_BOARD,
     PRESS_BOARD,
     BoardConfig,
     MsitBbsCollector,
     MsitBbsIngestWatermark,
 )
-from domain.master.hub.services.collectors.economic.msit_publicinfo_63_collector import (
+from domain.master.hub.services.collectors.economic.msit.msit_publicinfo_63_collector import (
     BOARD_KEY as MSIT_PUBINFO_BOARD_KEY,
     MsitPublicInfo63Collector,
     SOURCE_TYPE as MSIT_PUBINFO_SOURCE_TYPE,
 )
-from domain.master.hub.services.collectors.economic.msit_watermark import (
+from domain.master.hub.services.collectors.economic.msit.msit_watermark import (
     parse_ntt_seq_no_from_url,
 )
-from domain.master.hub.services.collectors.economic.startup_recipe_collector import (
+from domain.master.hub.services.collectors.economic.mfds.mfds_bbs_collector import (
+    PRESS_BOARD as MFDS_PRESS_BOARD,
+    MfdsBbsCollector,
+    MfdsBoardConfig,
+    MfdsIngestWatermark,
+    _with_year as _mfds_with_year,
+)
+from domain.master.hub.services.collectors.economic.bok.bok_ecos_collector import (
+    BokEcosCollector,
+)
+from domain.master.hub.services.collectors.economic.subsidy24.subsidy24_collector import (
+    Subsidy24Collector,
+    Subsidy24Watermark,
+)
+from domain.master.hub.services.collectors.economic.dart.dart_periodic_collector import (
+    DartPeriodicCollector,
+)
+from domain.master.hub.services.collectors.economic.mss.mss_bbs_collector import (
+    MssBbsCollector,
+    MssWatermark,
+)
+from domain.master.hub.services.collectors.economic.startup_recipe.startup_recipe_collector import (
     StartupRecipeEconomicCollector,
 )
-from domain.master.hub.services.collectors.economic.platum_collector import (
+from domain.master.hub.services.collectors.economic.platum.platum_collector import (
     PlatumEconomicCollector,
 )
-from domain.master.hub.services.collectors.economic.venturesquare_collector import (
+from domain.master.hub.services.collectors.economic.nps.nps_dart_collector import (
+    NpsDartCollector,
+    NpsWatermark,
+)
+from domain.master.hub.services.collectors.economic.dart.dart_ipo_collector import (
+    DartIpoCollector,
+    DartIpoWatermark,
+)
+from domain.master.hub.services.collectors.economic.kipris.kipris_patent_collector import (
+    KiprisPatentCollector,
+    KiprisWatermark,
+)
+from domain.master.hub.services.collectors.economic.naver.naver_datalab_collector import (
+    NaverDatalabCollector,
+    NaverDatalabWatermark,
+)
+from domain.master.hub.services.collectors.economic.naver.naver_search_collector import (
+    NaverSearchCollector,
+    NaverSearchWatermark,
+)
+from domain.master.hub.services.collectors.economic.venturesquare.venturesquare_collector import (
     VenturesquareEconomicCollector,
 )
-from domain.master.hub.services.collectors.economic.wowtale_collector import WowtaleEconomicCollector
-from domain.master.hub.services.collectors.economic.yahoo_finance_collector import (
+from domain.master.hub.services.collectors.economic.wowtale.wowtale_collector import WowtaleEconomicCollector
+from domain.master.hub.services.collectors.economic.yahoo.yahoo_finance_collector import (
     YahooFinanceEtfCollector,
 )
-from domain.master.hub.services.collectors.economic.yahoo_macro_collector import (
+from domain.master.hub.services.collectors.economic.yahoo.yahoo_macro_collector import (
     YahooMacroCollector,
 )
-from domain.master.hub.services.collectors.economic.alio_public_inst_project_collector import (
+from domain.master.hub.services.collectors.economic.alio.alio_public_inst_project_collector import (
     AlioPublicInstProjectCollector,
 )
 from domain.master.models.bases.raw_economic_data import RawEconomicData
@@ -81,10 +122,20 @@ class BronzeEconomicIngestService:
         session: AsyncSession,
         dart_api_key: str | None,
         alio_service_key: str | None = None,
+        bok_ecos_api_key: str | None = None,
+        subsidy24_service_key: str | None = None,
+        naver_client_id: str | None = None,
+        naver_client_secret: str | None = None,
+        kipris_api_key: str | None = None,
     ):
         self._session = session
         self._dart_key = dart_api_key
         self._alio_key = alio_service_key
+        self._bok_ecos_key = bok_ecos_api_key
+        self._subsidy24_key = subsidy24_service_key
+        self._naver_client_id = naver_client_id
+        self._naver_client_secret = naver_client_secret
+        self._kipris_key = kipris_api_key
         self._economic_repo = EconomicRepository(session)
 
     async def ingest_dart(
@@ -92,7 +143,7 @@ class BronzeEconomicIngestService:
         bgn_de: str | None = None,
         end_de: str | None = None,
         *,
-        include_ownership_disclosure: bool = True,
+        include_ownership_disclosure: bool = False,
     ) -> dict[str, Any]:
         if not self._dart_key:
             raise ValueError("DART_API_KEY(또는 OPENDART_API_KEY)가 설정되어 있지 않습니다.")
@@ -176,7 +227,7 @@ class BronzeEconomicIngestService:
             categories: (slug, apply_investment_filter) 튜플 리스트.
                         None이면 기본값(funding / venture-capital / Global-news).
         """
-        from domain.master.hub.services.collectors.economic.wowtale_archive_crawler import (
+        from domain.master.hub.services.collectors.economic.wowtale.wowtale_archive_crawler import (
             WowtaleArchiveCrawler,
         )
 
@@ -563,6 +614,197 @@ class BronzeEconomicIngestService:
         logger.info("Bronze economic MSIT publicinfo-63 ingest: %s", result)
         return result
 
+    async def ingest_mfds_press(
+        self,
+        *,
+        max_pages: int = 5,
+        max_items: int = 100,
+        fetch_body: bool = True,
+        target_year: int | None = None,
+    ) -> dict[str, Any]:
+        """식약처(MFDS) 보도자료 (연도 + 허가/신약/임상 키워드) 수집 → `raw_economic_data`.
+
+        바이오/헬스 선행 신호(GOVT_MFDS_APPROVAL). investment_amount=None (정성 신호).
+        """
+        board: MfdsBoardConfig = (
+            MFDS_PRESS_BOARD if target_year is None else _mfds_with_year(MFDS_PRESS_BOARD, target_year)
+        )
+        wm = await self._latest_mfds_watermark(board.source_type)
+        collector = MfdsBbsCollector(board)
+
+        dtos: list[EconomicCollectDto] = []
+        stats: dict[str, int] = {}
+        try:
+            dtos, stats = await collector.collect(
+                max_pages=max_pages,
+                max_items=max_items,
+                fetch_body=fetch_body,
+                watermark=wm,
+            )
+        except Exception:
+            logger.exception("MFDS 보도자료 Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": board.board_key,
+            "source_type": board.source_type,
+            "target_year": board.target_year,
+            "watermark": (
+                {"source_url": wm.source_url, "seq": wm.seq} if wm else None
+            ),
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "stats": stats,
+        }
+        logger.info("Bronze economic MFDS press ingest: %s", result)
+        return result
+
+    async def ingest_bok_ecos(
+        self,
+        *,
+        start: str,
+        end: str,
+        max_rows: int = 10000,
+    ) -> dict[str, Any]:
+        """한국은행 ECOS 거시 시계열(FDI·통화량·기준금리) → `raw_economic_data`.
+
+        Args:
+            start/end: 주기별 일자 문자열 — 월 YYYYMM / 연 YYYY / 일 YYYYMMDD / 분기 YYYYQn.
+        """
+        if not self._bok_ecos_key:
+            raise ValueError("BOK_ECOS_API_KEY 가 설정되어 있지 않습니다.")
+
+        collector = BokEcosCollector(self._bok_ecos_key)
+        dtos: list[EconomicCollectDto] = []
+        try:
+            dtos = await collector.collect(start=start, end=end, max_rows=max_rows)
+        except Exception:
+            logger.exception("BOK ECOS Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        type_counts = dict(Counter(d.source_type for d in dtos).most_common(20))
+        result = {
+            "source": "bok_ecos",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "source_type_counts": type_counts,
+            "range": {"start": start, "end": end},
+        }
+        logger.info("Bronze economic BOK ECOS ingest: %s", result)
+        return result
+
+    async def ingest_subsidy24(
+        self,
+        *,
+        max_items: int = 500,
+    ) -> dict[str, Any]:
+        """보조금24(gov24) 정부 지원 서비스 목록 → `raw_economic_data`.
+
+        증분 수집: DB 최신 `수정일시` → cond[수정일시:GTE] API 파라미터로 변경분만 가져온다.
+        """
+        if not self._subsidy24_key:
+            raise ValueError("SUBSIDY24_SERVICE_KEY 가 설정되어 있지 않습니다.")
+
+        wm = await self._latest_subsidy24_watermark()
+        collector = Subsidy24Collector(self._subsidy24_key)
+
+        dtos: list[EconomicCollectDto] = []
+        stats: dict[str, int] = {}
+        try:
+            dtos, stats = await collector.collect(max_items=max_items, watermark=wm)
+        except Exception:
+            logger.exception("보조금24 Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result: dict[str, Any] = {
+            "source": "subsidy24",
+            "watermark": wm.modified_at.isoformat() if wm and wm.modified_at else None,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "stats": stats,
+        }
+        logger.info("Bronze economic 보조금24 ingest: %s", result)
+        return result
+
+    async def ingest_dart_periodic(
+        self,
+        bgn_de: str | None = None,
+        end_de: str | None = None,
+        *,
+        enrich_financials: bool = True,
+        max_enrich: int = 200,
+    ) -> dict[str, Any]:
+        """DART 정기공시(A) 사업보고서·반기보고서 → `raw_economic_data`.
+
+        R&D/CAPEX 금액 보강(enrich_financials=True, KOSPI/KOSDAQ 법인 우선).
+        """
+        if not self._dart_key:
+            raise ValueError("DART_API_KEY(또는 OPENDART_API_KEY)가 설정되어 있지 않습니다.")
+
+        collector = DartPeriodicCollector(self._dart_key)
+        dtos: list[EconomicCollectDto] = []
+        stats: dict[str, int] = {}
+        try:
+            dtos, stats = await collector.collect(
+                bgn_de=bgn_de,
+                end_de=end_de,
+                enrich_financials=enrich_financials,
+                max_enrich=max_enrich,
+            )
+        except Exception:
+            logger.exception("DART 정기공시 Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        type_counts = dict(Counter(d.source_type for d in dtos).most_common(10))
+        result: dict[str, Any] = {
+            "source": "dart_periodic",
+            "bgn_de": bgn_de,
+            "end_de": end_de,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "source_type_counts": type_counts,
+            "stats": stats,
+        }
+        logger.info("Bronze economic DART 정기공시 ingest: %s", result)
+        return result
+
+    async def ingest_mss_press(
+        self,
+        *,
+        max_items: int = 200,
+    ) -> dict[str, Any]:
+        """중소벤처기업부(MSS) 보도자료 → `raw_economic_data`.
+
+        창업·벤처·중소기업 정책 선행 신호(GOVT_MSS_PRESS).
+        증분 수집: DB 최신 bcIdx 워터마크 이하 항목은 skip.
+        """
+        wm = await self._latest_mss_watermark()
+        collector = MssBbsCollector()
+
+        dtos: list[EconomicCollectDto] = []
+        stats: dict[str, int] = {}
+        try:
+            dtos, stats = await collector.collect(max_items=max_items, watermark=wm)
+        except Exception:
+            logger.exception("중기부 보도자료 Bronze 수집 실패. 빈 결과로 진행합니다.")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result: dict[str, Any] = {
+            "source": "mss_press",
+            "source_type": "GOVT_MSS_PRESS",
+            "watermark": {"bc_idx": wm.bc_idx} if wm else None,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "stats": stats,
+        }
+        logger.info("Bronze economic MSS 보도자료 ingest: %s", result)
+        return result
+
     async def ingest_moef_local_pdfs(
         self,
         paths: list[Path | str],
@@ -653,6 +895,28 @@ class BronzeEconomicIngestService:
             published_at=row.get("published_at"),
         )
 
+    async def _latest_mfds_watermark(self, source_type: str) -> MfdsIngestWatermark | None:
+        """MFDS 증분 기준 — 최신 published_at 행의 source_url + raw_metadata.seq."""
+        stmt = (
+            select(
+                RawEconomicData.source_url,
+                RawEconomicData.raw_metadata,
+            )
+            .where(RawEconomicData.source_type == source_type)
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).mappings().first()
+        if not row or not row.get("source_url"):
+            return None
+        meta = row.get("raw_metadata") or {}
+        seq = meta.get("seq") if isinstance(meta, dict) else None
+        if isinstance(seq, str) and seq.isdigit():
+            seq = int(seq)
+        if not isinstance(seq, int):
+            seq = None
+        return MfdsIngestWatermark(source_url=row["source_url"], seq=seq)
+
     async def _latest_publict_list_seq_no(self) -> int | None:
         """`GOVT_MSIT_RND` 의 raw_metadata.publict_list_seq_no MAX.
 
@@ -675,6 +939,316 @@ class BronzeEconomicIngestService:
                 "publict_list_seq_no 워터마크 조회 실패 — full re-fetch 로 진행"
             )
             return None
+
+    async def _latest_mss_watermark(self) -> MssWatermark | None:
+        """중기부 증분 기준 — DB 최신 raw_metadata.bc_idx."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "GOVT_MSS_PRESS")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        bc_idx = meta.get("bc_idx") if isinstance(meta, dict) else None
+        if bc_idx is not None:
+            try:
+                bc_idx = int(bc_idx)
+            except (TypeError, ValueError):
+                bc_idx = None
+        return MssWatermark(bc_idx=bc_idx) if bc_idx else None
+
+    async def _latest_subsidy24_watermark(self) -> Subsidy24Watermark | None:
+        """보조금24 증분 기준 — DB 에서 가장 최근 `수정일시`(raw_metadata.modified_at_raw) 추출."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "GOVT_SUBSIDY24")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        raw_dt_str = meta.get("modified_at_raw") if isinstance(meta, dict) else None
+        if not raw_dt_str:
+            return None
+        from domain.master.hub.services.collectors.economic.subsidy24.subsidy24_collector import (
+            parse_modified_at as _parse_modified_at,
+        )
+        dt = _parse_modified_at(raw_dt_str)
+        return Subsidy24Watermark(modified_at=dt) if dt else None
+
+    # ------------------------------------------------------------------
+    # DART IPO 발행공시 (pblntf_ty=C)
+    # ------------------------------------------------------------------
+
+    async def ingest_dart_ipo(
+        self,
+        *,
+        bgn_de: str | None = None,
+        end_de: str | None = None,
+        max_pages: int = 10,
+    ) -> dict[str, Any]:
+        """DART 발행공시(C)에서 증권신고서(주식) 등 IPO 선행 신호 수집.
+
+        단일 쿼리 날짜 범위는 14일 이하로 유지 (DART API 제한).
+        """
+        if not self._dart_key:
+            raise ValueError("dart_api_key가 설정되지 않았습니다.")
+
+        from datetime import timedelta
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(tz=kst)
+        end = end_de or today.strftime("%Y%m%d")
+        bgn = bgn_de or (today - timedelta(days=7)).strftime("%Y%m%d")
+
+        wm = await self._latest_dart_ipo_watermark()
+        collector = DartIpoCollector(self._dart_key)
+        dtos, stats = await collector.collect(
+            bgn_de=bgn, end_de=end, watermark=wm, max_pages=max_pages,
+        )
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": "dart_ipo",
+            "source_type": "DART_IPO_DISCLOSURE",
+            "date_range": {"bgn_de": bgn, "end_de": end},
+            "watermark": {"last_rcept_dt": wm.last_rcept_dt} if wm else None,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": len(dtos) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze DART IPO ingest: %s", result)
+        return result
+
+    async def _latest_dart_ipo_watermark(self) -> DartIpoWatermark | None:
+        """IPO 공시 증분 기준 — DB 최신 raw_metadata.rcept_dt."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "DART_IPO_DISCLOSURE")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        rcept_dt = meta.get("rcept_dt") if isinstance(meta, dict) else None
+        return DartIpoWatermark(last_rcept_dt=rcept_dt) if rcept_dt else None
+
+    # ------------------------------------------------------------------
+    # 국민연금공단 포트폴리오 (DART 지분공시)
+    # ------------------------------------------------------------------
+
+    async def ingest_nps_portfolio(
+        self,
+        *,
+        bgn_de: str | None = None,
+        end_de: str | None = None,
+        max_pages: int = 30,
+    ) -> dict[str, Any]:
+        """DART 지분공시(pblntf_ty=D)에서 국민연금공단 대량보유 변동 공시 수집.
+
+        Args:
+            bgn_de: 시작일 YYYYMMDD (기본: 오늘 -14일)
+            end_de: 종료일 YYYYMMDD (기본: 오늘)
+            max_pages: DART API 페이지 상한
+        """
+        if not self._dart_key:
+            raise ValueError("dart_api_key가 설정되지 않았습니다.")
+
+        from datetime import timedelta
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(tz=kst)
+        end = end_de or today.strftime("%Y%m%d")
+        bgn = bgn_de or (today - timedelta(days=14)).strftime("%Y%m%d")
+
+        wm = await self._latest_nps_watermark()
+        collector = NpsDartCollector(self._dart_key)
+        dtos, stats = await collector.collect(
+            bgn_de=bgn, end_de=end, watermark=wm, max_pages=max_pages,
+        )
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": "nps_portfolio",
+            "source_type": "NPS_PORTFOLIO_DART",
+            "date_range": {"bgn_de": bgn, "end_de": end},
+            "watermark": {"last_rcept_dt": wm.last_rcept_dt} if wm else None,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": len(dtos) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze NPS portfolio ingest: %s", result)
+        return result
+
+    async def _latest_nps_watermark(self) -> NpsWatermark | None:
+        """NPS 증분 기준 — DB 최신 raw_metadata.rcept_dt."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "NPS_PORTFOLIO_DART")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        rcept_dt = meta.get("rcept_dt") if isinstance(meta, dict) else None
+        return NpsWatermark(last_rcept_dt=rcept_dt) if rcept_dt else None
+
+    # ------------------------------------------------------------------
+    # 네이버 DataLab 검색량 트렌드 (분야별 주간 실제 검색 수요)
+    # ------------------------------------------------------------------
+
+    async def ingest_naver_datalab(
+        self,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, Any]:
+        """네이버 DataLab API로 분야별 주간 검색량 비율 수집.
+
+        Args:
+            start_date: YYYYMMDD (기본: 오늘-28일). 과거 값 지정 시 backfill.
+            end_date:   YYYYMMDD (기본: 오늘)
+        """
+        if not self._naver_client_id or not self._naver_client_secret:
+            raise ValueError("naver_client_id / naver_client_secret 가 설정되지 않았습니다.")
+
+        wm = await self._latest_naver_datalab_watermark()
+        collector = NaverDatalabCollector(self._naver_client_id, self._naver_client_secret)
+        dtos, stats = await collector.collect(
+            start_date=start_date,
+            end_date=end_date,
+            watermark=wm,
+        )
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result: dict[str, Any] = {
+            "source": "naver_datalab",
+            "source_type": "DISCOURSE_NAVER_DATALAB",
+            "watermark": {"last_week_start": wm.last_week_start} if wm else None,
+            "date_range": {"start_date": start_date, "end_date": end_date},
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": len(dtos) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze Naver DataLab ingest: %s", result)
+        return result
+
+    async def _latest_naver_datalab_watermark(self) -> NaverDatalabWatermark | None:
+        """DataLab 증분 기준 — DB 최신 raw_metadata.week_start."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "DISCOURSE_NAVER_DATALAB")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        week_start = meta.get("week_start") if isinstance(meta, dict) else None
+        return NaverDatalabWatermark(last_week_start=week_start) if week_start else None
+
+    # ------------------------------------------------------------------
+    # KIPRIS 특허 출원 트렌드 (기술 분야별 주간 선행 신호)
+    # ------------------------------------------------------------------
+
+    async def ingest_kipris_patents(self) -> dict[str, Any]:
+        """KIPRIS PLUS API로 기술 키워드별 주간 특허 출원 건수 수집.
+
+        월 1,000건 한도 → 20키워드 × 주 1회 = ~80건/월.
+        주 단위 watermark: 이번 주 이미 수집했으면 skip.
+        """
+        if not self._kipris_key:
+            raise ValueError("KIPRIS_API_KEY(kipris_api_key)가 설정되지 않았습니다.")
+
+        wm = await self._latest_kipris_watermark()
+        collector = KiprisPatentCollector(self._kipris_key)
+        dtos, stats = await collector.collect(watermark=wm)
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result: dict[str, Any] = {
+            "source": "kipris_patents",
+            "source_type": "PATENT_KIPRIS_TREND",
+            "watermark": {"last_week_start": wm.last_week_start} if wm else None,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": len(dtos) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze KIPRIS 특허 트렌드 ingest: %s", result)
+        return result
+
+    async def _latest_kipris_watermark(self) -> KiprisWatermark | None:
+        """KIPRIS 증분 기준 — DB 최신 raw_metadata.week_start."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "PATENT_KIPRIS_TREND")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        week_start = meta.get("week_start") if isinstance(meta, dict) else None
+        return KiprisWatermark(last_week_start=week_start) if week_start else None
+
+    # ------------------------------------------------------------------
+    # 네이버 뉴스 기사 수 (키워드별 일별 언론 공급 신호)
+    # ------------------------------------------------------------------
+
+    async def ingest_naver_search(
+        self,
+        *,
+        target_date: str | None = None,
+    ) -> dict[str, Any]:
+        """네이버 뉴스 API로 키워드별 일별 기사 수(total) 수집.
+
+        DataLab(주간 검색 수요)과 짝을 이루는 일별 언론 공급(supply) 신호.
+
+        Args:
+            target_date: YYYYMMDD (기본: 어제). 과거 날짜 지정 시 backfill.
+        """
+        if not self._naver_client_id or not self._naver_client_secret:
+            raise ValueError("naver_client_id / naver_client_secret 가 설정되지 않았습니다.")
+
+        wm = await self._latest_naver_search_watermark()
+        collector = NaverSearchCollector(self._naver_client_id, self._naver_client_secret)
+        dtos, stats = await collector.collect(target_date=target_date, watermark=wm)
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result: dict[str, Any] = {
+            "source": "naver_search",
+            "source_type": "DISCOURSE_NAVER_NEWS",
+            "watermark": {"last_collected_date": wm.last_collected_date} if wm else None,
+            "target_date": target_date,
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": len(dtos) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze Naver News Search ingest: %s", result)
+        return result
+
+    async def _latest_naver_search_watermark(self) -> NaverSearchWatermark | None:
+        """뉴스 검색 증분 기준 — DB 최신 raw_metadata.date."""
+        stmt = (
+            select(RawEconomicData.raw_metadata)
+            .where(RawEconomicData.source_type == "DISCOURSE_NAVER_NEWS")
+            .order_by(RawEconomicData.published_at.desc().nullslast())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        if not row:
+            return None
+        meta = row if isinstance(row, dict) else {}
+        date_str = meta.get("date") if isinstance(meta, dict) else None
+        return NaverSearchWatermark(last_collected_date=date_str) if date_str else None
 
     async def purge_by_source_type(self, source_type: str) -> dict[str, Any]:
         deleted = await self._economic_repo.delete_by_source_type(source_type)

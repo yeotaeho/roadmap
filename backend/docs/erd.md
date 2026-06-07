@@ -16,6 +16,11 @@
 4. **Gold 서빙 전용**: 앱/웹 UI는 Gold 테이블만 조회  
 5. **데이터 리니지 보존**: Silver/Gold에서 `raw_table_ref`, `raw_id`로 역추적 가능
 
+> **현재 구현 차이:** ERD는 목표 논리 모델이다. 2026-06-07 기준 master 수집기는
+> KIPRIS와 Naver DataLab도 `raw_economic_data`에 적재한다.
+> 현재 물리 구현은
+> [`MASTER_BRONZE_IMPLEMENTATION_STATUS.md`](../domain/master/docs/economic/core/MASTER_BRONZE_IMPLEMENTATION_STATUS.md)를 따른다.
+
 ---
 
 ## 2) 통합 ERD 개요

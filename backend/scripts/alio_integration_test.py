@@ -18,7 +18,7 @@ _BACKEND_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_BACKEND_ROOT))
 
 from core.config.settings import get_settings
-from domain.master.hub.services.collectors.economic.alio_public_inst_project_collector import (
+from domain.master.hub.services.collectors.economic.alio.alio_public_inst_project_collector import (
     AlioPublicInstProjectCollector,
 )
 

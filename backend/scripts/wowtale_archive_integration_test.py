@@ -21,7 +21,7 @@ from core.database import get_db
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
-from domain.master.hub.services.collectors.economic.wowtale_archive_crawler import (
+from domain.master.hub.services.collectors.economic.wowtale.wowtale_archive_crawler import (
     WowtaleArchiveCrawler,
     _fetch_html,
     _parse_archive_page,
