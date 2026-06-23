@@ -185,6 +185,41 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("KIPRIS_API_KEY", "KIPRIS_SERVICE_KEY"),
     )
 
+    github_token: Optional[str] = Field(default=None, validation_alias="GITHUB_TOKEN")
+    worknet_api_key: Optional[str] = Field(default=None, validation_alias="WORKNET_API_KEY")
+    hrdnet_api_key: Optional[str] = Field(default=None, validation_alias="HRDNET_API_KEY")
+    goyong24_recruit_api_key: Optional[str] = Field(
+        default=None, validation_alias="GOYONG24_RECRUIT_API_KEY"
+    )
+    goyong24_employer_training_api_key: Optional[str] = Field(
+        default=None, validation_alias="GOYONG24_EMPLOYER_TRAINING_API_KEY"
+    )
+    goyong24_senior_program_api_key: Optional[str] = Field(
+        default=None, validation_alias="GOYONG24_SENIOR_PROGRAM_API_KEY"
+    )
+    goyong24_duty_info_api_key: Optional[str] = Field(
+        default=None, validation_alias="GOYONG24_DUTY_INFO_API_KEY"
+    )
+    goyong24_national_hrd_consortium_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias="GOYONG24_NATIONAL_HRD_CONSORTIUM_API_KEY",
+    )
+    saramin_access_key: Optional[str] = Field(
+        default=None, validation_alias="SARAMIN_ACCESS_KEY"
+    )
+
+    # 관세청 수출입무역통계 OpenAPI (Bronze — raw_innovation_data, HS코드별 월간 수출금액)
+    #   발급: https://www.data.go.kr → "관세청 수출입무역통계" 검색 → 서비스 신청
+    customs_service_key: Optional[str] = Field(
+        default=None, validation_alias="CUSTOMS_SERVICE_KEY"
+    )
+
+    # 커리어넷 Open API (Bronze — raw_people_data, 직업정보 일자리전망·학과정보)
+    #   발급: https://www.career.go.kr Open API 센터 → 인증키 발급
+    careernet_api_key: Optional[str] = Field(
+        default=None, validation_alias="CAREERNET_API_KEY"
+    )
+
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)
     #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
     #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡

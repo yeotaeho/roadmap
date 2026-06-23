@@ -20,6 +20,19 @@
 > KIPRIS와 Naver DataLab도 `raw_economic_data`에 적재한다.
 > 현재 물리 구현은
 > [`MASTER_BRONZE_IMPLEMENTATION_STATUS.md`](../domain/master/docs/economic/core/MASTER_BRONZE_IMPLEMENTATION_STATUS.md)를 따른다.
+>
+> **2026-06-12 결함 수정 (마이그레이션 `d7f3a9c1e5b2`):** 아래 4개 구조 결함을 수정했다.
+> - **A.** `sectors`/`sub_sectors` 마스터 생성·시드(12개) + `sector_source_map`으로
+>   5개 Innovation 소스 분류값(arXiv 카테고리·GitHub 토픽·관세청 HS그룹·tech_category)을
+>   섹터 slug로 통합 — Silver 융합의 공통 축 확보.
+> - **B.** Silver 리니지를 1:1에서 N:M으로 전환(`refined_signal_sources`). 한 신호가
+>   여러 Bronze 원천을 가리켜 "다수 소스 동시 출현 = 강신호"를 표현.
+> - **C.** Silver에 `reference_period_start/end`(데이터 기준 기간)와 증거별
+>   `contribution_weight`(lead-lag 가중) 추가 — 선행(arXiv)·후행(관세청) 시차 모델링 가능.
+> - **D.** `data_role`을 JSONB에서 1급 컬럼으로 승격(`refined_innovation_signal.data_role`).
+>
+> 기존 `refined_trend/gap/chance_insights`(미구현)의 1:1 `raw_table_ref`/`raw_id`는
+> 위 N:M 패턴으로 대체되며, Silver 본격 구현 시 동일 패턴을 따른다.
 
 ---
 
@@ -90,6 +103,28 @@ CREATE TABLE sub_sectors (
 );
 
 CREATE INDEX idx_sub_sectors_sector ON sub_sectors(sector_slug);
+```
+
+> **구현 상태(2026-06-12):** `sectors`·`sub_sectors`는 마이그레이션 `d7f3a9c1e5b2`로
+> 물리 생성되었고 `sectors`는 12개 섹터로 시드되었다. (실제 제약명: `pk_sectors`,
+> `pk_sub_sectors`, `fk_sub_sectors_sector`, `ix_sub_sectors_sector`.)
+
+```sql
+-- 3.3 소스 분류값 → 섹터 통합 매핑 (결함 A 수정)
+--     5개 Innovation 소스의 이질적 분류값을 단일 sectors.slug 축으로 정규화한다.
+--     Silver는 이 테이블을 조회해 arXiv/GitHub/관세청/TechBlog 신호를 같은 섹터로 묶는다.
+CREATE TABLE sector_source_map (
+    id BIGSERIAL PRIMARY KEY,                            -- 매핑 PK
+    sector_slug VARCHAR(50) NOT NULL REFERENCES sectors(slug), -- 귀속 섹터
+    match_key VARCHAR(50) NOT NULL,                      -- 분류 차원: arxiv_category / github_topic / customs_group / tech_category
+    match_value VARCHAR(120) NOT NULL,                   -- 원천 분류값: 'cs.AI', 'machine-learning', 'SEMICONDUCTOR', 'AI_ML' 등
+    note VARCHAR(255),                                   -- 매핑 근거 메모(옵션)
+    created_at TIMESTAMPTZ DEFAULT now(),                -- 생성 시각
+    UNIQUE (match_key, match_value)                      -- 동일 분류값은 1개 섹터로만
+);
+CREATE INDEX ix_sector_source_map_sector ON sector_source_map(sector_slug);
+-- 시드 예: ('arxiv_category','cs.AI','ai-data'), ('customs_group','COSMETICS','beauty-fashion'),
+--          ('github_topic','robotics','mobility'), ('tech_category','FINTECH','fintech') ...
 ```
 
 ---
@@ -283,50 +318,94 @@ CREATE UNIQUE INDEX uq_verified_company_source_biz ON verified_company_master(so
 
 ## 5) Silver Layer (AI 정제/추론)
 
+### 5.0 교차융합형 혁신 Silver — 결함 B·C·D 수정 (구현됨)
+
+> 마이그레이션 `d7f3a9c1e5b2`로 물리 생성. Innovation Flow 산출의 실제 기준 스키마이며,
+> Pulse/Gap/Chance Silver도 본격 구현 시 이 패턴(데이터 기준기간·data_role 1급화·N:M 리니지)을 따른다.
+
+```sql
+-- 섹터별 혁신 모멘텀 신호 (한 신호 = 여러 원천의 융합 결과)
+CREATE TABLE refined_innovation_signal (
+    id BIGSERIAL PRIMARY KEY,                            -- Silver 신호 PK
+    sector_slug VARCHAR(50) NOT NULL REFERENCES sectors(slug), -- 귀속 섹터(sector_source_map으로 해소)
+    sub_sector_id BIGINT REFERENCES sub_sectors(id),     -- 세부 섹터(옵션)
+    data_role VARCHAR(50) NOT NULL,                      -- (D) 1급 컬럼: FUTURE_TECH_SIGNAL / EXPORT_FLOW_SIGNAL / TECH_BLOG_SIGNAL …
+    signal_topic VARCHAR(255) NOT NULL,                  -- 통합 토픽/기술명
+    momentum_score INT,                                  -- 정규화 모멘텀(0~100)
+    confidence NUMERIC(5,2),                             -- 신뢰도
+    extracted_keywords JSONB,                            -- 키워드 배열
+    reference_period_start DATE NOT NULL,                -- (C) 데이터가 가리키는 기준 기간 시작
+    reference_period_end DATE NOT NULL,                  -- (C) 기준 기간 끝 — lead-lag 정렬 근거
+    source_count INT NOT NULL DEFAULT 0,                 -- (B) 교차 출처 보강 개수(다수 소스 = 강신호)
+    processed_at TIMESTAMPTZ DEFAULT now(),              -- 분석 완료 시각
+    CONSTRAINT ck_refined_innov_period CHECK (reference_period_end >= reference_period_start)
+);
+CREATE INDEX ix_refined_innov_sector ON refined_innovation_signal(sector_slug);
+CREATE INDEX ix_refined_innov_data_role ON refined_innovation_signal(data_role);
+CREATE INDEX ix_refined_innov_period ON refined_innovation_signal(reference_period_start, reference_period_end);
+
+-- (B) N:M 리니지 — 한 신호가 가리키는 다수 Bronze 원천
+CREATE TABLE refined_signal_sources (
+    id BIGSERIAL PRIMARY KEY,                            -- 리니지 PK
+    signal_id BIGINT NOT NULL REFERENCES refined_innovation_signal(id) ON DELETE CASCADE, -- 소속 신호
+    raw_table_ref VARCHAR(50) NOT NULL,                  -- 원천 테이블명(raw_innovation_data 등)
+    raw_id BIGINT NOT NULL,                              -- 원천 레코드 PK
+    contribution_weight NUMERIC(5,2),                    -- 시차/신뢰 가중(선행 arXiv vs 후행 관세청 차등)
+    created_at TIMESTAMPTZ DEFAULT now(),                -- 생성 시각
+    UNIQUE (signal_id, raw_table_ref, raw_id)            -- 동일 원천 중복 연결 방지
+);
+CREATE INDEX ix_refined_signal_sources_raw ON refined_signal_sources(raw_table_ref, raw_id); -- 역추적
+```
+
+### 5.1 Pulse/Gap/Chance Silver (목표 모델)
+
+> 아래 3개는 미구현 목표 모델이다. 결함 수정 반영: `data_role`·`reference_date`를 추가했고,
+> 1:1 `raw_table_ref`/`raw_id`는 §5.0의 N:M `refined_signal_sources` 패턴으로 대체한다.
+
 ```sql
 -- Pulse 분석용 Silver
 CREATE TABLE refined_trend_insights (
     id BIGSERIAL PRIMARY KEY,                 -- Silver 레코드 PK
-    raw_table_ref VARCHAR(50) NOT NULL,       -- 원천 테이블명
-    raw_id BIGINT NOT NULL,                   -- 원천 레코드 PK
     sector_slug VARCHAR(50) REFERENCES sectors(slug), -- AI 분류 섹터
     sub_sector_id BIGINT REFERENCES sub_sectors(id),  -- AI 분류 세부 섹터
+    data_role VARCHAR(50) NOT NULL,           -- (D) 신호 종류 1급 컬럼
     sentiment_score FLOAT,                    -- -1.0 ~ 1.0
     impact_score INT,                         -- 영향도 점수
     extracted_keywords JSONB,                 -- 배열
+    reference_date DATE,                      -- (C) 데이터 기준 일자(lead-lag)
     processed_at TIMESTAMPTZ DEFAULT now()    -- 분석 완료 시각
+    -- (B) 원천 리니지는 refined_signal_sources(signal_id→이 테이블) 패턴 사용
 );
 CREATE INDEX idx_refined_trend_sector ON refined_trend_insights(sector_slug);
-CREATE INDEX idx_refined_trend_raw ON refined_trend_insights(raw_table_ref, raw_id);
 
 -- Gap 분석용 Silver
 CREATE TABLE refined_gap_insights (
     id BIGSERIAL PRIMARY KEY,                 -- Silver 레코드 PK
-    raw_table_ref VARCHAR(50) NOT NULL,       -- 원천 테이블명
-    raw_id BIGINT NOT NULL,                   -- 원천 레코드 PK
     sector_slug VARCHAR(50) REFERENCES sectors(slug), -- 관련 섹터
+    data_role VARCHAR(50) NOT NULL,           -- (D) 신호 종류 1급 컬럼
     extracted_problem TEXT NOT NULL,
     extracted_opportunity TEXT NOT NULL,
+    reference_date DATE,                      -- (C) 데이터 기준 일자
     processed_at TIMESTAMPTZ DEFAULT now()    -- 분석 완료 시각
+    -- (B) 원천 리니지는 refined_signal_sources 패턴 사용
 );
 CREATE INDEX idx_refined_gap_sector ON refined_gap_insights(sector_slug);
-CREATE INDEX idx_refined_gap_raw ON refined_gap_insights(raw_table_ref, raw_id);
 
 -- Chance 분석용 Silver
 CREATE TABLE refined_chance_insights (
     id BIGSERIAL PRIMARY KEY,                 -- Silver 레코드 PK
-    raw_table_ref VARCHAR(50) NOT NULL DEFAULT 'raw_opportunity_data', -- 원천 테이블명
-    raw_id BIGINT NOT NULL,                   -- 원천 레코드 PK
     sector_slug VARCHAR(50) REFERENCES sectors(slug), -- AI 판별 매칭 섹터
+    data_role VARCHAR(50) NOT NULL,           -- (D) 신호 종류 1급 컬럼
     extracted_type VARCHAR(50) NOT NULL,      -- 채용/부트캠프/공모전/지원금 분류
     extracted_target JSONB,                   -- 지원 대상 목록(JSON 배열)
     extracted_benefits JSONB,                 -- 혜택/보상 목록(JSON 배열)
     extracted_deadline DATE,                  -- 마감일
     extracted_qualifications JSONB,           -- 자격 요건 목록(JSON 배열)
+    reference_date DATE,                      -- (C) 데이터 기준 일자
     processed_at TIMESTAMPTZ DEFAULT now()    -- 분석 완료 시각
+    -- (B) 원천 리니지는 refined_signal_sources 패턴 사용 (기존 raw_opportunity_data 1:1 대체)
 );
 CREATE INDEX idx_refined_chance_sector ON refined_chance_insights(sector_slug);
-CREATE INDEX idx_refined_chance_raw ON refined_chance_insights(raw_table_ref, raw_id);
 ```
 
 ---
@@ -703,5 +782,5 @@ CREATE TABLE user_competencies (
 
 ---
 
-문서 버전: v2.6  
-최종 업데이트: 2026-05-05
+문서 버전: v2.7  
+최종 업데이트: 2026-06-12 (결함 A·B·C·D 수정 — 마이그레이션 `d7f3a9c1e5b2`)

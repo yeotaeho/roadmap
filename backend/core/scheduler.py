@@ -49,6 +49,12 @@ from domain.master.hub.services.bronze_market_timeseries_ingest_service import (
 from domain.master.hub.services.bronze_opportunity_ingest_service import (
     BronzeOpportunityIngestService,
 )
+from domain.master.hub.services.bronze_innovation_ingest_service import (
+    BronzeInnovationIngestService,
+)
+from domain.master.hub.services.bronze_people_ingest_service import (
+    BronzePeopleIngestService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +322,79 @@ async def _job_yahoo_macro() -> dict[str, Any]:
         return await svc.ingest_yahoo_macro()
 
 
+async def _job_arxiv_papers() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_arxiv(
+            days_back=7, max_results=50
+        )
+
+
+async def _job_github_trending() -> dict[str, Any]:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(
+            session, github_token=settings.github_token
+        ).ingest_github_trending(days_back=7)
+
+
+async def _job_worknet_jobs() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.worknet_api_key:
+        logger.warning("[scheduler] worknet_api_key 없음 — 워크넷 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzePeopleIngestService(
+            session, worknet_api_key=settings.worknet_api_key
+        ).ingest_worknet_job_info()
+
+
+async def _job_kistep() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_kistep()
+
+
+async def _job_techblog_kr() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_techblog_kr(
+            max_items_per_feed=30
+        )
+
+
+async def _job_customs_export() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "customs_service_key", None)
+    if not key:
+        logger.warning("[scheduler] customs_service_key 없음 — 관세청 수출통계 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_customs_export(
+            customs_service_key=key
+        )
+
+
+async def _job_hrdnet_training() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.hrdnet_api_key:
+        logger.warning("[scheduler] hrdnet_api_key 없음 — HRD-Net 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzePeopleIngestService(
+            session, hrdnet_api_key=settings.hrdnet_api_key
+        ).ingest_hrdnet_training()
+
+
+async def _job_careernet() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "careernet_api_key", None)
+    if not key:
+        logger.warning("[scheduler] careernet_api_key 없음 — 커리어넷 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzePeopleIngestService(
+            session, careernet_api_key=key
+        ).ingest_careernet()
+
+
 # ---------------------------------------------------------------------------
 # 등록 & 라이프사이클
 # ---------------------------------------------------------------------------
@@ -324,6 +403,7 @@ async def _job_yahoo_macro() -> dict[str, Any]:
 # (job_id, factory, group)
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
+    ("techblog_kr",       _job_techblog_kr),
     ("wowtale",           _job_wowtale),
     ("platum",            _job_platum),
     ("venturesquare",     _job_venturesquare),
@@ -349,6 +429,16 @@ _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart_periodic",    _job_dart_periodic),
     ("kipris_patents",   _job_kipris_patents),
     ("naver_datalab",    _job_naver_datalab),
+    ("arxiv_papers",     _job_arxiv_papers),
+    ("github_trending",  _job_github_trending),
+    ("kistep_report",    _job_kistep),
+)
+
+_MONTHLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
+    ("worknet_jobs",      _job_worknet_jobs),
+    ("hrdnet_training",   _job_hrdnet_training),
+    ("customs_export",    _job_customs_export),
+    ("careernet",         _job_careernet),
 )
 
 
@@ -419,18 +509,37 @@ def start_scheduler() -> AsyncIOScheduler | None:
             misfire_grace_time=3600,
         )
 
+    monthly_trigger = CronTrigger(
+        day=1,
+        hour=daily_hh,
+        minute=daily_mm,
+        timezone=settings.scheduler_timezone,
+    )
+    for job_id, factory in _MONTHLY_JOBS:
+        sched.add_job(
+            _wrap(job_id, factory),
+            trigger=monthly_trigger,
+            id=f"monthly_{job_id}",
+            name=f"monthly_{job_id}",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+
     sched.start()
     _scheduler = sched
 
     logger.info(
         "[scheduler] STARTED tz=%s daily=%02d:%02d weekly=DoW%s %02d:%02d "
-        "daily_jobs=%d weekly_jobs=%d",
+        "daily_jobs=%d weekly_jobs=%d monthly_jobs=%d",
         settings.scheduler_timezone,
         daily_hh, daily_mm,
         settings.scheduler_weekly_dow,
         weekly_hh, weekly_mm,
         len(_DAILY_JOBS),
         len(_WEEKLY_JOBS),
+        len(_MONTHLY_JOBS),
     )
     for job in sched.get_jobs():
         logger.info("[scheduler] registered: id=%s next_run=%s", job.id, job.next_run_time)
@@ -484,6 +593,7 @@ async def run_job_now(job_id: str) -> dict[str, Any]:
         job_id,
         f"daily_{job_id}",
         f"weekly_{job_id}",
+        f"monthly_{job_id}",
     )
     job = None
     for cid in candidates:

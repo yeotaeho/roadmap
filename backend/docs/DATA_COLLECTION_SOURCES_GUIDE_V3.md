@@ -1,4 +1,4 @@
-# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.2 · 2026-06-07 갱신)
+# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.3 · 2026-06-09 갱신)
 
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
@@ -20,9 +20,9 @@
 | `raw_discourse_data` | 뉴스·커뮤니티·담론 등 **이슈·리스크** |
 | `raw_opportunity_data` | 채용·부트캠프·공모전·지원사업 등 **기회** |
 
-> 이 표는 목표 논리 모델이다. 현재 master 구현은 KIPRIS, Naver DataLab,
-> 검색 수요 신호는 Naver DataLab을 통해 `raw_economic_data`에 적재한다.
-> 실제 물리 적재 위치는 구현 현황 SSOT를 따른다.
+> KIPRIS와 Naver DataLab은 기존 호환성 때문에 `raw_economic_data`에 유지한다.
+> arXiv·GitHub는 `raw_innovation_data`, 고용24 직업정보·훈련과정은
+> `raw_people_data`에 적재한다.
 
 ---
 
@@ -82,11 +82,17 @@
 |------|------------|-----------|--------|------|------|
 | **KIPRIS PLUS — 특허 출원 트렌드** | `PATENT_KIPRIS_TREND` | Open API (`ServiceKey`) | 주별 | ✅ | 논리 분류 Innovation, 현재는 `raw_economic_data` 적재 |
 | **NTIS (국가 R&D 통합)** | `INNOVATION_NTIS_*` | Open API / RSS | — | ❌ P1 | 국가 R&D 과제·논문·특허 통합 |
-| **arXiv (한국 저자 필터)** | `INNOVATION_ARXIV_*` | REST API | — | ❌ | AI·바이오 논문 추이 |
-| **GitHub Trending (한국)** | `INNOVATION_GITHUB_*` | REST API | — | ❌ | Star 급증 오픈소스 탐지 |
+| **arXiv 분야별 논문** | `INNOVATION_ARXIV_KR` | Atom REST API | 주별 | ✅ | 11개 분야 수집 완료. 한국 저자 필터는 미구현 |
+| **GitHub 신규 인기 저장소** | `INNOVATION_GITHUB_TRENDING` | Search REST API | 주별 | ✅ | 10개 토픽 그룹, 주 단위 멱등성. 한국 저장소 필터는 미구현 |
 | **기업 기술 블로그 RSS** | `INNOVATION_TECHBLOG_*` | RSS | — | ❌ | 네이버D2·카카오Tech·쏘카 등 |
 
-> **KIPRIS API 핵심 파라미터**: 인증 파라미터명 `ServiceKey` (대소문자 정확히), 날짜 `applicationDate=YYYYMMDD~YYYYMMDD` (틸다 구분). IPC 코드 필터(`ipcCpc` 등)는 미동작 — `inventionTitle` 키워드 방식으로 대체.
+> **KIPRIS API 핵심 파라미터**: 인증 파라미터명은 `ServiceKey`이며 날짜는
+> `applicationDate=YYYYMMDD~YYYYMMDD` 형식이다. IPC 필터 대신 검증된
+> `inventionTitle` 키워드 방식을 사용한다. 현재 9개 그룹에 AI·바이오·에너지·
+> 반도체·모빌리티·핀테크·콘텐츠·푸드테크·에듀테크를 포함한다.
+>
+> **2026-06-09 검증**: arXiv 11개 분야 33건 수집·29건 적재,
+> GitHub 단일 토픽 3건 수집·적재 및 재실행 0건을 확인했다.
 
 ---
 
@@ -95,6 +101,8 @@
 | 출처 | source_type | 수집 방법 | 스케줄 | 구현 | 비고 |
 |------|------------|-----------|--------|------|------|
 | **네이버 DataLab 검색량** | `DISCOURSE_NAVER_DATALAB` | Open API | 주별 | ✅ | 논리 분류 People/Demand, 현재는 `raw_economic_data` 적재 |
+| **고용24 직업정보** | `PEOPLE_WORKNET_JOB` | Open API XML | 월별 | ✅ | 직업 분류 492건. 채용 건수가 아닌 `JOB_TAXONOMY_SIGNAL` |
+| **고용24 국민내일배움카드 훈련과정** | `PEOPLE_HRDNET_TRAINING` | Open API XML | 월별 | ✅ | 12개 NCS 분야 과정 수·훈련비·정원 집계 |
 | **Google Trends (한국)** | `PEOPLE_GTRENDS_*` | PyTrends | — | ❌ | 글로벌 vs 한국 비교 |
 | **원티드 채용 공고** | `PEOPLE_WANTED_*` | Playwright | — | ❌ P1 | IT/스타트업 기술 스택 수요 |
 | **사람인 OpenAPI** | `PEOPLE_SARAMIN_*` | Open API | — | ❌ | 채용 공고 수량·요구 기술 |

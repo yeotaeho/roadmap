@@ -66,6 +66,24 @@ _TECH_KEYWORD_GROUPS: list[tuple[str, list[str]]] = [
         "블록체인",
         "디지털화폐",
     ]),
+    ("CONTENT_MEDIA", [
+        "웹툰",
+        "OTT",
+        "메타버스",
+        "실감콘텐츠",
+    ]),
+    ("FOODTECH", [
+        "스마트팜",
+        "대체단백질",
+        "식품기술",
+        "배양육",
+    ]),
+    ("EDUTECH", [
+        "에듀테크",
+        "VR학습",
+        "AI교육",
+        "학습분석",
+    ]),
 ]
 
 # getAdvancedSearch 필수 Boolean 플래그

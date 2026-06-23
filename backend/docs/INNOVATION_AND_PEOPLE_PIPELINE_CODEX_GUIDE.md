@@ -1,8 +1,32 @@
 # Bronze Innovation & People Pipeline — Codex 구현 가이드
 
 **작성일:** 2026-06-07  
+**구현 현황 갱신:** 2026-06-09 (Korean-specific 소스 추가)
 **대상:** Codex (AI 코딩 어시스턴트)  
 **우선순위 기준:** P0 = 이번 태스크에서 반드시 구현 / P1 = 다음 태스크 / P2 = 장기 후보
+
+## 구현 결과 요약
+
+- P0 인프라, 컬렉터 4개, 서비스, 라우터, 스케줄러, 환경변수, KIPRIS 다양화를 구현했다.
+- Alembic은 기존 DB 스키마를 `a3f8c2d1e9b4`로 stamp한 뒤 신규 테이블 migration
+  `b6c9d2e4f7a1`과 ORM 주석 동기화 migration `c8d4e6f1a2b3`까지 적용했다.
+- `raw_innovation_data`, `raw_people_data` 테이블과 UNIQUE 제약 생성을 확인했다.
+- 고용24 통합에 따라 구 WorkNet/HRD-Net URL을 `work24.go.kr` Open API로 교체했다.
+- 직업정보 API는 채용공고 수요가 아니라 직업 분류 492건을 제공하므로 `JOB_TAXONOMY_SIGNAL`로 저장한다.
+- 국민내일배움카드 훈련과정은 12개 NCS 분야의 과정 수, 훈련비, 정원을 `TRAINING_DEMAND_SIGNAL`로 저장한다.
+- arXiv와 GitHub의 분야별 수집은 완료했지만 한국 저자·한국 저장소 필터는 아직 구현하지 않았다.
+
+### 2026-06-09 검증 결과
+
+| 검증 | 결과 |
+|------|------|
+| 무네트워크 파싱 테스트 | 15/15 통과 |
+| 기존 Economic 회귀 테스트 | 185/185 통과 |
+| 외부 API 제한 통합 테스트 | arXiv 3건, GitHub 3건, 고용24 직업정보 492건, 훈련과정 1개 분야 통과 |
+| 고용24 전체 DB 적재 | 직업정보 492건, 훈련 집계 12건 적재 |
+| 멱등성 | 고용24 동일 날짜 재실행 0건, GitHub 동일 배치 재적재 0건 |
+| arXiv 전체 분야 DB 적재 | 11개 분야 33건 수집, URL 중복 제외 29건 적재 |
+| Alembic | current/head 모두 `c8d4e6f1a2b3`, `alembic check` 통과 |
 
 ---
 
@@ -82,10 +106,16 @@ backend/
 │               │   │   └── arxiv_papers_collector.py         ← (10) P0 컬렉터
 │               │   ├── github/
 │               │   │   ├── __init__.py
-│               │   │   └── github_trending_collector.py      ← (11) P0 컬렉터
+│               │   │   └── github_trending_collector.py      ← (11) P0 컬렉터 (모멘텀 2-pass)
+│               │   ├── techblog/
+│               │   │   ├── __init__.py
+│               │   │   └── techblog_kr_collector.py          ← (12) P1 컬렉터 (일일, 키 불필요)
+│               │   ├── customs/
+│               │   │   ├── __init__.py
+│               │   │   └── customs_export_collector.py       ← (13) P1 컬렉터 (월간, CUSTOMS_SERVICE_KEY)
 │               │   └── kocca/
 │               │       ├── __init__.py
-│               │       └── kocca_content_collector.py        ← (12) P1 컬렉터
+│               │       └── kocca_content_collector.py        ← (미구현) P1 다음 컬렉터
 │               │
 │               └── people/
 │                   ├── __init__.py
@@ -505,75 +535,46 @@ InnovationCollectDto(
 
 ---
 
-### (13) WorkNet 직업정보 Collector
+### (13) 고용24 직업정보 Collector
 
 **파일:** `collectors/people/worknet/worknet_job_info_collector.py`  
 **테이블:** `raw_people_data`  
 **source_type:** `PEOPLE_WORKNET_JOB`  
 **스케줄:** 월간 (monthly — 매월 1일, APScheduler CronTrigger `day=1`)  
-**API 키:** `WORKNET_API_KEY` (고용24 OpenAPI 회원가입 후 발급, 무료)
+**API 키:** `WORKNET_API_KEY` (고용24 직업정보 서비스 인증키)
 
 #### API 엔드포인트
 
 ```
-GET https://www.work.go.kr/cjob/openApi/getJobList.do
+GET https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo212L01.do
 ```
 
 #### 파라미터
 
 ```python
 params = {
-    "apiKey": api_key,
-    "callTp": "L",   # 목록 조회
-    "pageNum": 1,
-    "pageSize": 100,
-    "occupation": "",  # 빈값 = 전 직종
-    "returnType": "JSON",
+    "authKey": api_key,
+    "returnType": "XML",
+    "target": "JOBCD",
 }
 ```
 
-#### 직종 코드 범위 (다양성 핵심)
-
-`occupation` 파라미터에 코드를 넣어 섹터별 순회.
-
-```python
-_WORKNET_SECTORS: list[tuple[str, str]] = [
-    ("IT_SOFTWARE",      "23"),   # IT·인터넷·통신
-    ("ENGINEERING",      "09"),   # 기계·금속
-    ("BIOHEALTH",        "07"),   # 의료·보건·복지
-    ("EDUCATION",        "12"),   # 교육·연구·법률
-    ("CREATIVE",         "04"),   # 문화·예술·방송·스포츠
-    ("FOOD_SERVICE",     "11"),   # 외식·음식서비스
-    ("DISTRIBUTION",     "14"),   # 유통·무역·운송
-    ("CONSTRUCTION",     "03"),   # 건설
-    ("AGRICULTURE",      "01"),   # 농림·어업
-    ("FINANCE",          "08"),   # 금융·보험
-    ("PUBLIC_SERVICE",   "21"),   # 공무원·공공서비스
-    ("BEAUTY_FASHION",   "20"),   # 미용·숙박·여행·오락
-    ("WELFARE",          "17"),   # 사회복지
-]
-```
-
-#### 응답에서 핵심 지표 추출
-
-```python
-# 직업별 채용공고 건수 (search_volume_or_count)
-job_count = item.get("totalCnt", 0)  # 해당 직종 현재 공고 수
-job_name = item.get("jobNm", "")
-```
+응답은 `jobCd`, `jobNm`, `jobClcd`, `jobClcdNM`을 포함한 직업 분류 목록이다.
+2026-06-09 실제 응답은 492건이며 채용공고 건수 필드는 제공하지 않는다.
 
 #### PeopleCollectDto 매핑
 
 ```python
 PeopleCollectDto(
     source_type="PEOPLE_WORKNET_JOB",
-    source_url=f"https://www.work.go.kr/cjob/openApi/getJobList.do?occupation={occ_code}",
+    source_url=f"{api_url}?target=JOBCD&jobCd={job_code}",
     keyword_or_job=job_name[:100],
-    search_volume_or_count=job_count,
+    search_volume_or_count=None,
     raw_metadata={
-        "occupation_code": occ_code,
-        "sector_name": sector_name,
-        "data_role": "JOB_DEMAND_SIGNAL",
+        "job_code": job_code,
+        "job_category_code": job_category_code,
+        "job_category_name": job_category_name,
+        "data_role": "JOB_TAXONOMY_SIGNAL",
     },
     reference_date=today,  # 수집 당일
 )
@@ -581,23 +582,22 @@ PeopleCollectDto(
 
 ---
 
-### (14) HRD-Net 훈련과정 Collector
+### (14) 고용24 국민내일배움카드 훈련과정 Collector
 
 **파일:** `collectors/people/hrdnet/hrdnet_training_collector.py`  
 **테이블:** `raw_people_data`  
 **source_type:** `PEOPLE_HRDNET_TRAINING`  
 **스케줄:** 월간 (monthly — 매월 1일)  
-**API 키:** `HRDNET_API_KEY` (고용24/HRD-Net OpenAPI, 무료)
+**API 키:** `HRDNET_API_KEY` (고용24 국민내일배움카드 훈련과정 서비스 인증키)
 
 #### API 엔드포인트
 
 ```
-GET https://www.hrd.go.kr/hrdp/co/pcoao/PCOAO0100P.do
+GET https://www.work24.go.kr/cm/openApi/call/hr/callOpenApiSvcInfo310L01.do
 ```
 
-> ⚠️ HRD-Net API는 공공데이터포털(data.go.kr)에서도 동일 데이터를 제공한다.  
-> `https://api.odcloud.kr/api/15070807/v1/uddi:...` 형태로 접근 가능하므로  
-> 발급된 키 형식에 따라 엔드포인트를 결정할 것.
+필수 파라미터는 `authKey`, `returnType=XML`, `outType=1`, 조회 시작·종료일,
+페이지, 정렬 조건이다. 구현은 수집일로부터 90일 범위를 조회한다.
 
 #### 수집 목표
 
@@ -628,7 +628,7 @@ _NCS_TRAINING_SECTORS: list[tuple[str, str]] = [
 ```python
 PeopleCollectDto(
     source_type="PEOPLE_HRDNET_TRAINING",
-    source_url=f"https://www.hrd.go.kr/hrdp/co/pcoao/PCOAO0100P.do?ncsOccupCd={ncs_code}",
+    source_url=f"{api_url}?srchNcs1={ncs_code}",
     keyword_or_job=sector_name[:100],
     search_volume_or_count=course_count,  # 개설 과정 수
     raw_metadata={
@@ -788,8 +788,8 @@ saramin_access_key: str | None = Field(default=None, validation_alias="SARAMIN_A
 `.env.example`에도 항목 추가:
 ```
 GITHUB_TOKEN=                  # GitHub Personal Access Token (optional, rate limit 향상)
-WORKNET_API_KEY=               # 고용24 OpenAPI 키 (https://openapi.work.go.kr/)
-HRDNET_API_KEY=                # HRD-Net OpenAPI 키 (data.go.kr)
+WORKNET_API_KEY=               # 고용24 직업정보 서비스 인증키
+HRDNET_API_KEY=                # 고용24 국민내일배움카드 훈련과정 인증키
 SARAMIN_ACCESS_KEY=            # 사람인 OpenAPI Access Key (P1)
 ```
 
@@ -799,8 +799,8 @@ SARAMIN_ACCESS_KEY=            # 사람인 OpenAPI Access Key (P1)
 
 | 키 | 발급처 | 비용 | 비고 |
 |---|--------|------|------|
-| `WORKNET_API_KEY` | https://openapi.work.go.kr | 무료 | 고용24 회원가입 후 API 신청 |
-| `HRDNET_API_KEY` | https://www.data.go.kr | 무료 | 공공데이터포털 — "HRD-Net 훈련과정" 검색 후 활용신청 |
+| `WORKNET_API_KEY` | https://www.work24.go.kr | 무료 | 고용24 직업정보 서비스별 인증키 |
+| `HRDNET_API_KEY` | https://www.work24.go.kr | 무료 | 고용24 국민내일배움카드 훈련과정 서비스별 인증키 |
 | `GITHUB_TOKEN` | https://github.com/settings/tokens | 무료 | Personal Access Token, `public_repo` scope만 필요 |
 | `SARAMIN_ACCESS_KEY` | https://oapi.saramin.co.kr | 무료 | 사람인 OpenAPI 회원 신청 (P1) |
 | `arXiv` | 없음 | 무료 | API 키 불필요 |
@@ -811,43 +811,305 @@ SARAMIN_ACCESS_KEY=            # 사람인 OpenAPI Access Key (P1)
 
 ### Phase 1 — 인프라 (먼저 완료 필요)
 
-- [ ] ORM 모델: `raw_innovation_data.py`
-- [ ] ORM 모델: `raw_people_data.py`
-- [ ] DTO: `innovation_collect_dto.py`
-- [ ] DTO: `people_collect_dto.py`
-- [ ] Repository: `innovation_repository.py`
-- [ ] Repository: `people_repository.py`
-- [ ] Alembic 마이그레이션 생성 + 검토
-- [ ] `alembic upgrade head`
+- [x] ORM 모델: `raw_innovation_data.py`
+- [x] ORM 모델: `raw_people_data.py`
+- [x] DTO: `innovation_collect_dto.py`
+- [x] DTO: `people_collect_dto.py`
+- [x] Repository: `innovation_repository.py`
+- [x] Repository: `people_repository.py`
+- [x] Alembic 마이그레이션 생성 + 검토
+- [x] `alembic upgrade head`
 
 ### Phase 2 — P0 컬렉터
 
-- [ ] `arxiv_papers_collector.py` — arXiv 11개 카테고리, 주간
-- [ ] `github_trending_collector.py` — 10개 토픽, 주간
-- [ ] `worknet_job_info_collector.py` — 13개 직종, 월간
-- [ ] `hrdnet_training_collector.py` — 12개 NCS 직종, 월간
-- [ ] `BronzeInnovationIngestService`
-- [ ] `BronzePeopleIngestService`
+- [x] `arxiv_papers_collector.py` — arXiv 11개 카테고리, 주간
+- [x] `github_trending_collector.py` — 10개 토픽 그룹, 주간
+- [x] `worknet_job_info_collector.py` — 고용24 직업 분류 전체, 월간
+- [x] `hrdnet_training_collector.py` — 고용24 12개 NCS 직종, 월간
+- [x] `BronzeInnovationIngestService`
+- [x] `BronzePeopleIngestService`
 
 ### Phase 3 — 라우터 + 스케줄러
 
-- [ ] 라우터 4개 엔드포인트 추가
-- [ ] 스케줄러 잡 4개 추가 (weekly 2 + monthly 2)
-- [ ] 환경변수 추가 (`settings.py` + `.env.example`)
+- [x] 라우터 4개 엔드포인트 추가
+- [x] 스케줄러 잡 4개 추가 (weekly 2 + monthly 2)
+- [x] 환경변수 추가 (`settings.py` + `.env.example`)
 
 ### Phase 4 — KIPRIS 다양화 (기존 파일 수정)
 
-- [ ] `_TECH_KEYWORD_GROUPS`에 `CONTENT_MEDIA`, `FOODTECH`, `EDUTECH` 그룹 추가
+- [x] `_TECH_KEYWORD_GROUPS`에 `CONTENT_MEDIA`, `FOODTECH`, `EDUTECH` 그룹 추가
 
-### Phase 5 — P1 (다음 태스크)
+### Phase 5 — Korean-specific 소스 (2026-06-09 추가)
 
-- [ ] `kocca_content_collector.py`
-- [ ] `saramin_jobs_collector.py`
-- [ ] 워크넷 직업 상세 정보 (연봉·전망 지표) 수집
+- [x] `techblog_kr_collector.py` — 국내 테크 블로그 RSS 6개 (API키 불필요, 일일)
+- [x] `customs_export_collector.py` — 관세청 HS코드별 수출금액 (월간, CUSTOMS_SERVICE_KEY)
+- [x] `kistep_report_collector.py` — KISTEP 미래유망기술 보고서 (주간, **API키 불필요**)
+- [x] `careernet_collector.py` — 커리어넷 직업정보(일자리전망)·학과정보 (월간, CAREERNET_API_KEY)
+      → 폐지된 워크넷 직업전망 API를 `prospect` 필드로 대체
+- [ ] `kocca_content_collector.py` — KOCCA 콘텐츠산업통계 (월간, DATA_GO_KR_KEY 보유)
+- [ ] `saramin_jobs_collector.py` — 사람인 채용공고 수요 (주간, SARAMIN_ACCESS_KEY)
 
 ---
 
-## 11. 구현 패턴 주의사항
+## 11. Korean-specific 소스 상세 스펙 (2026-06-09 추가)
+
+### 국내 테크 블로그 RSS Collector
+
+**파일:** `collectors/innovation/techblog/techblog_kr_collector.py`
+**테이블:** `raw_innovation_data`
+**source_type:** `INNOVATION_TECHBLOG_KR`
+**스케줄:** 일일 (API 키 불필요)
+**멱등성:** source_url(permalink) UNIQUE — ON CONFLICT DO NOTHING 자동 처리
+
+#### 수집 피드 목록
+
+| blog_name | RSS URL | sector_hint |
+|-----------|---------|-------------|
+| naver_d2 | https://d2.naver.com/rss.xml | AI_INFRA |
+| kakao_tech | https://tech.kakao.com/feed | AI_DATA |
+| line_eng | https://engineering.linecorp.com/ko/feed | BACKEND_INFRA |
+| woowahan | https://techblog.woowahan.com/feed | BACKEND_LOGISTICS |
+| toss | https://toss.tech/rss | FINTECH_MOBILE |
+| hyperconnect | https://hyperconnect.github.io/feed.xml | AI_VIDEO |
+
+#### 기술 카테고리 자동 분류
+
+제목+요약 키워드 매칭: `AI_ML`, `DATA`, `INFRA`, `BACKEND`, `FRONTEND`, `MOBILE`, `DEVOPS`, `SECURITY`, `FINTECH`, `TECH_GENERAL`
+
+#### raw_metadata 구조
+
+```python
+{
+    "blog_name": "naver_d2",
+    "sector_hint": "AI_INFRA",
+    "tech_category": "AI_ML",
+    "tags": ["LLM", "RAG"],
+    "data_role": "TECH_BLOG_SIGNAL",
+}
+```
+
+---
+
+### 관세청 수출입무역통계 Collector
+
+**파일:** `collectors/innovation/customs/customs_export_collector.py`
+**테이블:** `raw_innovation_data`
+**source_type:** `INNOVATION_CUSTOMS_EXPORT`
+**스케줄:** 월간 (확정치 익월 중순 공표 → 기본 2개월 전 조회)
+**API 키:** `CUSTOMS_SERVICE_KEY` (data.go.kr ServiceKey)
+**등록:** https://www.data.go.kr/data/15101609/openapi.do (관세청_품목별 수출입실적)
+
+#### 검증된 API 스펙 (2026-06-09 data.go.kr 확인)
+
+```
+엔드포인트: http://apis.data.go.kr/1220000/Itemtrade/getItemtradeList
+요청 파라미터:
+  serviceKey  필수  data.go.kr 인증키
+  strtYymm    필수  시작년월 YYYYMM (1년 이내)
+  endYymm     필수  종료년월 YYYYMM (1년 이내)
+  hsSgn       선택  HS부호 (2/4/6/10자리) — 4자리 권장
+응답 필드 (XML):
+  resultCode  결과코드 (00=성공)
+  year        기간 (2026.04)
+  statKor     품목명
+  hsCd        HS코드
+  expDlr      수출금액 (USD)    ← 핵심 신호
+  impDlr      수입금액 (USD)
+  expWgt/impWgt  중량 (kg)
+  balPayments    무역수지 (USD)
+운영계정 트래픽: 100,000/일
+```
+
+> ⚠️ 국가별 분해가 필요하면 `nitemtrade/getNitemtradeList`(품목별 국가별, `cntyCd` 필수) 사용.
+> 현재 컬렉터는 국가 무관 집계인 `Itemtrade`를 사용하며, 응답의 '총계' 행은 합산에서 제외한다.
+
+#### HS 코드 그룹
+
+| group_name | HS 코드 | sector_label |
+|-----------|---------|-------------|
+| SEMICONDUCTOR | 8541, 8542 | 반도체·집적회로 |
+| DISPLAY | 8524, 9013 | 디스플레이·광학 |
+| AUTOMOTIVE | 8703, 8708 | 자동차·부품 |
+| MACHINERY | 8479, 8425, 8428 | 일반기계·하역 |
+| CHEMICAL | 2901, 2902, 2909 | 화학·석유화학 |
+| COSMETICS | 3304, 3305, 3307 | 화장품·K-뷰티 |
+| FOOD_PROCESS | 0901, 2106, 2101 | 식품가공 |
+| STEEL_METAL | 7208, 7209, 7219 | 철강·비철금속 |
+| SHIP_LOGISTICS | 8901, 8902, 8716 | 선박·물류장비 |
+| BATTERY | 8507, 8544 | 이차전지·전선 |
+
+#### raw_metadata 구조
+
+```python
+{
+    "hs_code": "8542",
+    "group_name": "SEMICONDUCTOR",
+    "sector_label": "반도체·집적회로",
+    "yearmonth": "202605",
+    "exp_amount": 12345678,   # USD (천 달러 또는 원 — API 응답 단위 확인 필요)
+    "exp_count": 1234,
+    "data_role": "EXPORT_FLOW_SIGNAL",
+}
+```
+
+#### 선행성 근거
+
+수출 금액 급등 → 해당 산업 채용/투자 증가 6~12개월 선행:
+- HS 8542 급등 → 반도체 엔지니어 채용 확대
+- HS 3304 급등 → K-뷰티 기획·마케터 수요 증가
+- HS 0901 급등 → 식품/물류 스타트업 성장
+
+#### 주의사항
+
+> 초기 구현은 `unipass.customs.go.kr` 추측 엔드포인트를 썼으나, 2026-06-09 data.go.kr
+> 명세 확인 결과 정확한 주소는 `apis.data.go.kr/1220000/Itemtrade/getItemtradeList`였다.
+> expDlr 단위는 **USD(달러)**이며, hsSgn 4자리 조회 시 세부 품목 + 총계 행이 함께 와서
+> 총계 행 중복 합산을 막는 `_is_total_row()` 필터가 필수다.
+
+---
+
+## 12. 장기 검토 소스 목록 (P2~P3)
+
+현재 구현 우선순위에서 제외되었으나, 섹터 커버리지 확장 시 검토할 소스들.
+
+### KOCCA 콘텐츠산업통계 — P1 (가장 빠른 다음 구현)
+
+```
+API:    https://api.data.go.kr/openapi/oas3/15086820
+키:     DATA_GO_KR_SERVICE_KEY (기존 보유)
+수집:   게임·음악·웹툰/만화·방송·영화·캐릭터 6개 분야 매출액·수출액·종사자수
+주기:   월간 (연간 통계이지만 분기별 속보치 존재)
+파일:   collectors/innovation/kocca/kocca_content_collector.py (미구현)
+source_type: INNOVATION_KOCCA_CONTENT
+```
+
+### KEDI 교육통계서비스 — P2
+
+```
+API:    https://kess.kedi.re.kr (한국교육학술정보원)
+수집:   학과별 취업률·졸업자수 (에듀테크 수요 간접 지표)
+주기:   연간 (1~2월 전년도 확정치 공표)
+한계:   후행 지표 (전년도 통계) — 선행성 낮음
+source_type: INNOVATION_KEDI_EDUCATION
+```
+
+### MOTIE 산업통상자원부 보도자료 — P2
+
+```
+방식:   MSIT 보도자료 크롤링과 동일 패턴
+URL:    https://www.motie.go.kr/motie/ne/presse/press2/bbs/bbsList.do
+수집:   제조업 정책·수출 지원·에너지 전환 공고
+주기:   일일
+source_type: INNOVATION_MOTIE_PRESS
+```
+
+### KIRIA 로봇산업통계 — P3
+
+```
+URL:    https://www.kiria.org (한국로봇산업진흥원)
+수집:   로봇 보급·생산 통계
+주기:   연간 (PDF 배포)
+한계:   파싱 난이도 높음 (PDF), 연간 후행
+```
+
+### YouTube Data API v3 (한국 채널) — P3
+
+```
+API:    https://www.googleapis.com/youtube/v3/search
+키:     YOUTUBE_DATA_API_KEY
+수집:   크리에이터 분야별 채널 구독자 성장 추이
+한계:   쿼터 소모 빠름 (일일 10,000 유닛)
+source_type: INNOVATION_YOUTUBE_KR
+```
+
+### 추가 조사 소스 (2026-06-09 data.go.kr 전수 조사) — P2~P3
+
+기존 가이드에 없던, 검증된 한국 공공 API. 섹터 공백 보완 시 우선 검토.
+
+#### KISTEP 발간보고서 — ✅ 구현 완료 (2026-06-09)
+
+```
+엔드포인트: https://www.kistep.re.kr/openApi24.es
+파라미터:   startDate(YYYYMMDD), endDate(YYYYMMDD), boardNum(기본 831-006)
+인증:       불필요 (serviceKey 파라미터 없음 — 직접 호출 검증 완료)
+포맷:       JSON {"response": {"result": [...]}}
+응답필드:   subject, publishOrg, contentsKor, contentsPurps, contentsCnclsn,
+            originUrl, atchfileUrl, regDate, contentId
+수집주기:   주간 (최근 1년 롤링, source_url=originUrl/contentId로 멱등)
+선행성:     ★★★★ — 국가 차원 '다음 유망기술' 시그널 (arXiv보다 정책 밀착)
+용도:       신규 섹터 발굴 — 어떤 기술 카테고리를 추가할지 판단
+파일:       collectors/innovation/kistep/kistep_report_collector.py
+source_type: INNOVATION_KISTEP_REPORT (data_role=FUTURE_TECH_SIGNAL)
+```
+
+#### KIAT 기술시장정보 DB — P2 (제조·소재 기술 사업화)
+
+```
+API:    data.go.kr 15058947 (한국산업기술진흥원_기술시장정보 및 부가정보)
+수집:   기술이전·사업화 대상 기술 DB (제조·소재·부품 강세)
+선행성: ★★★ — 제조 섹터의 R&D→사업화 파이프라인
+source_type: INNOVATION_KIAT_TECHMARKET
+```
+
+#### 워크넷 직업전망 API — ❌ 폐지 (커리어넷으로 대체)
+
+```
+상태:   data.go.kr 3071367 단독 Open-API 폐지 ("해당 OPEN-API 서비스는 없습니다")
+        고용24 승인 서비스 목록에도 '직업전망' 없음 (직업정보/직무정보만 존재)
+대체:   커리어넷 직업정보 API의 prospect(일자리전망) 필드로 동일 신호 확보 ↓
+```
+
+#### 커리어넷 OpenAPI — ✅ 구현 완료 (2026-06-09, 직업전망 대체)
+
+```
+엔드포인트: https://www.career.go.kr/cnet/openapi/getOpenApi
+공통:       apiKey, svcType=api, contentType=json, perPage, thisPage
+직업정보:   svcCode=JOB,   gubun=job_dic_list  → source_type=PEOPLE_CAREERNET_JOB
+학과정보:   svcCode=MAJOR, gubun=univ_list     → source_type=PEOPLE_CAREERNET_MAJOR
+핵심필드:   job(직업명), prospect(일자리전망 ← 직업전망 대체), salery(연봉),
+            summary, profession, possibility, similarJob, jobdicSeq
+수집주기:   월간 (직업/학과 데이터 정적, perPage/thisPage 페이지네이션)
+용도:       직업별 미래수요 라벨(prospect) + 학과→직업 매칭 (Sync/Roadmap 탭)
+파일:       collectors/people/careernet/careernet_collector.py
+API키:      CAREERNET_API_KEY (career.go.kr Open API 센터 발급, 연계주기 월1회)
+```
+
+#### NIPA ICT 기업지원 사업 — P3 (Opportunity 도메인 후보)
+
+```
+API:    data.go.kr 정보통신산업진흥원 사업정보
+수집:   AI·SW·ICT 기업지원 사업 (사업화·해외진출·인력양성)
+용도:   raw_opportunity_data — chance 탭 매칭 풀 확장
+```
+
+#### 민간 스타트업 DB (THE VC / 혁신의숲) — 공식 API 없음
+
+```
+현황:   더브이씨(thevc.kr)·혁신의숲(innoforest.co.kr) 모두 공개 API 미제공
+대안:   1) 제휴/유료 데이터 라이선스 협의
+        2) robots.txt 준수 범위 내 공개 페이지 크롤링 (법적 검토 필요)
+        3) 이미 구현된 Wowtale/Platum/Venturesquare RSS로 투자 신호 대체 수집
+판단:   현재 RSS 3종으로 투자 흐름은 충분히 커버 — 신규 구현 불요
+```
+
+---
+
+## 13. 환경변수 추가 현황 (누적)
+
+| 변수 | 용도 | 상태 |
+|------|------|------|
+| `GITHUB_TOKEN` | GitHub Search API rate limit 향상 | ✅ 구현 |
+| `WORKNET_API_KEY` | 고용24 직업정보 | ✅ 구현 |
+| `HRDNET_API_KEY` | 고용24 훈련과정 | ✅ 구현 |
+| `SARAMIN_ACCESS_KEY` | 사람인 채용공고 | 미구현 (P1) |
+| `CUSTOMS_SERVICE_KEY` | 관세청 수출입통계 | ✅ 구현 (API 신청 필요) |
+| `CAREERNET_API_KEY` | 커리어넷 직업정보·학과정보 | ✅ 구현 (career.go.kr 발급) |
+| (없음) | KISTEP 발간보고서 | ✅ 구현 (**인증키 불필요**) |
+| `KOCCA_SERVICE_KEY` (또는 `DATA_GO_KR_SERVICE_KEY`) | KOCCA 콘텐츠통계 | 미구현 (P1) |
+
+---
+
+## 구현 패턴 주의사항
 
 1. **멱등성 우선**: 모든 컬렉터는 동일 조건으로 2번 실행해도 중복 적재 없어야 함.  
    `source_url` (또는 다중 컬럼 UNIQUE)로 `ON CONFLICT DO NOTHING` 처리.
@@ -872,14 +1134,16 @@ SARAMIN_ACCESS_KEY=            # 사람인 OpenAPI Access Key (P1)
 
 ## 12. 완료 후 커버리지 예상
 
-| 섹터 | 기존 | 구현 후 |
-|------|------|---------|
-| AI/ML·소프트웨어 | 🟢 | 🟢 (arXiv cs.AI, GitHub AI 토픽 추가) |
-| 콘텐츠/크리에이터 | 🔴 | 🟡 (arXiv cs.SI, GitHub creator-tool, KIPRIS 웹툰) |
-| 교육/에듀테크 | 🔴 | 🟡 (HRD-Net 교육직종, KIPRIS 에듀테크, arXiv) |
-| 식품/농업 | 🔴 | 🟡 (HRD-Net 식품직종, KIPRIS 스마트팜·대체단백질) |
-| 사회서비스/복지 | 🔴 | 🟡 (WorkNet 복지직종, HRD-Net 사회복지) |
-| 바이오/헬스케어 | 🟡 | 🟢 (arXiv q-bio, GitHub healthtech 추가) |
-| 에너지/기후 | 🟡 | 🟢 (arXiv physics.ao-ph, GitHub climate 추가) |
-| 물류/유통 | 🔴 | 🟡 (WorkNet 유통직종, HRD-Net 물류) |
-| 패션/뷰티 | 🔴 | 🟡 (WorkNet 미용직종, HRD-Net 미용) |
+| 섹터 | 기존 | P0 구현 후 | Korean 소스 추가 후 |
+|------|------|-----------|------------------|
+| AI/ML·소프트웨어 | 🟢 | 🟢 (arXiv cs.AI, GitHub AI 토픽) | 🟢+ (TechBlog AI_ML 카테고리) |
+| 콘텐츠/크리에이터 | 🔴 | 🟡 (GitHub creator-tool, KIPRIS) | 🟡 (TechBlog 간접 커버) |
+| 교육/에듀테크 | 🔴 | 🟡 (HRD-Net EDUCATION, KIPRIS) | 🟡 (TechBlog FRONTEND/MOBILE) |
+| 식품/농업 | 🔴 | 🟡 (HRD-Net FOOD, KIPRIS) | 🟡+ (Customs FOOD_PROCESS HS) |
+| 사회서비스/복지 | 🔴 | 🟡 (WorkNet·HRD-Net 복지) | 🟡 (변화 없음) |
+| 바이오/헬스케어 | 🟡 | 🟢 (arXiv q-bio, GitHub healthtech) | 🟢 (변화 없음) |
+| 에너지/기후 | 🟡 | 🟢 (arXiv physics.ao-ph, GitHub climate) | 🟢 (변화 없음) |
+| 물류/유통 | 🔴 | 🟡 (WorkNet·HRD-Net 물류) | 🟡+ (Customs SHIP_LOGISTICS HS) |
+| 패션/뷰티(K-beauty) | 🔴 | 🟡 (HRD-Net 미용) | 🟡+ (Customs COSMETICS HS 3304) |
+| **제조·반도체** | 🟡 | 🟡 (KIPRIS, GitHub robotics) | 🟢 (Customs SEMICONDUCTOR·MACHINERY) |
+| **핀테크** | 🟡 | 🟡 (GitHub fintech, arXiv q-fin) | 🟢 (TechBlog FINTECH — 토스 etc.) |

@@ -32,10 +32,25 @@ from domain.master.hub.services.bronze_market_timeseries_ingest_service import (
 from domain.master.hub.services.bronze_opportunity_ingest_service import (
     BronzeOpportunityIngestService,
 )
+from domain.master.hub.services.bronze_innovation_ingest_service import (
+    BronzeInnovationIngestService,
+)
+from domain.master.hub.services.bronze_people_ingest_service import (
+    BronzePeopleIngestService,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/master", tags=["master"])
+
+
+class BronzeIngestResponse(BaseModel):
+    source: str
+    fetched: int
+    inserted: int
+    not_inserted: int = 0
+    stats: dict[str, object] | None = None
+    skipped_date: str | None = None
 
 
 class DartBronzeIngestRequest(BaseModel):
@@ -931,6 +946,126 @@ async def run_kipris_patents_bronze(
     except Exception:
         logger.exception("KIPRIS 특허 트렌드 Bronze ingest 실패")
         raise HTTPException(status_code=502, detail="KIPRIS 특허 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/innovation/arxiv", response_model=BronzeIngestResponse)
+async def run_arxiv_innovation_bronze(
+    days_back: int = Query(7, ge=1, le=30),
+    max_results: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """arXiv 분야별 최신 논문을 raw_innovation_data에 적재한다."""
+    try:
+        return await BronzeInnovationIngestService(db).ingest_arxiv(
+            days_back=days_back,
+            max_results=max_results,
+        )
+    except Exception:
+        logger.exception("arXiv innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="arXiv 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/innovation/github", response_model=BronzeIngestResponse)
+async def run_github_innovation_bronze(
+    days_back: int = Query(7, ge=1, le=30),
+    db: AsyncSession = Depends(get_db),
+):
+    """GitHub 분야별 신규 인기 저장소를 raw_innovation_data에 적재한다."""
+    settings = get_settings()
+    try:
+        return await BronzeInnovationIngestService(
+            db, github_token=settings.github_token
+        ).ingest_github_trending(days_back=days_back)
+    except Exception:
+        logger.exception("GitHub innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="GitHub 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/people/worknet-jobs", response_model=BronzeIngestResponse)
+async def run_worknet_people_bronze(db: AsyncSession = Depends(get_db)):
+    """고용24 직업정보 API에서 직업 분류(taxonomy) 목록을 raw_people_data에 적재한다."""
+    settings = get_settings()
+    svc = BronzePeopleIngestService(db, worknet_api_key=settings.worknet_api_key)
+    try:
+        return await svc.ingest_worknet_job_info()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("WorkNet people Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="고용24 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/people/hrdnet-training", response_model=BronzeIngestResponse)
+async def run_hrdnet_people_bronze(db: AsyncSession = Depends(get_db)):
+    """HRD-Net 직종별 훈련 수요를 raw_people_data에 적재한다."""
+    settings = get_settings()
+    svc = BronzePeopleIngestService(db, hrdnet_api_key=settings.hrdnet_api_key)
+    try:
+        return await svc.ingest_hrdnet_training()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("HRD-Net people Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="HRD-Net 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/innovation/techblog-kr", response_model=BronzeIngestResponse)
+async def run_techblog_kr_innovation_bronze(
+    max_items_per_feed: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """국내 테크 기업 기술 블로그 RSS를 raw_innovation_data에 적재한다."""
+    try:
+        return await BronzeInnovationIngestService(db).ingest_techblog_kr(
+            max_items_per_feed=max_items_per_feed
+        )
+    except Exception:
+        logger.exception("TechBlog KR innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="기술 블로그 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/innovation/kistep", response_model=BronzeIngestResponse)
+async def run_kistep_innovation_bronze(db: AsyncSession = Depends(get_db)):
+    """KISTEP 발간보고서(미래 유망기술)를 raw_innovation_data에 적재한다. (인증키 불필요)"""
+    try:
+        return await BronzeInnovationIngestService(db).ingest_kistep()
+    except Exception:
+        logger.exception("KISTEP innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="KISTEP 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/innovation/customs-export", response_model=BronzeIngestResponse)
+async def run_customs_export_innovation_bronze(
+    yearmonth: str | None = Query(None, description="YYYYMM 형식. 미입력 시 전월 자동 계산."),
+    db: AsyncSession = Depends(get_db),
+):
+    """관세청 HS코드별 월간 수출통계를 raw_innovation_data에 적재한다."""
+    settings = get_settings()
+    key = getattr(settings, "customs_service_key", None)
+    try:
+        return await BronzeInnovationIngestService(db).ingest_customs_export(
+            customs_service_key=key or "",
+            yearmonth=yearmonth,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Customs Export innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="관세청 수출통계 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/people/careernet", response_model=BronzeIngestResponse)
+async def run_careernet_people_bronze(db: AsyncSession = Depends(get_db)):
+    """커리어넷 직업정보(일자리전망)·학과정보를 raw_people_data에 적재한다."""
+    settings = get_settings()
+    svc = BronzePeopleIngestService(db, careernet_api_key=settings.careernet_api_key)
+    try:
+        return await svc.ingest_careernet()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Careernet people Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="커리어넷 수집 중 오류가 발생했습니다.") from None
 
 
 @router.delete("/bronze/opportunity/by-source-type/{source_type}")

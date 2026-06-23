@@ -23,6 +23,8 @@ from domain.auth.models.bases.user_sync_profile import UserSyncProfile
 from domain.master.models.bases.raw_economic_data import RawEconomicData  # Bronze
 from domain.master.models.bases.raw_market_timeseries import RawMarketTimeseries  # Bronze
 from domain.master.models.bases.raw_opportunity_data import RawOpportunityData  # Bronze
+from domain.master.models.bases.raw_innovation_data import RawInnovationData  # Bronze
+from domain.master.models.bases.raw_people_data import RawPeopleData  # Bronze
 
 target_metadata = Base.metadata
 

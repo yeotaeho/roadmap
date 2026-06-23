@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -19,6 +19,8 @@ class RawOpportunityData(Base):
     __tablename__ = "raw_opportunity_data"
     __table_args__ = (
         UniqueConstraint("source_url", name="uq_raw_opportunity_data_source_url"),
+        Index("ix_raw_opportunity_deadline_at", "deadline_at"),
+        Index("ix_raw_opportunity_source_type", "source_type"),
         {"comment": "Bronze — 기회(채용·지원사업·부트캠프·공모전) 원천"},
     )
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Numeric, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -21,6 +21,9 @@ class RawMarketTimeseries(Base):
     __tablename__ = "raw_market_timeseries"
     __table_args__ = (
         UniqueConstraint("ticker", "trade_date", name="uq_raw_market_timeseries_ticker_date"),
+        Index("ix_raw_market_ts_ticker_date", "ticker", "trade_date"),
+        Index("ix_raw_market_ts_trade_date", "trade_date"),
+        Index("ix_raw_market_ts_source_type", "source_type"),
         {"comment": "Bronze — Yahoo 등 일별 OHLCV·거래대금 시계열"},
     )
 
