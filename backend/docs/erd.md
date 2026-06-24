@@ -500,7 +500,7 @@ CREATE TABLE refined_pulse_metric_silver (
     reference_date DATE NOT NULL,             -- 일자 그레인
     raw_signal_value NUMERIC(18,6),           -- 정규화 전 원시 합성값 (sentiment·volume·search 융합)
     normalized_score INT CHECK (normalized_score BETWEEN 0 AND 100), -- Gold score로 직결
-    momentum_pct DECIMAL(6,2),                -- 기준 윈도우 대비 변화율
+    momentum_pct NUMERIC(8,2),                -- 기준 윈도우 대비 변화율 (급등 시 수천 % 가능, a1b2c3d4e5f6)
     status_badge VARCHAR(20),                 -- 급상승/태풍급 등 (닫힌 집합 권장)
     window_days INT NOT NULL,                 -- 모멘텀 산출 윈도우 (예: 20)
     baseline_method VARCHAR(40) NOT NULL,     -- zscore / pct_change / ma_ratio 등 (재현성)
@@ -550,7 +550,7 @@ CREATE TABLE pulse_metrics_log (
     recorded_date DATE NOT NULL,              -- 차트 X축 날짜
     score INT NOT NULL CHECK (score BETWEEN 0 AND 100),
     status_badge VARCHAR(20) NOT NULL,        -- 태풍급/급상승 등
-    momentum_pct DECIMAL(5,2),                -- 증감률(%)
+    momentum_pct NUMERIC(8,2),                -- 증감률(%) — 급등 시 수천 % 가능 (a1b2c3d4e5f6)
     created_at TIMESTAMPTZ DEFAULT now()      -- 적재 시각
 );
 CREATE INDEX idx_pulse_metrics_date_sector ON pulse_metrics_log(recorded_date, sector_slug);
