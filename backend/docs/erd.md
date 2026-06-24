@@ -8,6 +8,34 @@
 
 ---
 
+## 0) 구현 상태 & 마이그레이션 정합 (먼저 읽기)
+
+> **이 문서는 목표 논리 모델과 실제 물리 스키마가 섞여 있다.** DDL이 적혀 있다고 물리 테이블이 존재한다는 뜻이 아니다. 코드를 작성하기 전 반드시 이 절을 먼저 읽는다.
+
+**상태 범례**
+- ✅ **물리 구현** — 마이그레이션으로 실제 테이블 존재.
+- 🟡 **스키마만** — 테이블 DDL은 존재하나 이를 채우는 정제/서비스 로직이 없음.
+- 🔴 **목표 모델** — DDL은 설계일 뿐 물리 테이블 미존재. 그대로 쓰면 `relation does not exist`로 깨진다.
+
+**마이그레이션 정합 (2026-06-24 기준)**
+- 실제 마이그레이션 head = **`e2c5a7b9d3f4`** (down=`d7f3a9c1e5b2`). 이 문서가 가정하는 적용 head도 동일.
+- `e2c5a7b9d3f4`(raw_discourse_data·verified_company_master)는 Neon **미적용 가능성**이 있다. 배포 전 `alembic current` 확인이 필수다.
+- `9f2a6d4e1b0c`(2026-05-06, reset)가 `alembic_version`을 제외한 **public 전 테이블을 DROP CASCADE** 후 `users`·`user_sync_profiles`만 재생성했다. 그 이전 마이그레이션이 만든 `user_competency`·`user_roadmap_status`·`refresh_tokens`·`playing_with_neon`은 **현재 존재하지 않는다**. 이후 마이그레이션이 raw_*·sectors계열·refined_innovation 계열을 추가했다.
+
+**현재 물리 존재 테이블 (✅, 총 14)**
+`users` · `user_sync_profiles` · `sectors` · `sub_sectors` · `sector_source_map` · `raw_economic_data` · `raw_market_timeseries` · `raw_innovation_data` · `raw_people_data` · `raw_opportunity_data` · `raw_discourse_data`\* · `verified_company_master`\* · `refined_innovation_signal`🟡 · `refined_signal_sources`🟡
+(\* = `e2c5a7b9d3f4` 적용 시 존재. refined_* 2종은 DDL만 있고 정제 로직이 없어 🟡)
+
+**미존재 (🔴 목표 모델)** — 본 문서에 DDL이 있어도 물리 테이블이 없다
+- Silver §5.1: `refined_trend_insights` · `refined_gap_insights` · `refined_chance_insights`.
+- AI/RAG §5.2(신설): `document_embeddings`. Sync·Pulse §5.3(신설): `user_embeddings` · `refined_pulse_metric_silver` · `refined_sync_inputs`.
+- Gold §6 전체: `pulse_metrics_log` · `trending_keywords` · `economic_briefings` · `causal_chains` · `crossover_metrics` · `gap_issues` · `issue_evidences` · `sync_scores_daily` · `chance_opportunities` · `user_chance_matches` · `user_roadmaps` · `roadmap_quests` · `growth_daily_logs` · `coach_sessions` · `coach_messages` · `insight_wallets`. (예외: `user_sync_profiles`는 §6.3에 있으나 ✅ 물리 존재)
+- Consult/Profile §7 전체: `consultation_sessions` · `consultation_turns` · `user_personas` · `user_competencies`.
+
+**인증 영속 경계** — 리프레시 토큰·OAuth state·PKCE는 **Redis(Upstash)** 에만 저장하며 DB 테이블을 두지 않는다(`refresh_tokens`는 reset에서 제거됨). ERD에 인증 토큰 테이블이 없는 것은 정상이다.
+
+---
+
 ## 1) 핵심 설계 원칙
 
 1. **마스터 단일화**: 산업 기준은 `sectors.slug` 하나만 사용  
@@ -65,6 +93,9 @@ raw_* (Bronze) ───> refined_* (Silver) ───> *_log/*_issues (Gold)
 
 raw_economic_data     — 이벤트·신호 (뉴스, 거래량 급증, 공시)
 raw_market_timeseries — 티커×거래일 OHLCV 연속 시계열 (Yahoo 16종 등)
+
+document_embeddings   — RAG/유사도 검색 벡터 저장소 (§5.2, halfvec 3072)
+user_embeddings / refined_pulse_metric_silver / refined_sync_inputs — Sync·Pulse 산출 입력 (§5.3)
 ```
 
 ---
@@ -318,10 +349,13 @@ CREATE UNIQUE INDEX uq_verified_company_source_biz ON verified_company_master(so
 
 ## 5) Silver Layer (AI 정제/추론)
 
-### 5.0 교차융합형 혁신 Silver — 결함 B·C·D 수정 (구현됨)
+### 5.0 교차융합형 혁신 Silver — 결함 B·C·D 수정 (🟡 스키마만, 정제 서비스 미구현)
 
-> 마이그레이션 `d7f3a9c1e5b2`로 물리 생성. Innovation Flow 산출의 실제 기준 스키마이며,
+> 마이그레이션 `d7f3a9c1e5b2`로 **테이블만** 물리 생성됐고, 이를 채우는 정제 서비스/리포지토리는 아직 없다(=🟡). Innovation Flow 산출의 기준 스키마이며,
 > Pulse/Gap/Chance Silver도 본격 구현 시 이 패턴(데이터 기준기간·data_role 1급화·N:M 리니지)을 따른다.
+>
+> **다음 마이그레이션 보강 예정(미적용):** 멱등 재처리를 위해 자연키 `UNIQUE(sector_slug, data_role, signal_topic, reference_period_start, reference_period_end)`와, 재현·회귀 추적용 `model_name`·`prompt_version` 컬럼을 추가한다. `data_role`은 자유문자열 대신 닫힌 집합(§5.3 표준값 참조)으로 CHECK를 건다.
+> **리니지 주의:** `refined_signal_sources.signal_id`는 `refined_innovation_signal`에만 FK로 묶여 있어, §5.1의 다른 Silver는 이 테이블을 그대로 재사용할 수 없다. 범용 리니지(`refined_source_links`)로의 일반화는 P1에서 다룬다.
 
 ```sql
 -- 섹터별 혁신 모멘텀 신호 (한 신호 = 여러 원천의 융합 결과)
@@ -408,11 +442,105 @@ CREATE TABLE refined_chance_insights (
 CREATE INDEX idx_refined_chance_sector ON refined_chance_insights(sector_slug);
 ```
 
+### 5.2 AI / RAG 인프라 (임베딩·벡터 검색) — 🔴 신규 설계 (P0)
+
+> CLAUDE.md가 못박은 pgvector + `text-embedding-3-large`(3072차원) 기반 RAG·유사도 검색의 **물리 저장소**다. 기존 ERD에 벡터 컬럼이 전무해 Coach·유사도 검색이 구현 불가했던 공백을 메운다.
+> Bronze 불변 원칙을 깨지 않도록 raw_*에 vector를 직접 넣지 않고 **별도 임베딩 테이블**에 모은다(리니지는 `source_table`/`source_id`로 보존).
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;   -- pgvector >= 0.7 (halfvec 지원)
+
+-- 임베딩 통합 저장소 (청크 단위 · 메타필터 + 유사도 검색을 한 쿼리로)
+CREATE TABLE document_embeddings (
+    id BIGSERIAL PRIMARY KEY,
+    source_table VARCHAR(50) NOT NULL,        -- 원천 테이블명 (insight_wallets, coach_messages, gap_issues, refined_innovation_signal …)
+    source_id BIGINT NOT NULL,                -- 원천 레코드 PK
+    chunk_index INT NOT NULL DEFAULT 0,       -- 긴 본문 청크 순번 (RAG는 청크 단위)
+    content_text TEXT NOT NULL,               -- 임베딩된 원문 청크 (재인덱싱·표시용)
+    embedding halfvec(3072) NOT NULL,         -- 3072차원. vector(3072)는 HNSW 2000차원 한계 초과 → halfvec 사용
+    embedding_model VARCHAR(60) NOT NULL DEFAULT 'text-embedding-3-large', -- 모델 고정 추적
+    embedding_version VARCHAR(40),            -- 임베딩 파이프라인 버전 (재임베딩 백필 추적)
+    sector_slug VARCHAR(50) REFERENCES sectors(slug), -- 메타필터용 섹터 축 (NULL 허용)
+    metadata JSONB,                           -- 추가 메타필터 (data_role, user_id, lang 등)
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (source_table, source_id, chunk_index, embedding_model) -- 동일 청크 중복 임베딩 방지(멱등)
+);
+-- 유사도 검색 인덱스: 코사인. halfvec + HNSW (ivfflat은 2000차원 한계로 불가)
+CREATE INDEX ix_document_embeddings_hnsw
+    ON document_embeddings USING hnsw (embedding halfvec_cosine_ops);
+CREATE INDEX ix_document_embeddings_source ON document_embeddings(source_table, source_id); -- 역추적/재인덱싱
+CREATE INDEX ix_document_embeddings_sector ON document_embeddings(sector_slug);
+```
+
+> **검색 패턴.** `WHERE sector_slug = :s AND metadata @> :filter ORDER BY embedding <=> :query_vec LIMIT k` — 메타필터 + 유사도를 단일 SQL로 처리한다.
+> **차원 대안.** 3072 전차원 유지가 부담이면 OpenAI `dimensions=2000`으로 축소해 `vector(2000)` + HNSW(`vector_cosine_ops`)도 가능하다. 단 한 번 정하면 재임베딩 비용이 크므로 `embedding_model`/`embedding_version`으로 고정·추적한다.
+> **감사 로그(FastMCP write tool)·LLM 관측 컬럼**은 P1(해당 도메인 구현 시) 범위다(§0 참조).
+
+### 5.3 Sync·Pulse 산출용 Silver (재설계) — 🔴 신규 설계 (P0)
+
+> 기존 Gold(`sync_scores_daily`, `pulse_metrics_log`)는 "점수만 적재되는 빈 결과 테이블"이었다. 무엇으로부터 계산되는지를 Silver로 명시해 **Gold가 단순 사영(projection)** 이 되도록 한다.
+> 공통 원칙은 ① 일자 그레인 시계열, ② 멱등 자연키 UNIQUE(배치 재실행 안전), ③ `model_name`·`prompt_version`으로 재현·회귀 추적이다.
+
+```sql
+-- (Sync) 사용자 임베딩 — 적합도 산출 입력
+CREATE TABLE user_embeddings (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    embedding halfvec(3072) NOT NULL,         -- 관심사·목표직무·역량 텍스트의 임베딩
+    source_version VARCHAR(40),               -- 입력 스냅샷 버전 (프로필 변경 시 재계산)
+    embedding_model VARCHAR(60) NOT NULL DEFAULT 'text-embedding-3-large',
+    computed_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ix_user_embeddings_hnsw ON user_embeddings USING hnsw (embedding halfvec_cosine_ops);
+
+-- (Pulse) 섹터×일자 정규화 시계열 Silver — Gold pulse_metrics_log의 입력
+CREATE TABLE refined_pulse_metric_silver (
+    id BIGSERIAL PRIMARY KEY,
+    sector_slug VARCHAR(50) NOT NULL REFERENCES sectors(slug),
+    sub_sector_id BIGINT REFERENCES sub_sectors(id),
+    reference_date DATE NOT NULL,             -- 일자 그레인
+    raw_signal_value NUMERIC(18,6),           -- 정규화 전 원시 합성값 (sentiment·volume·search 융합)
+    normalized_score INT CHECK (normalized_score BETWEEN 0 AND 100), -- Gold score로 직결
+    momentum_pct DECIMAL(6,2),                -- 기준 윈도우 대비 변화율
+    status_badge VARCHAR(20),                 -- 급상승/태풍급 등 (닫힌 집합 권장)
+    window_days INT NOT NULL,                 -- 모멘텀 산출 윈도우 (예: 20)
+    baseline_method VARCHAR(40) NOT NULL,     -- zscore / pct_change / ma_ratio 등 (재현성)
+    model_name VARCHAR(120),
+    prompt_version VARCHAR(40),
+    processed_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (sector_slug, sub_sector_id, reference_date, baseline_method) -- 멱등
+);
+CREATE INDEX ix_refined_pulse_silver_sector_date ON refined_pulse_metric_silver(sector_slug, reference_date DESC);
+
+-- (Sync) 사용자×섹터×일자 적합도 입력 — Gold sync_scores_daily의 입력
+CREATE TABLE refined_sync_inputs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sector_slug VARCHAR(50) NOT NULL REFERENCES sectors(slug),
+    reference_date DATE NOT NULL,
+    affinity_score NUMERIC(5,2),              -- 사용자 임베딩 vs 섹터 트렌드 코사인 등
+    trend_score NUMERIC(5,2),                 -- 섹터 트렌드 강도 (refined_pulse_metric_silver 참조)
+    contributing_keywords JSONB,              -- 근거 키워드
+    model_name VARCHAR(120),
+    prompt_version VARCHAR(40),
+    processed_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (user_id, sector_slug, reference_date) -- 멱등
+);
+CREATE INDEX ix_refined_sync_inputs_user_date ON refined_sync_inputs(user_id, reference_date DESC);
+```
+
+> **data_role 표준값(닫힌 집합).** `FUTURE_TECH_SIGNAL` · `EXPORT_FLOW_SIGNAL` · `TECH_BLOG_SIGNAL` · `CAPITAL_FLOW_SIGNAL` · `DEMAND_HIRING_SIGNAL` · `SEARCH_DEMAND_SIGNAL` · `DISCOURSE_SIGNAL`. Silver 전반의 `data_role`은 이 집합으로 CHECK/ENUM 고정한다(자유문자열 금지).
+> **Pulse 산출 흐름(검증 대상).** `raw_economic/innovation/people/market_timeseries` → (정제) `refined_innovation_signal`·`refined_pulse_metric_silver` → (사영) `pulse_metrics_log`(Gold). 이 한 줄을 끝까지 뚫어 ERD 적합성을 실증한다.
+> ⏳ **구현 착수(2026-06-24).** `refined_pulse_metric_silver`·`pulse_metrics_log` 마이그레이션 `f1a2b3c4d5e6` 작성(미적용), 산출 로직 `pulse_pipeline.py`(결정론적·19 테스트 통과). `user_embeddings`·`refined_sync_inputs`는 설계만.
+
 ---
 
 ## 6) Gold Layer (UI 서빙)
 
+> 🔴 **이 절의 모든 테이블은 목표 모델(물리 미존재)이다.** 단 §6.3 `user_sync_profiles`만 ✅ 실재한다. 그대로 SELECT하면 깨진다(§0 참조).
+
 ### 6.1 Pulse 탭
+
+> ⏳ `refined_pulse_metric_silver`(§5.3)·`pulse_metrics_log` 마이그레이션 `f1a2b3c4d5e6` 작성 완료(미적용). 산출 로직 = `domain/market_insight/hub/services/pulse_pipeline.py`(결정론적·테스트 통과). DB 적용 전이라 §0 기준 여전히 🔴 미존재.
 
 ```sql
 CREATE TABLE pulse_metrics_log (
@@ -426,6 +554,8 @@ CREATE TABLE pulse_metrics_log (
     created_at TIMESTAMPTZ DEFAULT now()      -- 적재 시각
 );
 CREATE INDEX idx_pulse_metrics_date_sector ON pulse_metrics_log(recorded_date, sector_slug);
+-- 멱등 재생성용 자연키 (sub_sector_id NULL 안전, 마이그레이션 f1a2b3c4d5e6).
+CREATE UNIQUE INDEX uq_pulse_metrics_natural ON pulse_metrics_log(sector_slug, COALESCE(sub_sector_id, -1), recorded_date);
 
 CREATE TABLE trending_keywords (
     id BIGSERIAL PRIMARY KEY,                 -- 키워드 레코드 PK
@@ -505,6 +635,8 @@ CREATE INDEX idx_issue_evidences_issue_id ON issue_evidences(issue_id);
 ```
 
 ### 6.3 Sync(싱크) 탭
+
+> ✅ `user_sync_profiles`는 물리 존재. 🔴 `sync_scores_daily`는 목표 모델(미존재). 산출 입력은 §5.3(`refined_sync_inputs`·`user_embeddings`) 참조.
 
 ```sql
 -- 사용자 명시적 관심사/목표 직무 (AI 매칭 기준 데이터)
@@ -696,6 +828,8 @@ CREATE INDEX idx_insight_wallets_user ON insight_wallets(user_id, created_at DES
 
 ## 7) Consult / Profile / Competency
 
+> 🔴 **이 절 전체가 목표 모델(물리 미존재)이다.** `consultation_*`·`user_personas`·`user_competencies`는 `9f2a6d4e1b0c` reset 이후 한 번도 생성된 적이 없다(§0 참조).
+
 ```sql
 CREATE TYPE consultation_session_status AS ENUM ('active', 'completed', 'abandoned');
 
@@ -758,6 +892,8 @@ CREATE TABLE user_competencies (
 
 ## 8) 폐기/이관 대상 (구버전 정리)
 
+> ⚠️ **갱신(2026-06-24):** 아래 구버전 테이블은 `9f2a6d4e1b0c`(reset)가 이미 전부 DROP했다. 현 DB에 존재하지 않으므로 추가 drop 작업은 불필요하며, 이 목록은 과거 이력 참고용이다. 구 `user_competency`는 `BIGSERIAL`+`is_certified` 형태였고 `domain_id` 컬럼은 없었다(아래 표기 정정).
+
 아래 구버전은 이 문서 기준에서 **폐기 또는 뷰/마이그레이션용 한시 유지** 대상입니다.
 
 - `domains`
@@ -782,5 +918,7 @@ CREATE TABLE user_competencies (
 
 ---
 
-문서 버전: v2.7  
-최종 업데이트: 2026-06-12 (결함 A·B·C·D 수정 — 마이그레이션 `d7f3a9c1e5b2`)
+문서 버전: v2.8  
+최종 업데이트: 2026-06-24 (v2.8 — P0 개정: §0 구현상태·head 정합, §5.2 AI/RAG 임베딩, §5.3 Sync·Pulse 산출 Silver 재설계)
+실제 마이그레이션 head: `e2c5a7b9d3f4`
+이전: v2.7 (2026-06-12, 결함 A·B·C·D — `d7f3a9c1e5b2`)
