@@ -41,6 +41,9 @@ from apscheduler.triggers.cron import CronTrigger
 from core.config.settings import get_settings
 from core.database import AsyncSessionLocal
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
+from domain.market_insight.hub.services.text_sector_classify_service import (
+    TextSectorClassifyService,
+)
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -487,6 +490,17 @@ async def _job_saramin_recruit() -> dict[str, Any] | None:
 
 
 # (job_id, factory, group)
+async def _job_text_classify() -> dict[str, Any] | None:
+    """raw_economic/discourse 자유 텍스트를 LLM 섹터 분류(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 텍스트 섹터 분류 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = TextSectorClassifyService(session)
+        return await svc.classify_unclassified()
+
+
 async def _job_pulse_refine() -> dict[str, Any]:
     """Silver/Gold 정제 — 누적 Bronze(혁신·경제·사람) 신호로 Pulse 재생성(멱등)."""
     async with AsyncSessionLocal() as session:
@@ -516,6 +530,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("goyong24_recruit",  _job_goyong24_recruit),
     ("saramin_recruit",   _job_saramin_recruit),
     ("news_rss",          _job_news_rss),
+    ("text_classify",     _job_text_classify),
     ("pulse_refine",      _job_pulse_refine),
 )
 

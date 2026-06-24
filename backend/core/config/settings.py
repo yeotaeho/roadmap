@@ -146,6 +146,15 @@ class Settings(BaseSettings):
     naver_client_secret: str
     naver_redirect_uri: str
 
+    # LLM (Silver — raw_economic/discourse 자유 텍스트 섹터 분류)
+    openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")
+    llm_classify_model: str = Field(
+        default="gpt-4o-mini", validation_alias="LLM_CLASSIFY_MODEL"
+    )
+    llm_classify_confidence_min: float = Field(
+        default=0.6, validation_alias="LLM_CLASSIFY_CONFIDENCE_MIN"
+    )
+
     # Open DART (Bronze — raw_economic_data 등)
     dart_api_key: Optional[str] = Field(
         default=None,

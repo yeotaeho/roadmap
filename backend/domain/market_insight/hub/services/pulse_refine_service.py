@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config.settings import get_settings
 from domain.market_insight.hub.repositories.pulse_repository import PulseRepository
 from domain.market_insight.hub.services.pulse_pipeline import (
     BaselineMethod,
@@ -11,6 +12,7 @@ from domain.market_insight.hub.services.pulse_pipeline import (
     fuse_signals,
     project_to_gold,
 )
+from domain.market_insight.hub.services.text_sector_classify_service import PROMPT_VERSION
 
 
 class PulseRefineService:
@@ -23,11 +25,21 @@ class PulseRefineService:
         window_days: int = 20,
         baseline_method: BaselineMethod = "zscore",
         weights: dict[str, float] | None = None,
+        min_history: int = 5,
     ) -> dict:
-        """raw 3축 → 가중 융합 → Silver → Gold 한 줄을 실행하고 적재 건수를 반환한다."""
-        axis = await self.repo.fetch_axis_signals()
+        """raw 4축 → 가중 융합 → Silver → Gold 한 줄을 실행하고 적재 건수를 반환한다.
+
+        min_history=5: 이력 5점 미만 섹터는 중립(보합) 처리 — 희소 데이터 거짓 급등 차단.
+        """
+        settings = get_settings()
+        axis = await self.repo.fetch_axis_signals(
+            text_confidence_min=settings.llm_classify_confidence_min,
+            text_prompt_version=PROMPT_VERSION,
+        )
         signals = fuse_signals(axis, weights)
-        silver = compute_silver(signals, window_days=window_days, baseline_method=baseline_method)
+        silver = compute_silver(
+            signals, window_days=window_days, baseline_method=baseline_method, min_history=min_history
+        )
         silver_n = await self.repo.replace_silver(silver, baseline_method)
         gold = project_to_gold(silver)
         gold_n = await self.repo.replace_gold(gold)

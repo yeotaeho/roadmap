@@ -37,10 +37,15 @@ class AxisSignal:
 
 
 # 축별 융합 가중치. 합성 신호값 = Σ weight[axis] × value.
+# market = 자본 흐름(Yahoo 시장 시계열). 진로 제품의 핵심 '돈의 흐름' 축.
+# economic_text = LLM 분류 경제뉴스(코드 미보유분). discourse = LLM 분류 뉴스 담론(노이즈 큰 공급 신호).
 DEFAULT_AXIS_WEIGHTS: dict[str, float] = {
     "innovation": 1.0,
     "economic": 1.0,
     "people": 0.7,
+    "market": 1.0,
+    "economic_text": 1.0,
+    "discourse": 0.5,
 }
 
 
@@ -67,6 +72,11 @@ class PulseGoldRow:
     score: int
     status_badge: str
     momentum_pct: float
+
+
+# 모멘텀(%) 저장 상한. NUMERIC(8,2)(<10^6) 오버플로 방지 + 배지가 50%에서 포화하므로
+# 그 이상은 "포화"로 간주해 클램프(희소 베이스라인이 만드는 수백만 % 노이즈 차단).
+MOMENTUM_CAP = 9999.99
 
 
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
@@ -104,6 +114,7 @@ def _normalize(value: float, window: list[float], method: str) -> tuple[int, flo
     else:  # pct_change
         score = _clamp(50 + momentum_pct)
 
+    momentum_pct = max(-MOMENTUM_CAP, min(MOMENTUM_CAP, momentum_pct))
     return score, round(momentum_pct, 2)
 
 
@@ -111,8 +122,13 @@ def compute_silver(
     signals: list[SignalInput],
     window_days: int = 20,
     baseline_method: BaselineMethod = "zscore",
+    min_history: int = 0,
 ) -> list[PulseSilverRow]:
-    """섹터별 시계열을 정규화해 Silver 행 목록을 산출한다. 결정론적·멱등이다."""
+    """섹터별 시계열을 정규화해 Silver 행 목록을 산출한다. 결정론적·멱등이다.
+
+    min_history: 모멘텀 산출에 필요한 최소 직전 관측 수. 미만이면 중립(score 50, 보합).
+    이력이 희소한 섹터가 거짓 급등(태풍급)을 내는 것을 막는다(운영은 5, 테스트 기본 0).
+    """
     by_sector: dict[str, list[SignalInput]] = {}
     for sig in signals:
         by_sector.setdefault(sig.sector_slug, []).append(sig)
@@ -122,7 +138,10 @@ def compute_silver(
         ordered = sorted(items, key=lambda x: x.reference_date)
         for i, cur in enumerate(ordered):
             window = [p.raw_signal_value for p in ordered[max(0, i - window_days):i]]
-            score, momentum_pct = _normalize(cur.raw_signal_value, window, baseline_method)
+            if len(window) < min_history:
+                score, momentum_pct = 50, 0.0  # 이력 부족 → 중립
+            else:
+                score, momentum_pct = _normalize(cur.raw_signal_value, window, baseline_method)
             rows.append(
                 PulseSilverRow(
                     sector_slug=sector,

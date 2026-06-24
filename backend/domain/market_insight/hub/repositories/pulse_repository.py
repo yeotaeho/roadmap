@@ -31,34 +31,47 @@ _SECTOR_CODE_MAP: dict[str, str] = {
     "BEAUTY": "beauty-fashion",
 }
 
-# raw_innovation_data → sector_source_map 으로 섹터 매핑 후 (섹터×수집일) 신호 건수 집계.
-# reference_date 는 collected_at::date (Pulse = 관측된 신호 흐름; 논문 발행일 노이즈 회피).
-# 섹터 분류 필드가 없는 KIAT_TECH_DEMAND·KISTEP 은 제외된다.
+# market 축: raw_market_timeseries.source_type → sectors.slug (실측 16티커 기준).
+# 광범위 지수(SPY·QQQ·ARKK)는 단일섹터 무귀속이라 제외(섹터 강제 매핑 = 날조).
+_MARKET_SOURCE_MAP: dict[str, str] = {
+    "YAHOO_ETF_AI": "ai-data", "YAHOO_STOCK_KR_NAVER": "ai-data",
+    "YAHOO_GLOBAL_SMH": "semiconductor", "YAHOO_STOCK_KR_HYNIX": "semiconductor",
+    "YAHOO_STOCK_KR_SAMSUNG": "semiconductor",
+    "YAHOO_ETF_BIO": "bio-health", "YAHOO_STOCK_KR_SBIO": "bio-health",
+    "YAHOO_ETF_BATTERY": "energy-climate", "YAHOO_ETF_RENEWABLE": "energy-climate",
+    "YAHOO_GLOBAL_LIT": "energy-climate", "YAHOO_GLOBAL_XLE": "energy-climate",
+    "YAHOO_STOCK_KR_LGES": "energy-climate",
+    "YAHOO_ETF_KFOOD": "food-agri",
+}
+
+# raw_innovation_data → sector_source_map 으로 섹터 매핑 후 (섹터×기준일) 신호 건수 집계.
+# reference_date = COALESCE(published_at, collected_at)::date — 실제 발생일로 분산해
+# 수집일(백필) 한 점에 신호가 몰려 모멘텀이 폭증하는 것을 방지. 분류 필드 없는 KIAT/KISTEP 제외.
 _INNOVATION_SIGNAL_SQL = text(
     """
     WITH mapped AS (
-        SELECT r.id AS rid, m.sector_slug, r.collected_at::date AS ref_date
+        SELECT r.id AS rid, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date) AS ref_date
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'arxiv_category'
          AND m.match_value = r.raw_metadata->>'category'
         WHERE r.source_type = 'INNOVATION_ARXIV_KR'
         UNION ALL
-        SELECT r.id, m.sector_slug, r.collected_at::date
+        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'customs_group'
          AND m.match_value = r.raw_metadata->>'group_name'
         WHERE r.source_type = 'INNOVATION_CUSTOMS_EXPORT'
         UNION ALL
-        SELECT r.id, m.sector_slug, r.collected_at::date
+        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'tech_category'
          AND m.match_value = r.raw_metadata->>'tech_category'
         WHERE r.source_type = 'INNOVATION_TECHBLOG_KR'
         UNION ALL
-        SELECT r.id, m.sector_slug, r.collected_at::date
+        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
         FROM raw_innovation_data r
         JOIN LATERAL jsonb_array_elements_text(r.raw_metadata->'topics') AS t(topic) ON true
         JOIN sector_source_map m
@@ -78,7 +91,7 @@ _INNOVATION_SIGNAL_SQL = text(
 _ECONOMIC_AXIS_SQL = text(
     """
     SELECT COALESCE(raw_metadata->>'industry_sector', raw_metadata->>'group_name') AS code,
-           collected_at::date AS ref_date,
+           COALESCE(published_at::date, collected_at::date) AS ref_date,
            COUNT(*) AS c
     FROM raw_economic_data
     WHERE (raw_metadata ? 'industry_sector' OR raw_metadata ? 'group_name')
@@ -97,6 +110,104 @@ _PEOPLE_AXIS_SQL = text(
       AND raw_metadata ? 'sector_name'
       AND reference_date IS NOT NULL
     GROUP BY 1, 2
+    """
+)
+
+# market 축: 자본 흐름(거래대금). 혼합통화(USD ETF + KRW 주식) 합산 오류를 피하려
+# 티커별 '상대 유량'(당일 거래대금 ÷ 그 티커의 기간 평균)으로 통화 중립화 후 source_type×거래일로 방출.
+# 같은 섹터의 다중 티커는 호출측(_add)에서 합산된다.
+_MARKET_AXIS_SQL = text(
+    """
+    WITH t AS (
+        SELECT source_type,
+               trade_date,
+               COALESCE(turnover_amount, volume * close_price) AS tv,
+               AVG(COALESCE(turnover_amount, volume * close_price))
+                   OVER (PARTITION BY source_type) AS avg_tv
+        FROM raw_market_timeseries
+    )
+    SELECT source_type,
+           trade_date AS ref_date,
+           AVG(tv / NULLIF(avg_tv, 0)) AS turnover
+    FROM t
+    GROUP BY source_type, trade_date
+    """
+)
+
+# economic_text·discourse 축: raw 자유 텍스트의 LLM 섹터 분류(refined_text_sector_class)를
+# (섹터×발생일) 건수로 집계. ref_date 는 원천 raw 테이블에서 가져온다(혁신축과 동일 분산).
+# confidence/prompt_version 필터로 저신뢰·구버전 분류를 배제. sector_slug NULL(무귀속)은 제외.
+_TEXT_SECTOR_AXIS_SQL = text(
+    """
+    SELECT 'economic_text' AS axis, c.sector_slug,
+           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date,
+           COUNT(DISTINCT c.raw_id) AS c
+    FROM refined_text_sector_class c
+    JOIN raw_economic_data e ON e.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_economic_data'
+      AND c.prompt_version = :pv
+      AND c.sector_slug IS NOT NULL
+      AND c.confidence >= :conf_min
+    GROUP BY c.sector_slug, ref_date
+    UNION ALL
+    SELECT 'discourse' AS axis, c.sector_slug,
+           COALESCE(d.published_at::date, d.collected_at::date) AS ref_date,
+           COUNT(DISTINCT c.raw_id) AS c
+    FROM refined_text_sector_class c
+    JOIN raw_discourse_data d ON d.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_discourse_data'
+      AND c.prompt_version = :pv
+      AND c.sector_slug IS NOT NULL
+      AND c.confidence >= :conf_min
+    GROUP BY c.sector_slug, ref_date
+    """
+)
+
+# 미분류 economic 행 조회. 이미 코드 매핑되는 행(industry_sector/group_name 보유)은 제외해
+# 기존 economic 축과 행 단위 disjoint 를 보장(이중 집계 차단). 최근 window_days 일만 대상.
+_FETCH_UNCLASSIFIED_ECONOMIC = text(
+    """
+    SELECT e.id AS raw_id,
+           e.raw_title || E'\n' ||
+           COALESCE(e.raw_metadata->>'content_text', e.raw_metadata->>'body_text',
+                    e.raw_metadata->>'summary', '') AS body
+    FROM raw_economic_data e
+    LEFT JOIN refined_text_sector_class c
+           ON c.raw_table_ref = 'raw_economic_data'
+          AND c.raw_id = e.id
+          AND c.prompt_version = :pv
+    WHERE c.id IS NULL
+      AND (e.raw_metadata ? 'industry_sector' OR e.raw_metadata ? 'group_name') IS NOT TRUE
+      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY e.id
+    LIMIT :lim
+    """
+)
+
+# 미분류 discourse 행 조회. discourse 는 현재 어느 축에도 없으므로 전 행이 대상.
+_FETCH_UNCLASSIFIED_DISCOURSE = text(
+    """
+    SELECT d.id AS raw_id,
+           d.headline || E'\n' || COALESCE(d.content_body, '') AS body
+    FROM raw_discourse_data d
+    LEFT JOIN refined_text_sector_class c
+           ON c.raw_table_ref = 'raw_discourse_data'
+          AND c.raw_id = d.id
+          AND c.prompt_version = :pv
+    WHERE c.id IS NULL
+      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY d.id
+    LIMIT :lim
+    """
+)
+
+_UPSERT_TEXT_SECTOR = text(
+    """
+    INSERT INTO refined_text_sector_class
+        (raw_table_ref, raw_id, sector_slug, confidence, model_name, prompt_version, input_hash)
+    VALUES
+        (:raw_table_ref, :raw_id, :sector_slug, :confidence, :model_name, :prompt_version, :input_hash)
+    ON CONFLICT (raw_table_ref, raw_id, prompt_version) DO NOTHING
     """
 )
 
@@ -133,25 +244,99 @@ _LATEST_GOLD_SQL = text(
 )
 
 
+def _normalize_axes(signals: list[AxisSignal]) -> list[AxisSignal]:
+    """축별로 값을 0~100 양수 band로 min-max 정규화(이종 단위 통약).
+
+    혁신 카운트(1~50)와 시장 거래대금(수십억)을 동등 비교 가능하게 만든다.
+    모멘텀은 compute_silver의 윈도우 상대변화로 산출되므로, 정규화가 섹터의
+    시간 변동(상대 추세)은 보존하면서 축간 스케일 격차만 제거한다. 단일/동일값
+    축(span=0)은 50(중립)으로 둔다.
+    """
+    by_axis: dict[str, list[AxisSignal]] = {}
+    for s in signals:
+        by_axis.setdefault(s.axis, []).append(s)
+
+    out: list[AxisSignal] = []
+    for axis, items in by_axis.items():
+        values = [s.value for s in items]
+        lo, hi = min(values), max(values)
+        span = hi - lo
+        for s in items:
+            norm = 50.0 if span == 0 else (s.value - lo) / span * 100.0
+            out.append(AxisSignal(s.sector_slug, s.reference_date, axis, round(norm, 4)))
+    return out
+
+
 class PulseRepository(BaseRepository):
-    async def fetch_axis_signals(self) -> list[AxisSignal]:
-        """innovation·economic·people 3축을 섹터×일자 신호로 집계한다(가중 융합 입력)."""
-        out: list[AxisSignal] = []
+    async def fetch_axis_signals(
+        self,
+        text_confidence_min: float = 0.0,
+        text_prompt_version: str | None = None,
+    ) -> list[AxisSignal]:
+        """축을 섹터×일자로 집계 후 축별 통약 정규화.
+
+        기본 4축(innovation·economic·people·market)에 더해, text_prompt_version 이
+        주어지면 LLM 분류 기반 economic_text·discourse 축을 합류시킨다.
+        """
+        # (sector, date, axis) → 합산값. 같은 섹터로 매핑되는 다중 코드/티커는 합산.
+        agg: dict[tuple[str, object, str], float] = {}
+
+        def _add(slug: str, ref_date: object, axis: str, value: float) -> None:
+            agg[(slug, ref_date, axis)] = agg.get((slug, ref_date, axis), 0.0) + value
 
         for r in (await self.session.execute(_INNOVATION_SIGNAL_SQL)).all():
-            out.append(AxisSignal(r.sector_slug, r.ref_date, "innovation", float(r.signal_count)))
+            _add(r.sector_slug, r.ref_date, "innovation", float(r.signal_count))
 
         for r in (await self.session.execute(_ECONOMIC_AXIS_SQL)).all():
             slug = _SECTOR_CODE_MAP.get((r.code or "").upper())
             if slug:
-                out.append(AxisSignal(slug, r.ref_date, "economic", float(r.c)))
+                _add(slug, r.ref_date, "economic", float(r.c))
 
         for r in (await self.session.execute(_PEOPLE_AXIS_SQL)).all():
             slug = _SECTOR_CODE_MAP.get((r.code or "").upper())
             if slug:
-                out.append(AxisSignal(slug, r.ref_date, "people", float(r.c)))
+                _add(slug, r.ref_date, "people", float(r.c))
 
-        return out
+        for r in (await self.session.execute(_MARKET_AXIS_SQL)).all():
+            slug = _MARKET_SOURCE_MAP.get(r.source_type)
+            if slug and r.turnover is not None:
+                _add(slug, r.ref_date, "market", float(r.turnover))
+
+        # economic_text·discourse 축(LLM 분류) — prompt_version 지정 시에만 합류.
+        if text_prompt_version is not None:
+            for r in (
+                await self.session.execute(
+                    _TEXT_SECTOR_AXIS_SQL,
+                    {"pv": text_prompt_version, "conf_min": text_confidence_min},
+                )
+            ).all():
+                _add(r.sector_slug, r.ref_date, r.axis, float(r.c))
+
+        raw = [AxisSignal(k[0], k[1], k[2], v) for k, v in agg.items()]
+        return _normalize_axes(raw)
+
+    async def fetch_unclassified_text_rows(
+        self, table_ref: str, prompt_version: str, window_days: int, limit: int
+    ) -> list[tuple[int, str]]:
+        """최근 window_days 내 미분류 raw 행을 (raw_id, 입력 텍스트) 목록으로 반환한다."""
+        sql = (
+            _FETCH_UNCLASSIFIED_ECONOMIC
+            if table_ref == "raw_economic_data"
+            else _FETCH_UNCLASSIFIED_DISCOURSE
+        )
+        rows = (
+            await self.session.execute(
+                sql, {"pv": prompt_version, "win": window_days, "lim": limit}
+            )
+        ).all()
+        return [(r.raw_id, r.body) for r in rows]
+
+    async def upsert_text_sector_class(self, payload: list[dict]) -> int:
+        """LLM 분류 결과를 멱등 적재(자연키 충돌 시 무시)한다. 적재 시도 건수를 반환한다."""
+        if not payload:
+            return 0
+        await self.session.execute(_UPSERT_TEXT_SECTOR, payload)
+        return len(payload)
 
     async def replace_silver(self, rows: list[PulseSilverRow], baseline_method: str) -> int:
         """해당 baseline_method 의 Silver 를 통째로 재기록한다(멱등)."""

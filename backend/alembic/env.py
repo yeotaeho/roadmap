@@ -27,6 +27,13 @@ from domain.master.models.bases.raw_innovation_data import RawInnovationData  # 
 from domain.master.models.bases.raw_people_data import RawPeopleData  # Bronze
 from domain.master.models.bases.raw_discourse_data import RawDiscourseData  # Bronze
 from domain.master.models.bases.verified_company_master import VerifiedCompanyMaster  # Bronze
+from domain.market_insight.models.bases.refined_pulse_metric_silver import (  # Silver
+    RefinedPulseMetricSilver,
+)
+from domain.market_insight.models.bases.pulse_metrics_log import PulseMetricsLog  # Gold
+from domain.market_insight.models.bases.refined_text_sector_class import (  # Silver
+    RefinedTextSectorClass,
+)
 
 target_metadata = Base.metadata
 
