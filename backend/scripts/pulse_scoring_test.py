@@ -9,8 +9,10 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from domain.market_insight.hub.services.pulse_pipeline import (  # noqa: E402
+    AxisSignal,
     SignalInput,
     compute_silver,
+    fuse_signals,
     project_to_gold,
 )
 
@@ -115,6 +117,27 @@ def test_project_gold() -> None:
     check("Gold momentum 보존", gold[-1].momentum_pct == 100.0)
 
 
+# ---------------------------------------------------------------------------
+# 가중 융합 — 동일 (섹터,일자) 축 합산 + 가중치 + 결정론
+# ---------------------------------------------------------------------------
+def test_fuse() -> None:
+    d = date(2026, 6, 24)
+    axis = [
+        AxisSignal("ai-data", d, "innovation", 3.0),
+        AxisSignal("ai-data", d, "economic", 2.0),
+        AxisSignal("ai-data", d, "people", 10.0),  # weight 0.7 → 7.0
+        AxisSignal("fintech", date(2026, 6, 1), "economic", 4.0),
+    ]
+    fused = fuse_signals(axis)  # 기본 가중치 innovation/economic=1.0, people=0.7
+    by = {(f.sector_slug, f.reference_date): f.raw_signal_value for f in fused}
+    check("융합 ai-data = 3+2+0.7*10 = 12.0", by[("ai-data", d)] == 12.0)
+    check("융합 fintech 별도일자 = 4.0", by[("fintech", date(2026, 6, 1))] == 4.0)
+    check("융합 행수 2(섹터×일자 그룹)", len(fused) == 2)
+    check("융합 가중치 오버라이드", fuse_signals(axis, {"people": 0.0, "innovation": 1.0, "economic": 1.0})[0].raw_signal_value == 5.0)
+    check("융합 결정론(정렬 안정)", fuse_signals(axis) == fuse_signals(axis))
+    check("융합 빈 입력 = []", fuse_signals([]) == [])
+
+
 def main() -> int:
     test_zscore_jump()
     test_other_methods()
@@ -123,6 +146,7 @@ def main() -> int:
     test_multi_sector()
     test_badge_tiers()
     test_project_gold()
+    test_fuse()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

@@ -27,6 +27,24 @@ class SignalInput:
 
 
 @dataclass(frozen=True)
+class AxisSignal:
+    """축(innovation/economic/people)별 섹터×일자 신호. 가중 융합의 입력."""
+
+    sector_slug: str
+    reference_date: date
+    axis: str
+    value: float
+
+
+# 축별 융합 가중치. 합성 신호값 = Σ weight[axis] × value.
+DEFAULT_AXIS_WEIGHTS: dict[str, float] = {
+    "innovation": 1.0,
+    "economic": 1.0,
+    "people": 0.7,
+}
+
+
+@dataclass(frozen=True)
 class PulseSilverRow:
     """refined_pulse_metric_silver 1행에 대응하는 결정론적 산출 결과."""
 
@@ -131,4 +149,20 @@ def project_to_gold(silver_rows: list[PulseSilverRow]) -> list[PulseGoldRow]:
             momentum_pct=r.momentum_pct,
         )
         for r in silver_rows
+    ]
+
+
+def fuse_signals(
+    axis_signals: list[AxisSignal],
+    weights: dict[str, float] | None = None,
+) -> list[SignalInput]:
+    """여러 축 신호를 (섹터, 일자)로 가중 합산해 단일 합성 신호로 융합한다. 결정론적."""
+    w = weights or DEFAULT_AXIS_WEIGHTS
+    agg: dict[tuple[str, date], float] = {}
+    for a in axis_signals:
+        key = (a.sector_slug, a.reference_date)
+        agg[key] = agg.get(key, 0.0) + w.get(a.axis, 1.0) * a.value
+    return [
+        SignalInput(sector_slug=k[0], reference_date=k[1], raw_signal_value=round(v, 6))
+        for k, v in sorted(agg.items())
     ]

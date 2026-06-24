@@ -8,10 +8,28 @@ from sqlalchemy import text
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 from domain.market_insight.hub.services.pulse_pipeline import (
+    AxisSignal,
     PulseGoldRow,
     PulseSilverRow,
-    SignalInput,
 )
+
+# economic industry_sector/group_name·people HRDNET sector_name 코드 → sectors.slug.
+# 산업 섹터가 아닌 신호유형 코드(CAPITAL_MARKET·SME_STARTUP·GOV_SUPPORT·STARTUP_VC·
+# CAREER_SWITCH·CAPITAL_FLOW)는 의도적으로 제외한다(섹터 강제 매핑 = 날조).
+_SECTOR_CODE_MAP: dict[str, str] = {
+    "AI_ML": "ai-data", "AI_TECH": "ai-data", "ICT_SW": "ai-data", "DATA": "ai-data",
+    "SEMICONDUCTOR": "semiconductor", "ICT_HW": "semiconductor",
+    "BIOHEALTH": "bio-health", "BIO": "bio-health", "HEALTH": "bio-health",
+    "ENERGY_CLIMATE": "energy-climate", "CLIMATE_ENERGY": "energy-climate", "BATTERY": "energy-climate",
+    "MOBILITY": "mobility",
+    "FINTECH": "fintech",
+    "CONTENT_MEDIA": "content-creator", "CULTURE_ARTS": "content-creator", "DESIGN": "content-creator",
+    "EDUTECH": "edutech", "EDUCATION": "edutech",
+    "FOODTECH": "food-agri", "FOOD": "food-agri",
+    "SOCIAL_WELFARE": "social-service",
+    "LOGISTICS": "logistics",
+    "BEAUTY": "beauty-fashion",
+}
 
 # raw_innovation_data → sector_source_map 으로 섹터 매핑 후 (섹터×수집일) 신호 건수 집계.
 # reference_date 는 collected_at::date (Pulse = 관측된 신호 흐름; 논문 발행일 노이즈 회피).
@@ -56,6 +74,32 @@ _INNOVATION_SIGNAL_SQL = text(
     """
 )
 
+# economic 축: industry_sector(우선)·group_name 코드별 (코드×수집일) 건수. 코드→슬러그는 파이썬에서.
+_ECONOMIC_AXIS_SQL = text(
+    """
+    SELECT COALESCE(raw_metadata->>'industry_sector', raw_metadata->>'group_name') AS code,
+           collected_at::date AS ref_date,
+           COUNT(*) AS c
+    FROM raw_economic_data
+    WHERE (raw_metadata ? 'industry_sector' OR raw_metadata ? 'group_name')
+    GROUP BY 1, 2
+    """
+)
+
+# people 축: HRDNET 훈련수요의 sector_name(산업 분류) 코드별 (코드×기준월) 건수.
+_PEOPLE_AXIS_SQL = text(
+    """
+    SELECT raw_metadata->>'sector_name' AS code,
+           reference_date AS ref_date,
+           COUNT(*) AS c
+    FROM raw_people_data
+    WHERE source_type = 'PEOPLE_HRDNET_TRAINING'
+      AND raw_metadata ? 'sector_name'
+      AND reference_date IS NOT NULL
+    GROUP BY 1, 2
+    """
+)
+
 _INSERT_SILVER = text(
     """
     INSERT INTO refined_pulse_metric_silver
@@ -90,17 +134,24 @@ _LATEST_GOLD_SQL = text(
 
 
 class PulseRepository(BaseRepository):
-    async def fetch_innovation_signals(self) -> list[SignalInput]:
-        """raw_innovation_data 를 섹터×일자 신호 건수로 집계해 파이프라인 입력으로 변환한다."""
-        rows = (await self.session.execute(_INNOVATION_SIGNAL_SQL)).all()
-        return [
-            SignalInput(
-                sector_slug=r.sector_slug,
-                reference_date=r.ref_date,
-                raw_signal_value=float(r.signal_count),
-            )
-            for r in rows
-        ]
+    async def fetch_axis_signals(self) -> list[AxisSignal]:
+        """innovation·economic·people 3축을 섹터×일자 신호로 집계한다(가중 융합 입력)."""
+        out: list[AxisSignal] = []
+
+        for r in (await self.session.execute(_INNOVATION_SIGNAL_SQL)).all():
+            out.append(AxisSignal(r.sector_slug, r.ref_date, "innovation", float(r.signal_count)))
+
+        for r in (await self.session.execute(_ECONOMIC_AXIS_SQL)).all():
+            slug = _SECTOR_CODE_MAP.get((r.code or "").upper())
+            if slug:
+                out.append(AxisSignal(slug, r.ref_date, "economic", float(r.c)))
+
+        for r in (await self.session.execute(_PEOPLE_AXIS_SQL)).all():
+            slug = _SECTOR_CODE_MAP.get((r.code or "").upper())
+            if slug:
+                out.append(AxisSignal(slug, r.ref_date, "people", float(r.c)))
+
+        return out
 
     async def replace_silver(self, rows: list[PulseSilverRow], baseline_method: str) -> int:
         """해당 baseline_method 의 Silver 를 통째로 재기록한다(멱등)."""

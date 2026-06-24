@@ -40,6 +40,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from core.config.settings import get_settings
 from core.database import AsyncSessionLocal
+from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -54,6 +55,12 @@ from domain.master.hub.services.bronze_innovation_ingest_service import (
 )
 from domain.master.hub.services.bronze_people_ingest_service import (
     BronzePeopleIngestService,
+)
+from domain.master.hub.services.bronze_discourse_ingest_service import (
+    BronzeDiscourseIngestService,
+)
+from domain.master.hub.services.bronze_company_ingest_service import (
+    BronzeCompanyIngestService,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,6 +307,28 @@ async def _job_smes_opportunity() -> dict[str, Any] | None:
         return await svc.ingest_smes(max_items=200)
 
 
+async def _job_kstartup_opportunity() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "kstartup_service_key", None)
+    if not key:
+        logger.warning("[scheduler] kstartup_service_key 없음 — K-Startup 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeOpportunityIngestService(session, kstartup_service_key=key)
+        return await svc.ingest_kstartup(max_items=200)
+
+
+async def _job_narajangteo_opportunity() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "narajangteo_service_key", None)
+    if not key:
+        logger.warning("[scheduler] narajangteo_service_key 없음 — 나라장터 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeOpportunityIngestService(session, narajangteo_service_key=key)
+        return await svc.ingest_narajangteo(max_items=200)
+
+
 async def _job_alio() -> dict[str, Any] | None:
     settings = get_settings()
     if not settings.alio_service_key:
@@ -353,10 +382,29 @@ async def _job_kistep() -> dict[str, Any]:
         return await BronzeInnovationIngestService(session).ingest_kistep()
 
 
+async def _job_news_rss() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeDiscourseIngestService(session).ingest_news_rss(
+            max_items_per_feed=50
+        )
+
+
 async def _job_techblog_kr() -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         return await BronzeInnovationIngestService(session).ingest_techblog_kr(
             max_items_per_feed=30
+        )
+
+
+async def _job_kiat_tech_demand() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "kiat_tech_demand_service_key", None)
+    if not key:
+        logger.warning("[scheduler] kiat_tech_demand_service_key 없음 — KIAT 수요기술 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_kiat_tech_demand(
+            service_key=key, max_items=500
         )
 
 
@@ -383,6 +431,20 @@ async def _job_hrdnet_training() -> dict[str, Any] | None:
         ).ingest_hrdnet_training()
 
 
+async def _job_venture_list() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "venture_list_service_key", None)
+    if not key:
+        logger.warning("[scheduler] venture_list_service_key 없음 — 벤처기업명단 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzeCompanyIngestService(
+            session, venture_list_service_key=key
+        ).ingest_venture_list(
+            max_items=5000, resource=settings.venture_list_resource
+        )
+
+
 async def _job_careernet() -> dict[str, Any] | None:
     settings = get_settings()
     key = getattr(settings, "careernet_api_key", None)
@@ -395,12 +457,43 @@ async def _job_careernet() -> dict[str, Any] | None:
         ).ingest_careernet()
 
 
+async def _job_goyong24_recruit() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "goyong24_recruit_api_key", None)
+    if not key:
+        logger.warning("[scheduler] goyong24_recruit_api_key 없음 — 고용24 채용 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzePeopleIngestService(
+            session, goyong24_recruit_api_key=key
+        ).ingest_goyong24_recruit()
+
+
+async def _job_saramin_recruit() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "saramin_access_key", None)
+    if not key:
+        logger.warning("[scheduler] saramin_access_key 없음 — 사람인 채용 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzePeopleIngestService(
+            session, saramin_api_key=key
+        ).ingest_saramin_recruit()
+
+
 # ---------------------------------------------------------------------------
 # 등록 & 라이프사이클
 # ---------------------------------------------------------------------------
 
 
 # (job_id, factory, group)
+async def _job_pulse_refine() -> dict[str, Any]:
+    """Silver/Gold 정제 — 누적 Bronze(혁신·경제·사람) 신호로 Pulse 재생성(멱등)."""
+    async with AsyncSessionLocal() as session:
+        svc = PulseRefineService(session)
+        return await svc.refine_and_serve()
+
+
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("techblog_kr",       _job_techblog_kr),
@@ -414,15 +507,21 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("msit_rnd_budget",   _job_msit_rnd_budget),
     ("mfds_press",        _job_mfds_press),
     ("smes_opportunity",  _job_smes_opportunity),
+    ("kstartup_opportunity", _job_kstartup_opportunity),
     ("subsidy24",         _job_subsidy24),
     ("mss_press",         _job_mss_press),
     ("dart_ipo",          _job_dart_ipo),
     ("nps_portfolio",     _job_nps_portfolio),
     ("naver_search",      _job_naver_search),
+    ("goyong24_recruit",  _job_goyong24_recruit),
+    ("saramin_recruit",   _job_saramin_recruit),
+    ("news_rss",          _job_news_rss),
+    ("pulse_refine",      _job_pulse_refine),
 )
 
 _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("alio_projects",    _job_alio),
+    ("narajangteo_opportunity", _job_narajangteo_opportunity),
     ("yahoo_finance",    _job_yahoo_finance),
     ("yahoo_macro",      _job_yahoo_macro),
     ("bok_ecos",         _job_bok_ecos),
@@ -432,6 +531,7 @@ _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("arxiv_papers",     _job_arxiv_papers),
     ("github_trending",  _job_github_trending),
     ("kistep_report",    _job_kistep),
+    ("kiat_tech_demand", _job_kiat_tech_demand),
 )
 
 _MONTHLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
@@ -439,6 +539,7 @@ _MONTHLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("hrdnet_training",   _job_hrdnet_training),
     ("customs_export",    _job_customs_export),
     ("careernet",         _job_careernet),
+    ("venture_list",      _job_venture_list),
 )
 
 
