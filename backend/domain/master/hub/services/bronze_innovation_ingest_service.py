@@ -25,6 +25,9 @@ from domain.master.hub.services.collectors.innovation.customs.customs_export_col
 from domain.master.hub.services.collectors.innovation.kistep.kistep_report_collector import (
     KistepReportCollector,
 )
+from domain.master.hub.services.collectors.innovation.kiat.tech_demand_collector import (
+    KiatTechDemandCollector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,5 +128,23 @@ class BronzeInnovationIngestService:
             "stats": stats,
         }
         logger.info("Bronze innovation KISTEP ingest: %s", result)
+        return result
+
+    async def ingest_kiat_tech_demand(
+        self, *, service_key: str, max_items: int = 200
+    ) -> dict[str, Any]:
+        """KIAT 기술은행 수요기술(기업의 기술 수요 = TECH_DEMAND_SIGNAL) 수집."""
+        if not service_key:
+            raise ValueError("TECH_DEMAND_SIGNAL(KIAT 수요기술 키)이 설정되어 있지 않습니다.")
+        rows, stats = await KiatTechDemandCollector(service_key).collect(max_items=max_items)
+        inserted = await self._repo.insert_many_skip_duplicates(rows)
+        result = {
+            "source": "kiat_tech_demand",
+            "fetched": len(rows),
+            "inserted": inserted,
+            "not_inserted": len(rows) - inserted,
+            "stats": stats,
+        }
+        logger.info("Bronze innovation KIAT 수요기술 ingest: %s", result)
         return result
 

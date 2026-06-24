@@ -42,29 +42,35 @@ class MarketTimeseriesRepository(BaseRepository):
         if not payload:
             return 0
 
-        stmt = pg_insert(RawMarketTimeseries).values(payload)
-        update_cols = {
-            "source_type": stmt.excluded.source_type,
-            "asset_name": stmt.excluded.asset_name,
-            "theme": stmt.excluded.theme,
-            "currency": stmt.excluded.currency,
-            "open_price": stmt.excluded.open_price,
-            "high_price": stmt.excluded.high_price,
-            "low_price": stmt.excluded.low_price,
-            "close_price": stmt.excluded.close_price,
-            "volume": stmt.excluded.volume,
-            "turnover_amount": stmt.excluded.turnover_amount,
-            "raw_metadata": stmt.excluded.raw_metadata,
-            "collected_at": func.now(),
-        }
-        stmt = stmt.on_conflict_do_update(
-            constraint="uq_raw_market_timeseries_ticker_date",
-            set_=update_cols,
-        ).returning(RawMarketTimeseries.id)
+        # asyncpg 바인드 파라미터 한도(32,767) 회피 — 13컬럼/행이라 행을 청크로 분할.
+        # 32767 // 13 ≈ 2520 → 안전하게 1000행/배치.
+        _BATCH = 1000
+
+        def _build_stmt(chunk: list[dict[str, Any]]):
+            stmt = pg_insert(RawMarketTimeseries).values(chunk)
+            return stmt.on_conflict_do_update(
+                constraint="uq_raw_market_timeseries_ticker_date",
+                set_={
+                    "source_type": stmt.excluded.source_type,
+                    "asset_name": stmt.excluded.asset_name,
+                    "theme": stmt.excluded.theme,
+                    "currency": stmt.excluded.currency,
+                    "open_price": stmt.excluded.open_price,
+                    "high_price": stmt.excluded.high_price,
+                    "low_price": stmt.excluded.low_price,
+                    "close_price": stmt.excluded.close_price,
+                    "volume": stmt.excluded.volume,
+                    "turnover_amount": stmt.excluded.turnover_amount,
+                    "raw_metadata": stmt.excluded.raw_metadata,
+                    "collected_at": func.now(),
+                },
+            ).returning(RawMarketTimeseries.id)
 
         async def _execute() -> int:
-            result = await self.session.execute(stmt)
-            count = len(result.scalars().all())
+            count = 0
+            for i in range(0, len(payload), _BATCH):
+                result = await self.session.execute(_build_stmt(payload[i : i + _BATCH]))
+                count += len(result.scalars().all())
             await self.session.commit()
             return count
 

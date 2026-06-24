@@ -220,6 +220,41 @@ class Settings(BaseSettings):
         default=None, validation_alias="CAREERNET_API_KEY"
     )
 
+    # 창업진흥원 K-Startup 통합공고 OpenAPI (Bronze — raw_opportunity_data, 정부 창업지원 사업공고)
+    #   발급: https://www.data.go.kr/data/15125364/openapi.do
+    #   data.go.kr 계열 키는 계정당 동일 인코딩키이므로 DATA_GO_KR_SERVICE_KEY 로 일괄 재사용 가능.
+    kstartup_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("KSTARTUP_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
+    )
+
+    # 조달청 나라장터 입찰공고정보 OpenAPI (Bronze — raw_opportunity_data, 정부→민간 자본 흐름)
+    #   발급: https://www.data.go.kr/data/15129394/openapi.do
+    narajangteo_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "NARAJANGTEO_SERVICE_KEY", "G2B_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"
+        ),
+    )
+
+    # 중소벤처기업부 벤처기업명단 (Bronze — verified_company_master, 정부 인증 기업)
+    #   발급: https://www.data.go.kr/data/15084581/openapi.do (fileData→OpenAPI 자동변환)
+    venture_list_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("VENTURE_LIST_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
+    )
+    # odcloud uddi 리소스 경로(배포 월마다 변경). 미설정 시 컬렉터 _DEFAULT_RESOURCE 사용.
+    venture_list_resource: Optional[str] = Field(
+        default=None, validation_alias="VENTURE_LIST_RESOURCE"
+    )
+
+    # KIAT 기술은행 수요기술 조회 서비스 (Bronze — raw_innovation_data, TECH_DEMAND_SIGNAL)
+    #   data.go.kr/15158929 (_GW REST). 사용자가 키를 TECH_DEMAND_SIGNAL 로 등록.
+    kiat_tech_demand_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("TECH_DEMAND_SIGNAL", "KIAT_TECH_DEMAND_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
+    )
+
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)
     #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
     #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡

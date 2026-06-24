@@ -25,6 +25,8 @@ from domain.master.models.bases.raw_market_timeseries import RawMarketTimeseries
 from domain.master.models.bases.raw_opportunity_data import RawOpportunityData  # Bronze
 from domain.master.models.bases.raw_innovation_data import RawInnovationData  # Bronze
 from domain.master.models.bases.raw_people_data import RawPeopleData  # Bronze
+from domain.master.models.bases.raw_discourse_data import RawDiscourseData  # Bronze
+from domain.master.models.bases.verified_company_master import VerifiedCompanyMaster  # Bronze
 
 target_metadata = Base.metadata
 

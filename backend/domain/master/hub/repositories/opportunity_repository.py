@@ -68,17 +68,14 @@ class OpportunityRepository(BaseRepository):
         if not payload:
             return 0
 
-        stmt = (
-            pg_insert(RawOpportunityData)
-            .values(payload)
-            .on_conflict_do_nothing(index_elements=["source_url"])
-            .returning(RawOpportunityData.id)
+        def _build(chunk: list[dict[str, Any]]):
+            return (
+                pg_insert(RawOpportunityData)
+                .values(chunk)
+                .on_conflict_do_nothing(index_elements=["source_url"])
+                .returning(RawOpportunityData.id)
+            )
+
+        return await self._execute_with_retry(
+            lambda: self._commit_batched_returning(_build, payload)
         )
-
-        async def _execute() -> int:
-            result = await self.session.execute(stmt)
-            inserted = len(result.scalars().all())
-            await self.session.commit()
-            return inserted
-
-        return await self._execute_with_retry(_execute)

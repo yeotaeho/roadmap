@@ -67,17 +67,14 @@ class EconomicRepository(BaseRepository):
         if not payload:
             return 0
 
-        stmt = (
-            pg_insert(RawEconomicData)
-            .values(payload)
-            .on_conflict_do_nothing(index_elements=["source_url"])
-            .returning(RawEconomicData.id)
+        def _build(chunk: list[dict[str, Any]]):
+            return (
+                pg_insert(RawEconomicData)
+                .values(chunk)
+                .on_conflict_do_nothing(index_elements=["source_url"])
+                .returning(RawEconomicData.id)
+            )
+
+        return await self._execute_with_retry(
+            lambda: self._commit_batched_returning(_build, payload)
         )
-
-        async def _execute() -> int:
-            result = await self.session.execute(stmt)
-            inserted = len(result.scalars().all())
-            await self.session.commit()
-            return inserted
-
-        return await self._execute_with_retry(_execute)

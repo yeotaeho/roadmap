@@ -11,15 +11,30 @@ from domain.master.hub.repositories.opportunity_repository import OpportunityRep
 from domain.master.hub.services.collectors.opportunity.smes_collector import (
     SmesOpenAPICollector,
 )
+from domain.master.hub.services.collectors.opportunity.kstartup.kstartup_collector import (
+    KStartupCollector,
+)
+from domain.master.hub.services.collectors.opportunity.narajangteo.narajangteo_collector import (
+    NarajangteoCollector,
+)
 from domain.master.models.transfer.opportunity_collect_dto import OpportunityCollectDto
 
 logger = logging.getLogger(__name__)
 
 
 class BronzeOpportunityIngestService:
-    def __init__(self, session: AsyncSession, smes_service_key: str | None):
+    def __init__(
+        self,
+        session: AsyncSession,
+        smes_service_key: str | None = None,
+        *,
+        kstartup_service_key: str | None = None,
+        narajangteo_service_key: str | None = None,
+    ):
         self._session = session
         self._smes_key = smes_service_key
+        self._kstartup_key = kstartup_service_key
+        self._narajangteo_key = narajangteo_service_key
         self._opportunity_repo = OpportunityRepository(session)
 
     async def ingest_smes(
@@ -55,6 +70,44 @@ class BronzeOpportunityIngestService:
             "not_inserted": max(0, len(dtos) - inserted),
         }
         logger.info("Bronze opportunity SMES ingest: %s", result)
+        return result
+
+    async def ingest_kstartup(self, *, max_items: int = 100) -> dict[str, Any]:
+        """창업진흥원 K-Startup 통합공고 수집."""
+        if not self._kstartup_key:
+            raise ValueError("KSTARTUP_SERVICE_KEY 가 설정되어 있지 않습니다.")
+        dtos: list[OpportunityCollectDto] = []
+        try:
+            dtos = await KStartupCollector(self._kstartup_key).collect(max_items=max_items)
+        except Exception:
+            logger.exception("K-Startup 공고 Bronze 수집 실패. 빈 결과로 진행합니다.")
+        inserted = await self._opportunity_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": "kstartup",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+        }
+        logger.info("Bronze opportunity K-Startup ingest: %s", result)
+        return result
+
+    async def ingest_narajangteo(self, *, max_items: int = 100) -> dict[str, Any]:
+        """조달청 나라장터 입찰공고 수집 (정부→민간 자본 흐름 신호)."""
+        if not self._narajangteo_key:
+            raise ValueError("NARAJANGTEO_SERVICE_KEY 가 설정되어 있지 않습니다.")
+        dtos: list[OpportunityCollectDto] = []
+        try:
+            dtos = await NarajangteoCollector(self._narajangteo_key).collect(max_items=max_items)
+        except Exception:
+            logger.exception("나라장터 입찰공고 Bronze 수집 실패. 빈 결과로 진행합니다.")
+        inserted = await self._opportunity_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": "narajangteo",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+        }
+        logger.info("Bronze opportunity 나라장터 ingest: %s", result)
         return result
 
     async def purge_by_source_type(self, source_type: str) -> dict[str, Any]:

@@ -38,6 +38,12 @@ from domain.master.hub.services.bronze_innovation_ingest_service import (
 from domain.master.hub.services.bronze_people_ingest_service import (
     BronzePeopleIngestService,
 )
+from domain.master.hub.services.bronze_discourse_ingest_service import (
+    BronzeDiscourseIngestService,
+)
+from domain.master.hub.services.bronze_company_ingest_service import (
+    BronzeCompanyIngestService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -742,6 +748,44 @@ async def run_smes_opportunity_bronze(
         ) from None
 
 
+@router.post("/bronze/opportunity/kstartup")
+async def run_kstartup_opportunity_bronze(
+    max_items: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """창업진흥원 K-Startup 통합공고를 raw_opportunity_data에 적재."""
+    settings = get_settings()
+    svc = BronzeOpportunityIngestService(
+        db, kstartup_service_key=settings.kstartup_service_key
+    )
+    try:
+        return await svc.ingest_kstartup(max_items=max_items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("K-Startup Opportunity Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="K-Startup 공고 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/opportunity/narajangteo")
+async def run_narajangteo_opportunity_bronze(
+    max_items: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    """조달청 나라장터 입찰공고를 raw_opportunity_data에 적재 (정부→민간 자본 흐름)."""
+    settings = get_settings()
+    svc = BronzeOpportunityIngestService(
+        db, narajangteo_service_key=settings.narajangteo_service_key
+    )
+    try:
+        return await svc.ingest_narajangteo(max_items=max_items)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        logger.exception("나라장터 Opportunity Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="나라장터 입찰공고 수집 중 오류가 발생했습니다.") from None
+
+
 @router.post("/bronze/economic/subsidy24")
 async def run_subsidy24_bronze(
     max_items: int = Query(500, ge=1, le=2000, description="최대 수집 건수"),
@@ -1054,6 +1098,25 @@ async def run_customs_export_innovation_bronze(
         raise HTTPException(status_code=502, detail="관세청 수출통계 수집 중 오류가 발생했습니다.") from None
 
 
+@router.post("/bronze/innovation/kiat-tech-demand", response_model=BronzeIngestResponse)
+async def run_kiat_tech_demand_innovation_bronze(
+    max_items: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+):
+    """KIAT 기술은행 수요기술(기업의 기술 수요)을 raw_innovation_data에 적재한다."""
+    settings = get_settings()
+    key = getattr(settings, "kiat_tech_demand_service_key", None)
+    try:
+        return await BronzeInnovationIngestService(db).ingest_kiat_tech_demand(
+            service_key=key or "", max_items=max_items
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("KIAT 수요기술 innovation Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="KIAT 수요기술 수집 중 오류가 발생했습니다.") from None
+
+
 @router.post("/bronze/people/careernet", response_model=BronzeIngestResponse)
 async def run_careernet_people_bronze(db: AsyncSession = Depends(get_db)):
     """커리어넷 직업정보(일자리전망)·학과정보를 raw_people_data에 적재한다."""
@@ -1066,6 +1129,79 @@ async def run_careernet_people_bronze(db: AsyncSession = Depends(get_db)):
     except Exception:
         logger.exception("Careernet people Bronze ingest 실패")
         raise HTTPException(status_code=502, detail="커리어넷 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/people/goyong24-recruit", response_model=BronzeIngestResponse)
+async def run_goyong24_recruit_people_bronze(
+    max_pages: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """고용24 채용정보를 직종별 공고 건수(Demand 신호)로 raw_people_data에 적재한다."""
+    settings = get_settings()
+    svc = BronzePeopleIngestService(
+        db, goyong24_recruit_api_key=settings.goyong24_recruit_api_key
+    )
+    try:
+        return await svc.ingest_goyong24_recruit(max_pages=max_pages)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("고용24 채용 people Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="고용24 채용정보 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/people/saramin-recruit", response_model=BronzeIngestResponse)
+async def run_saramin_recruit_people_bronze(db: AsyncSession = Depends(get_db)):
+    """사람인 채용정보를 키워드별 공고 건수(Demand 신호)로 raw_people_data에 적재한다."""
+    settings = get_settings()
+    svc = BronzePeopleIngestService(db, saramin_api_key=settings.saramin_access_key)
+    try:
+        return await svc.ingest_saramin_recruit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("사람인 채용 people Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="사람인 채용정보 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/discourse/news-rss", response_model=BronzeIngestResponse)
+async def run_news_rss_discourse_bronze(
+    max_items_per_feed: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """국내 뉴스 RSS(경제·산업·IT) 헤드라인을 raw_discourse_data에 적재한다. (인증키 불필요)"""
+    try:
+        return await BronzeDiscourseIngestService(db).ingest_news_rss(
+            max_items_per_feed=max_items_per_feed
+        )
+    except Exception:
+        logger.exception("뉴스 RSS discourse Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="뉴스 RSS 수집 중 오류가 발생했습니다.") from None
+
+
+@router.post("/bronze/company/venture-list", response_model=BronzeIngestResponse)
+async def run_venture_list_company_bronze(
+    max_items: int = Query(1000, ge=1, le=10000),
+    resource: str | None = Query(None, description="odcloud uddi 리소스 경로(미입력 시 기본값)"),
+    file_version: str | None = Query(None, description="파일 배포 버전 (예: 2026-04)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """중소벤처기업부 벤처기업명단을 verified_company_master에 적재(UPSERT)."""
+    settings = get_settings()
+    svc = BronzeCompanyIngestService(
+        db, venture_list_service_key=settings.venture_list_service_key
+    )
+    try:
+        return await svc.ingest_venture_list(
+            max_items=max_items,
+            resource=resource or settings.venture_list_resource,
+            file_version=file_version,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("벤처기업명단 company Bronze ingest 실패")
+        raise HTTPException(status_code=502, detail="벤처기업명단 수집 중 오류가 발생했습니다.") from None
 
 
 @router.delete("/bronze/opportunity/by-source-type/{source_type}")

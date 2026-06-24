@@ -35,20 +35,17 @@ class InnovationRepository(BaseRepository):
         if not payload:
             return 0
 
-        stmt = (
-            pg_insert(RawInnovationData)
-            .values(payload)
-            .on_conflict_do_nothing(index_elements=["source_url"])
-            .returning(RawInnovationData.id)
+        def _build(chunk: list[dict[str, Any]]):
+            return (
+                pg_insert(RawInnovationData)
+                .values(chunk)
+                .on_conflict_do_nothing(index_elements=["source_url"])
+                .returning(RawInnovationData.id)
+            )
+
+        return await self._execute_with_retry(
+            lambda: self._commit_batched_returning(_build, payload)
         )
-
-        async def _execute() -> int:
-            result = await self.session.execute(stmt)
-            inserted = len(result.scalars().all())
-            await self.session.commit()
-            return inserted
-
-        return await self._execute_with_retry(_execute)
 
     async def latest_by_source_type(self, source_type: str) -> RawInnovationData | None:
         # published_at은 논문 발행일로 수집 배치 시점과 다를 수 있으므로 collected_at 기준 정렬

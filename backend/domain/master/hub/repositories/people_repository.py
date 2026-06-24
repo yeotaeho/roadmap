@@ -35,22 +35,19 @@ class PeopleRepository(BaseRepository):
         if not payload:
             return 0
 
-        stmt = (
-            pg_insert(RawPeopleData)
-            .values(payload)
-            .on_conflict_do_nothing(
-                index_elements=["source_type", "keyword_or_job", "reference_date"]
+        def _build(chunk: list[dict[str, Any]]):
+            return (
+                pg_insert(RawPeopleData)
+                .values(chunk)
+                .on_conflict_do_nothing(
+                    index_elements=["source_type", "keyword_or_job", "reference_date"]
+                )
+                .returning(RawPeopleData.id)
             )
-            .returning(RawPeopleData.id)
+
+        return await self._execute_with_retry(
+            lambda: self._commit_batched_returning(_build, payload)
         )
-
-        async def _execute() -> int:
-            result = await self.session.execute(stmt)
-            inserted = len(result.scalars().all())
-            await self.session.commit()
-            return inserted
-
-        return await self._execute_with_retry(_execute)
 
     async def latest_reference_date(self, source_type: str) -> date | None:
         stmt = select(func.max(RawPeopleData.reference_date)).where(
