@@ -78,6 +78,11 @@ class PulseGoldRow:
 # 그 이상은 "포화"로 간주해 클램프(희소 베이스라인이 만드는 수백만 % 노이즈 차단).
 MOMENTUM_CAP = 9999.99
 
+# 모멘텀 가산 평활(Laplace) 상수. momentum = (value-base)/(base+k)로 분모를 안정화해,
+# 작은 기준선(시장축 상대유량 등 0에 가까운 base)이 만드는 거짓 폭증(수천%)을 신뢰 범위로 수렴.
+# 정규화 0~100 스케일 기준 "최소 의미 있는 배경 활동" 크기. 클수록 모멘텀이 더 보수적이 된다.
+MOMENTUM_SMOOTHING = 10.0
+
 
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
     return int(max(lo, min(hi, round(value))))
@@ -98,7 +103,8 @@ def _badge(momentum_pct: float, score: int) -> str:
 def _normalize(value: float, window: list[float], method: str) -> tuple[int, float]:
     """창(window) 기준선 대비 정규화. (normalized_score, momentum_pct)를 반환한다."""
     base = mean(window) if window else value
-    momentum_pct = ((value - base) / base * 100.0) if base else 0.0
+    # 가산 평활: 분모에 MOMENTUM_SMOOTHING 을 더해 작은 기준선의 division 폭증을 차단.
+    momentum_pct = (value - base) / (base + MOMENTUM_SMOOTHING) * 100.0
 
     if method == "zscore":
         sd = pstdev(window) if len(window) >= 2 else 0.0
@@ -126,7 +132,7 @@ def compute_silver(
 ) -> list[PulseSilverRow]:
     """섹터별 시계열을 정규화해 Silver 행 목록을 산출한다. 결정론적·멱등이다.
 
-    min_history: 모멘텀 산출에 필요한 최소 직전 관측 수. 미만이면 중립(score 50, 보합).
+    min_history: 모멘텀 산출에 필요한 최소 직전 유효(비영) 관측 수. 미만이면 중립(score 50, 보합).
     이력이 희소한 섹터가 거짓 급등(태풍급)을 내는 것을 막는다(운영은 5, 테스트 기본 0).
     """
     by_sector: dict[str, list[SignalInput]] = {}
@@ -138,8 +144,11 @@ def compute_silver(
         ordered = sorted(items, key=lambda x: x.reference_date)
         for i, cur in enumerate(ordered):
             window = [p.raw_signal_value for p in ordered[max(0, i - window_days):i]]
-            if len(window) < min_history:
-                score, momentum_pct = 50, 0.0  # 이력 부족 → 중립
+            # 유효(비영) 관측 기준 게이트 — min-max 정규화가 흔한 최소값을 0으로 보내
+            # 0으로 도배된 희소 섹터가 거의-0 기준선으로 거짓 급등(수천%)을 내는 것을 차단.
+            nonzero = [w for w in window if w > 0]
+            if len(nonzero) < min_history:
+                score, momentum_pct = 50, 0.0  # 유효 이력 부족 → 중립
             else:
                 score, momentum_pct = _normalize(cur.raw_signal_value, window, baseline_method)
             rows.append(

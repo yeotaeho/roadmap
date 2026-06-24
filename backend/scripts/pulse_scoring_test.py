@@ -45,7 +45,8 @@ def test_zscore_jump() -> None:
     check("zscore 첫 행 score=50/보합", rows[0].normalized_score == 50 and rows[0].status_badge == "보합")
     last = rows[-1]
     check("zscore 급등 score=95", last.normalized_score == 95)
-    check("zscore 급등 momentum=100.0", last.momentum_pct == 100.0)
+    # 가산 평활(k=10): (20-10)/(10+10)*100 = 50.0 (평활 전 100.0).
+    check("zscore 급등 momentum=50.0(평활)", last.momentum_pct == 50.0)
     check("zscore 급등 badge=태풍급", last.status_badge == "태풍급")
 
 
@@ -68,6 +69,36 @@ def test_flat() -> None:
     rows = compute_silver(_series("fintech", [5, 5, 5, 5]), baseline_method="zscore")
     check("평탄 전부 score=50", all(r.normalized_score == 50 for r in rows))
     check("평탄 전부 badge=보합", all(r.status_badge == "보합" for r in rows))
+
+
+# ---------------------------------------------------------------------------
+# 희소-0 게이트 — 0으로 도배된 희소 시계열의 거짓 급등 차단(비영 관측 기준)
+# ---------------------------------------------------------------------------
+def test_sparse_zero_gate() -> None:
+    # mobility 실데이터 형태: 19일 0 + 비영 2점. min-max 정규화가 흔한 최소값을 0으로
+    # 보내 윈도우가 0으로 도배 → 구 게이트(관측 개수)는 momentum 폭증. 신 게이트(비영 개수)는 중립.
+    vals = [0.0] * 19 + [40.0, 66.667]
+    last = compute_silver(_series("mobility", vals), baseline_method="zscore", min_history=5)[-1]
+    check("희소0 윈도우 최신 score=50", last.normalized_score == 50)
+    check("희소0 윈도우 최신 momentum=0", last.momentum_pct == 0.0)
+    check("희소0 윈도우 최신 badge=보합", last.status_badge == "보합")
+    # 대조: 충분한 비영 이력이면 정상 모멘텀 산출(중립 아님).
+    dense = compute_silver(
+        _series("ai-data", [10, 11, 9, 10, 12, 11, 20]), baseline_method="zscore", min_history=5
+    )[-1]
+    check("조밀 비영 이력 = 모멘텀 산출(중립 아님)", dense.normalized_score != 50)
+
+
+# ---------------------------------------------------------------------------
+# 가산 평활 — 작은 비영 기준선의 모멘텀 폭증을 신뢰 범위로 수렴(시장축 형태)
+# ---------------------------------------------------------------------------
+def test_momentum_smoothing() -> None:
+    # 작은 비영값(1.0)으로 도배 + 스파이크(60). 게이트는 통과(비영 6개)하나 base가 작아
+    # 평활 전이면 수천%(CAP). 가산 평활로 신뢰 범위(<1000%)로 수렴, 실 급등 방향은 유지.
+    vals = [1.0] * 6 + [60.0]
+    last = compute_silver(_series("food-agri", vals), baseline_method="zscore", min_history=5)[-1]
+    check("가산 평활: 모멘텀 < 1000%(폭증 차단)", last.momentum_pct < 1000.0)
+    check("가산 평활: 실 급등 방향 유지(양의 모멘텀)", last.momentum_pct > 50.0)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +145,7 @@ def test_project_gold() -> None:
     check("Gold 길이 = Silver 길이", len(gold) == len(silver))
     check("Gold recorded_date=Silver reference_date", gold[-1].recorded_date == date(2026, 6, 5))
     check("Gold score=Silver normalized_score", gold[-1].score == silver[-1].normalized_score)
-    check("Gold momentum 보존", gold[-1].momentum_pct == 100.0)
+    check("Gold momentum 보존(평활 50.0)", gold[-1].momentum_pct == 50.0)
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +173,8 @@ def main() -> int:
     test_zscore_jump()
     test_other_methods()
     test_flat()
+    test_sparse_zero_gate()
+    test_momentum_smoothing()
     test_idempotent()
     test_multi_sector()
     test_badge_tiers()
