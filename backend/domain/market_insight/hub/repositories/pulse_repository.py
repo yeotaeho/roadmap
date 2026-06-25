@@ -243,6 +243,55 @@ _LATEST_GOLD_SQL = text(
     """
 )
 
+# overview 월 버킷 평균 score 시계열.
+_OVERVIEW_MONTHLY_SQL = text(
+    """
+    SELECT to_char(recorded_date, 'YYYY-MM') AS bucket, round(avg(score)) AS value
+    FROM pulse_metrics_log
+    WHERE recorded_date >= (CURRENT_DATE - make_interval(months => :months))
+    GROUP BY 1
+    ORDER BY 1
+    """
+)
+
+# overview 섹터×ISO주 마지막 score(주별 최신 1행).
+_OVERVIEW_WEEKLY_SQL = text(
+    """
+    SELECT DISTINCT ON (sector_slug, date_trunc('week', recorded_date))
+        sector_slug,
+        to_char(date_trunc('week', recorded_date), 'IYYY-"W"IW') AS bucket,
+        score
+    FROM pulse_metrics_log
+    WHERE recorded_date >= (CURRENT_DATE - make_interval(weeks => :weeks))
+    ORDER BY sector_slug, date_trunc('week', recorded_date), recorded_date DESC
+    """
+)
+
+# overview 전 섹터 일평균 score 최근 2일(전일 대비 변동용).
+_OVERVIEW_DAILY_AVG_SQL = text(
+    """
+    SELECT recorded_date, avg(score) AS avg_score
+    FROM pulse_metrics_log
+    GROUP BY recorded_date
+    ORDER BY recorded_date DESC
+    LIMIT 2
+    """
+)
+
+# 단일 섹터 시계열(드릴다운).
+_HISTORY_SQL = text(
+    """
+    SELECT recorded_date, score, status_badge, momentum_pct
+    FROM pulse_metrics_log
+    WHERE sector_slug = :slug
+      AND recorded_date >= (CURRENT_DATE - make_interval(weeks => :weeks))
+    ORDER BY recorded_date ASC
+    """
+)
+
+# 섹터 메타(이름) 조회 — history 404 판별.
+_SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
+
 
 def _normalize_axes(signals: list[AxisSignal]) -> list[AxisSignal]:
     """축별로 값을 0~100 양수 band로 min-max 정규화(이종 단위 통약).
@@ -399,3 +448,51 @@ class PulseRepository(BaseRepository):
         ]
         result.sort(key=lambda x: x["score"], reverse=True)
         return result
+
+    async def fetch_overview(self, heatmap_weeks: int = 8, momentum_months: int = 12) -> dict:
+        """대시보드 overview 집계 — 최신/월/주/일평균 raw SQL → 순수 조립."""
+        from domain.market_insight.hub.services.pulse_overview import assemble_overview
+
+        latest_rows = (await self.session.execute(_LATEST_GOLD_SQL)).all()
+        latest = [
+            {
+                "sector_slug": r.sector_slug,
+                "sector_name": r.name_ko,
+                "accent_color": r.accent_color,
+                "score": r.score,
+                "momentum_pct": float(r.momentum_pct) if r.momentum_pct is not None else None,
+            }
+            for r in latest_rows
+        ]
+        monthly = [
+            {"bucket": r.bucket, "value": int(r.value)}
+            for r in (await self.session.execute(_OVERVIEW_MONTHLY_SQL, {"months": momentum_months})).all()
+        ]
+        weekly = [
+            {"sector_slug": r.sector_slug, "bucket": r.bucket, "score": r.score}
+            for r in (await self.session.execute(_OVERVIEW_WEEKLY_SQL, {"weeks": heatmap_weeks})).all()
+        ]
+        daily_avgs = [
+            {"recorded_date": r.recorded_date.isoformat(), "avg_score": float(r.avg_score)}
+            for r in (await self.session.execute(_OVERVIEW_DAILY_AVG_SQL)).all()
+        ]
+        return assemble_overview(latest, monthly, weekly, daily_avgs)
+
+    async def fetch_history(self, sector_slug: str, weeks: int = 26) -> dict | None:
+        """단일 섹터 Pulse 시계열(날짜 오름차순). 섹터 미존재 시 None."""
+        name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
+        if name_row is None:
+            return None
+        rows = (
+            await self.session.execute(_HISTORY_SQL, {"slug": sector_slug, "weeks": weeks})
+        ).all()
+        points = [
+            {
+                "recorded_date": r.recorded_date.isoformat(),
+                "score": r.score,
+                "status_badge": r.status_badge,
+                "momentum_pct": float(r.momentum_pct) if r.momentum_pct is not None else None,
+            }
+            for r in rows
+        ]
+        return {"sector_slug": sector_slug, "sector_name": name_row.name_ko, "points": points}
