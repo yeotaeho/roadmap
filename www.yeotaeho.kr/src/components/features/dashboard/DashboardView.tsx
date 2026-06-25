@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { CHANCE_OPPORTUNITIES } from "@/data/chanceOpportunities";
 import { GAP_ISSUES } from "@/data/gapIssues";
+import { useStore } from "@/store";
+import { useGapIssues, useOpportunities, useSyncScores } from "@/hooks/useDashboard";
+import { ddayLabel } from "@/lib/api/dashboard";
 import { PulseTab } from "./PulseTab";
 
 const SUB_TABS = [
@@ -106,7 +109,7 @@ export function DashboardView() {
       </div>
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-400">
-        백엔드 연동 전입니다. 수치·카드는 Mock입니다.
+        실데이터가 준비된 항목은 백엔드 라이브로, 준비 전 항목은 Mock으로 표시됩니다.
       </p>
     </div>
   );
@@ -135,12 +138,17 @@ function OpportunityRadar() {
 }
 
 function GapPanel() {
+  const { data: live } = useGapIssues();
+  const items =
+    live && live.length
+      ? live.map((i) => ({ id: String(i.id), problem: i.problem_summary, chance: i.chance_summary }))
+      : GAP_ISSUES.map((c) => ({ id: c.id as string, problem: c.problem, chance: c.chance }));
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">블루오션 (세상의 결핍)</h2>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3">
-          {GAP_ISSUES.map((card) => (
+          {items.map((card) => (
             <article key={card.id} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
               <div className="grid sm:grid-cols-2">
                 <div className="bg-slate-900 text-white p-4">
@@ -202,9 +210,20 @@ function SyncRadar() {
   );
 }
 
+type SyncRow = {
+  trend: string;
+  score: number;
+  badge?: string;
+  delta?: string;
+  tags?: readonly string[];
+  note?: string;
+};
+
 function SyncPanel() {
+  const profile = useStore((s) => s.profile);
+  const { data: liveScores } = useSyncScores(profile?.id);
   const growth = ["Python", "FastAPI", "LangGraph", "RAG", "AI 아키텍처"];
-  const trendSync = [
+  const mockRows: readonly SyncRow[] = [
     {
       trend: "지능형 기술 (AI & Data)",
       score: 86,
@@ -226,7 +245,11 @@ function SyncPanel() {
       tags: ["보안", "결제"],
       note: "트렌드는 강하지만 내 스택과의 교차점이 적습니다.",
     },
-  ] as const;
+  ];
+  const trendSync: readonly SyncRow[] =
+    liveScores && liveScores.length
+      ? liveScores.map((s) => ({ trend: s.sector_name, score: s.score, badge: s.badge ?? undefined }))
+      : mockRows;
 
   return (
     <div className="space-y-4">
@@ -281,13 +304,20 @@ function SyncPanel() {
                 <p className="text-sm font-medium text-slate-800 leading-snug dark:text-slate-100">{row.trend}</p>
                 <div className="shrink-0 text-right">
                   <p className="text-lg font-bold text-indigo-700">{row.score}</p>
-                  <p
-                    className={`text-[11px] font-semibold ${
-                      row.delta.startsWith("-") ? "text-rose-600" : "text-emerald-600"
-                    }`}
-                  >
-                    {row.delta}pt
-                  </p>
+                  {row.delta && (
+                    <p
+                      className={`text-[11px] font-semibold ${
+                        row.delta.startsWith("-") ? "text-rose-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {row.delta}pt
+                    </p>
+                  )}
+                  {row.badge && (
+                    <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-300">
+                      {row.badge}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden dark:bg-slate-700">
@@ -296,22 +326,26 @@ function SyncPanel() {
                   style={{ width: `${row.score}%` }}
                 />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-y-2 gap-x-1">
-                {row.tags.map((tag, idx) => (
-                  <React.Fragment key={`${row.trend}-${tag}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center dark:bg-indigo-900/40 dark:text-indigo-300">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{tag}</span>
-                    </div>
-                    {idx < row.tags.length - 1 && (
-                      <MoveRight className="w-4 h-4 text-slate-300 dark:text-slate-600" aria-hidden />
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{row.note}</p>
+              {row.tags && row.tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-y-2 gap-x-1">
+                  {row.tags.map((tag, idx) => (
+                    <React.Fragment key={`${row.trend}-${tag}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center dark:bg-indigo-900/40 dark:text-indigo-300">
+                          {idx + 1}
+                        </span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{tag}</span>
+                      </div>
+                      {idx < (row.tags?.length ?? 0) - 1 && (
+                        <MoveRight className="w-4 h-4 text-slate-300 dark:text-slate-600" aria-hidden />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+              {row.note && (
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{row.note}</p>
+              )}
             </li>
           ))}
         </ul>
@@ -321,11 +355,30 @@ function SyncPanel() {
 }
 
 function ChancePanel() {
+  const { data: live } = useOpportunities();
+  const items =
+    live && live.length
+      ? live.map((o) => ({
+          id: String(o.id),
+          title: o.title,
+          type: o.opportunity_type ?? "공고",
+          dday: ddayLabel(o.d_day_date),
+          match: null as number | null,
+          host: o.host_name ?? null,
+        }))
+      : CHANCE_OPPORTUNITIES.map((o) => ({
+          id: o.id as string,
+          title: o.title,
+          type: o.type,
+          dday: o.dday,
+          match: o.match as number | null,
+          host: null as string | null,
+        }));
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">다이렉트 찬스</h2>
       <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-        {CHANCE_OPPORTUNITIES.map((item, idx) => (
+        {items.map((item, idx) => (
           <article
             key={item.id}
             className={`min-w-[280px] max-w-[320px] rounded-2xl border bg-white p-4 shadow-sm dark:bg-slate-800 ${
@@ -338,10 +391,16 @@ function ChancePanel() {
               <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full dark:bg-indigo-900/30 dark:text-indigo-300">
                 {item.type}
               </span>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full inline-flex items-center gap-1 dark:bg-emerald-900/30 dark:text-emerald-300">
-                <BadgeCheck className="w-3.5 h-3.5" />
-                일치율 {item.match}%
-              </span>
+              {item.match != null ? (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full inline-flex items-center gap-1 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <BadgeCheck className="w-3.5 h-3.5" />
+                  일치율 {item.match}%
+                </span>
+              ) : item.host ? (
+                <span className="text-xs font-medium text-slate-500 truncate max-w-[140px] dark:text-slate-400">
+                  {item.host}
+                </span>
+              ) : null}
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
             <p className="mt-2 text-xs text-violet-700 font-bold dark:text-violet-300">{item.dday}</p>
