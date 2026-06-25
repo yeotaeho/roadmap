@@ -91,6 +91,20 @@ async def get_pulse_history(
         raise HTTPException(status_code=500, detail=f"Pulse history 조회 실패: {str(e)}")
 
 
+@router.get("/pulse/crossover")
+async def get_pulse_crossover(
+    months: int = Query(default=12, ge=1, le=36, description="시계열 월 수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """세대교체 — 전통 vs 신흥 섹터 월 score 시계열·교차점."""
+    try:
+        data = await PulseRepository(db).fetch_crossover(months)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"크로스오버 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"크로스오버 조회 실패: {str(e)}")
+
+
 @router.get("/keywords")
 async def get_trending_keywords(
     window_days: int = Query(default=30, ge=1, le=365, description="집계 윈도우(일)"),

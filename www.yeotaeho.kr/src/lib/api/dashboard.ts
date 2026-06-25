@@ -197,6 +197,27 @@ export async function fetchBriefing(): Promise<Briefing> {
   return { published_date: data.published_date ?? null, briefings: data.briefings ?? [] };
 }
 
+export interface CrossoverPoint {
+  bucket: string;
+  legacy_value: number | null;
+  emerging_value: number | null;
+  is_crossover: boolean;
+}
+export interface Crossover {
+  legacy_label: string;
+  emerging_label: string;
+  series: CrossoverPoint[];
+}
+
+export async function fetchCrossover(): Promise<Crossover> {
+  const { data } = await apiClient.get('/api/insight/pulse/crossover');
+  return {
+    legacy_label: data.legacy_label ?? '전통 산업',
+    emerging_label: data.emerging_label ?? '신흥 산업',
+    series: data.series ?? [],
+  };
+}
+
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
 export function ddayLabel(dDayDate: string | null): string {
   if (!dDayDate) return '상시';

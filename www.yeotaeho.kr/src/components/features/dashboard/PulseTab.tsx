@@ -4,8 +4,14 @@
  * 실시간 펄스(Pulse) 탭 — 섹터 카드 + 속도계·모멘텀·히트맵·점유율(Pulse Gold 즉석 집계).
  */
 
-import { useBriefing, usePulse, usePulseOverview, useTrendingKeywords } from "@/hooks/useDashboard";
-import type { PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
+import {
+  useBriefing,
+  useCrossover,
+  usePulse,
+  usePulseOverview,
+  useTrendingKeywords,
+} from "@/hooks/useDashboard";
+import type { Crossover, PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
 
 function heatTone(score: number | null): string {
@@ -44,6 +50,34 @@ function MomentumChart({ points }: { points: PulseMomentumPoint[] }) {
       {points.map((p, i) => (
         <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.value)} r="2.5" fill="#6366f1" />
       ))}
+    </svg>
+  );
+}
+
+function CrossoverChart({ data }: { data: Crossover }) {
+  const pts = data.series.filter((s) => s.legacy_value !== null && s.emerging_value !== null);
+  if (pts.length < 2) {
+    return <p className="text-sm text-slate-400">크로스오버 데이터가 아직 부족합니다.</p>;
+  }
+  const w = 560;
+  const h = 180;
+  const all = pts.flatMap((p) => [p.legacy_value as number, p.emerging_value as number]);
+  const max = Math.max(...all, 1);
+  const min = Math.min(...all, 0);
+  const span = max - min || 1;
+  const xAt = (i: number) => (i / (pts.length - 1)) * w;
+  const yAt = (v: number) => h - ((v - min) / span) * h;
+  const path = (key: "legacy_value" | "emerging_value") =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p[key] as number)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-44" role="img" aria-label="세대교체 크로스오버 차트">
+      <path d={path("legacy_value")} fill="none" stroke="#94a3b8" strokeWidth="2" />
+      <path d={path("emerging_value")} fill="none" stroke="#6366f1" strokeWidth="2" />
+      {pts.map((p, i) =>
+        p.is_crossover ? (
+          <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.emerging_value as number)} r="5" fill="#8b5cf6" />
+        ) : null,
+      )}
     </svg>
   );
 }
@@ -102,6 +136,7 @@ export function PulseTab() {
   const { data: overview, isLoading: ovLoading, isError: ovError } = usePulseOverview();
   const { data: keywords, isLoading: kwLoading, isError: kwError } = useTrendingKeywords();
   const { data: briefing, isLoading: brLoading, isError: brError } = useBriefing();
+  const { data: crossover, isLoading: coLoading, isError: coError } = useCrossover();
 
   const sectorCards = (livePulse ?? []).map((s) => ({
     slug: s.sector_slug,
@@ -283,6 +318,33 @@ export function PulseTab() {
           label="히트맵"
         >
           <Heatmap buckets={overview?.heatmap.buckets ?? []} rows={overview?.heatmap.rows ?? []} />
+        </PanelStatus>
+      </section>
+
+      {/* 3.5 세대교체 · 크로스오버 */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">세대교체 · 크로스오버</h2>
+          <div className="flex gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-slate-400" />
+              {crossover?.legacy_label ?? "전통"}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-indigo-500" />
+              {crossover?.emerging_label ?? "신흥"}
+            </span>
+          </div>
+        </div>
+        <PanelStatus
+          isLoading={coLoading}
+          isError={coError}
+          isEmpty={(crossover?.series.length ?? 0) === 0}
+          label="크로스오버"
+        >
+          <CrossoverChart
+            data={crossover ?? { legacy_label: "전통", emerging_label: "신흥", series: [] }}
+          />
         </PanelStatus>
       </section>
 

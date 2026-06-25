@@ -9,6 +9,7 @@ import {
   fetchOpportunities,
   fetchOpportunityDetail,
   fetchBriefing,
+  fetchCrossover,
   fetchPulse,
   fetchPulseHistory,
   fetchPulseOverview,
@@ -97,6 +98,15 @@ export function useBriefing() {
   return useQuery({
     queryKey: ['briefing'],
     queryFn: fetchBriefing,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useCrossover() {
+  return useQuery({
+    queryKey: ['crossover'],
+    queryFn: fetchCrossover,
     staleTime: STALE,
     retry: 1,
   });

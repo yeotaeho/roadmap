@@ -292,6 +292,20 @@ _HISTORY_SQL = text(
 # 섹터 메타(이름) 조회 — history 404 판별.
 _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 
+# 크로스오버 — 전통/신흥 그룹별 월 평균 score 시계열(string_to_array로 asyncpg-safe).
+_CROSSOVER_SQL = text(
+    """
+    SELECT to_char(recorded_date, 'YYYY-MM') AS bucket,
+           round(avg(score) FILTER (WHERE sector_slug = ANY(string_to_array(:legacy_csv, ',')))) AS legacy_value,
+           round(avg(score) FILTER (WHERE sector_slug = ANY(string_to_array(:emerging_csv, ',')))) AS emerging_value
+    FROM pulse_metrics_log
+    WHERE recorded_date >= (CURRENT_DATE - make_interval(months => :months))
+      AND sector_slug = ANY(string_to_array(:legacy_csv || ',' || :emerging_csv, ','))
+    GROUP BY 1
+    ORDER BY 1
+    """
+)
+
 
 def _normalize_axes(signals: list[AxisSignal]) -> list[AxisSignal]:
     """축별로 값을 0~100 양수 band로 min-max 정규화(이종 단위 통약).
@@ -499,3 +513,33 @@ class PulseRepository(BaseRepository):
             for r in rows
         ]
         return {"sector_slug": sector_slug, "sector_name": name_row.name_ko, "points": points}
+
+    async def fetch_crossover(self, months: int = 12) -> dict:
+        """전통 vs 신흥 섹터 월 평균 score 시계열·교차점 즉석 집계."""
+        from domain.market_insight.hub.services.crossover_metrics import (
+            EMERGING_LABEL,
+            EMERGING_SECTORS,
+            LEGACY_LABEL,
+            LEGACY_SECTORS,
+            assemble_crossover,
+        )
+
+        rows = (
+            await self.session.execute(
+                _CROSSOVER_SQL,
+                {
+                    "legacy_csv": ",".join(LEGACY_SECTORS),
+                    "emerging_csv": ",".join(EMERGING_SECTORS),
+                    "months": months,
+                },
+            )
+        ).all()
+        data = [
+            {
+                "bucket": r.bucket,
+                "legacy_value": int(r.legacy_value) if r.legacy_value is not None else None,
+                "emerging_value": int(r.emerging_value) if r.emerging_value is not None else None,
+            }
+            for r in rows
+        ]
+        return assemble_crossover(data, LEGACY_LABEL, EMERGING_LABEL)
