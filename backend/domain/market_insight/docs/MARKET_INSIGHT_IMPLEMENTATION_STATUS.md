@@ -54,8 +54,8 @@ Bronze(master 수집) raw_*
 ## 5. 추후 구현 (우선순위 순)
 
 ### A. Pulse 부가 서빙 (싼 것부터)
-- **모멘텀 시계열 차트 엔드포인트** 🟡 — `pulse_metrics_log`에 **이미 섹터별 전 날짜 시계열이 적재돼 있다**(`project_to_gold`가 모든 (섹터×일자) 행 적재). `/api/insight/pulse`만 `DISTINCT ON … 최신 1행` 서빙 중. → `GET /api/insight/pulse/{sector}/history` 추가만 하면 프론트 모멘텀 차트 복원 가능. **데이터 없음 아님, 서빙만 없음.**
-- **부가 Gold 수직**(전부 ERD 설계만, 미구현): `trending_keywords`(키워드 티커/클라우드), `economic_briefings`(3줄 브리핑), `causal_chains`(인과사슬), `crossover_metrics`(세대교체). 프론트에서 제거된 mock 섹션들이 여기 대응.
+- **모멘텀 시계열·결정론 부가 서빙** ✅ — 구현·머지됨(커밋 `bbfb651`~`6d88ba3`, main). `GET /api/insight/pulse/overview`(속도계/주간지수·연간 모멘텀 시계열·섹터×시간 히트맵·관심 점유율)와 `GET /api/insight/pulse/{sector}/history` 추가, 프론트 `PulseTab`에 4개 섹션 라이브 복원. 순수함수 `domain/market_insight/hub/services/pulse_overview.py` + `PulseRepository.fetch_overview`/`fetch_history` + `scripts/pulse_overview_test.py`(20 checks). 히트맵 2번째 축은 **섹터×시간**으로 구현(섹터×축 히트맵은 별도 미구현으로 남김). 설계/계획: [pulse-deterministic-serving-design](../../../../docs/superpowers/specs/2026-06-25-pulse-deterministic-serving-design.md), [pulse-deterministic-serving plan](../../../../docs/superpowers/plans/2026-06-25-pulse-deterministic-serving.md).
+- **부가 Gold 수직** 🟡 — 여전히 미구현, 다음 우선순위. `trending_keywords`(키워드 티커/클라우드 — `refined_innovation_signal.extracted_keywords` 활용), `economic_briefings`(3줄 브리핑, LLM), `causal_chains`(인과사슬, LLM), `crossover_metrics`(크로스오버 — "기존 vs 신흥" 데이터 정의 선결 필요). 프론트에서 제거된 mock 섹션들이 여기 대응.
 
 ### B. 엔티티 신호 활용
 - `refined_innovation_signal`은 적재되나 **아무도 소비하지 않음**. Pulse 축 보강(토픽 가중) 또는 별도 "급상승 토픽" 서빙으로 연결 가능. `refined_signal_sources` N:M 리니지 활용처도 미정.
