@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   Activity,
-  BadgeCheck,
   Compass,
   Link2,
   MoveRight,
@@ -13,11 +12,10 @@ import {
   TrendingUp,
   Workflow,
 } from "lucide-react";
-import { CHANCE_OPPORTUNITIES } from "@/data/chanceOpportunities";
-import { GAP_ISSUES } from "@/data/gapIssues";
 import { useStore } from "@/store";
 import { useGapIssues, useOpportunities, useSyncScores } from "@/hooks/useDashboard";
 import { ddayLabel } from "@/lib/api/dashboard";
+import { PanelStatus } from "./PanelStatus";
 import { PulseTab } from "./PulseTab";
 
 const SUB_TABS = [
@@ -109,7 +107,7 @@ export function DashboardView() {
       </div>
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-400">
-        실데이터가 준비된 항목은 백엔드 라이브로, 준비 전 항목은 Mock으로 표시됩니다.
+        모든 데이터는 백엔드 실시간 연동입니다. 실데이터가 없거나 실패하면 에러로 표시됩니다.
       </p>
     </div>
   );
@@ -138,39 +136,38 @@ function OpportunityRadar() {
 }
 
 function GapPanel() {
-  const { data: live } = useGapIssues();
-  const items =
-    live && live.length
-      ? live.map((i) => ({ id: String(i.id), problem: i.problem_summary, chance: i.chance_summary }))
-      : GAP_ISSUES.map((c) => ({ id: c.id as string, problem: c.problem, chance: c.chance }));
+  const { data, isLoading, isError } = useGapIssues();
+  const items = data ?? [];
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">블루오션 (세상의 결핍)</h2>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3">
-          {items.map((card) => (
-            <article key={card.id} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
-              <div className="grid sm:grid-cols-2">
-                <div className="bg-slate-900 text-white p-4">
-                  <p className="text-xs text-slate-300">세상의 문제</p>
-                  <p className="mt-2 text-sm font-medium">{card.problem}</p>
+        <PanelStatus isLoading={isLoading} isError={isError} isEmpty={items.length === 0} label="블루오션">
+          <div className="space-y-3">
+            {items.map((card) => (
+              <article key={card.id} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                <div className="grid sm:grid-cols-2">
+                  <div className="bg-slate-900 text-white p-4">
+                    <p className="text-xs text-slate-300">세상의 문제</p>
+                    <p className="mt-2 text-sm font-medium">{card.problem_summary}</p>
+                  </div>
+                  <div className="bg-emerald-50 p-4 border-t sm:border-t-0 sm:border-l border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-900/40">
+                    <p className="text-xs text-emerald-700">청년의 기회</p>
+                    <p className="mt-2 text-sm font-semibold text-emerald-900">{card.chance_summary}</p>
+                  </div>
                 </div>
-                <div className="bg-emerald-50 p-4 border-t sm:border-t-0 sm:border-l border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-900/40">
-                  <p className="text-xs text-emerald-700">청년의 기회</p>
-                  <p className="mt-2 text-sm font-semibold text-emerald-900">{card.chance}</p>
+                <div className="px-4 py-3 bg-white border-t border-slate-100 dark:bg-slate-900 dark:border-slate-700">
+                  <Link
+                    href={`/dashboard/gap/issues/${card.id}`}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                  >
+                    이 분야 파고들기 <MoveRight className="w-4 h-4" />
+                  </Link>
                 </div>
-              </div>
-              <div className="px-4 py-3 bg-white border-t border-slate-100 dark:bg-slate-900 dark:border-slate-700">
-                <Link
-                  href={`/dashboard/gap/issues/${card.id}`}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
-                >
-                  이 분야 파고들기 <MoveRight className="w-4 h-4" />
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+              </article>
+            ))}
+          </div>
+        </PanelStatus>
         <OpportunityRadar />
       </div>
     </div>
@@ -210,46 +207,18 @@ function SyncRadar() {
   );
 }
 
-type SyncRow = {
-  trend: string;
-  score: number;
-  badge?: string;
-  delta?: string;
-  tags?: readonly string[];
-  note?: string;
-};
+type SyncRow = { trend: string; score: number; badge?: string };
 
 function SyncPanel() {
   const profile = useStore((s) => s.profile);
-  const { data: liveScores } = useSyncScores(profile?.id);
+  const { data, isLoading, isError } = useSyncScores(profile?.id);
   const growth = ["Python", "FastAPI", "LangGraph", "RAG", "AI 아키텍처"];
-  const mockRows: readonly SyncRow[] = [
-    {
-      trend: "지능형 기술 (AI & Data)",
-      score: 86,
-      delta: "+4",
-      tags: ["LangGraph", "RAG", "FastAPI"],
-      note: "관심 키워드와 시장 요구가 가장 잘 맞습니다.",
-    },
-    {
-      trend: "지속 가능성 (Sustainability & ESG)",
-      score: 62,
-      delta: "+1",
-      tags: ["ESG", "데이터 거버넌스"],
-      note: "관심은 있으나 역량 신호는 아직 분산되어 있습니다.",
-    },
-    {
-      trend: "미래 금융 (Future Finance)",
-      score: 54,
-      delta: "-2",
-      tags: ["보안", "결제"],
-      note: "트렌드는 강하지만 내 스택과의 교차점이 적습니다.",
-    },
-  ];
-  const trendSync: readonly SyncRow[] =
-    liveScores && liveScores.length
-      ? liveScores.map((s) => ({ trend: s.sector_name, score: s.score, badge: s.badge ?? undefined }))
-      : mockRows;
+  const needsLogin = !profile?.id;
+  const trendSync: SyncRow[] = (data ?? []).map((s) => ({
+    trend: s.sector_name,
+    score: s.score,
+    badge: s.badge ?? undefined,
+  }));
 
   return (
     <div className="space-y-4">
@@ -289,138 +258,102 @@ function SyncPanel() {
             <TrendingUp className="w-4 h-4 text-indigo-600" aria-hidden />
             트렌드 대비 싱크로율
           </h3>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Mock · 전주 대비</span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">실시간 연동</span>
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           선택한 관심 키워드와 도메인별 시장 신호를 비교해 일치 정도를 보여줍니다.
         </p>
-        <ul className="mt-4 space-y-3">
-          {trendSync.map((row) => (
-            <li
-              key={row.trend}
-              className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/50"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium text-slate-800 leading-snug dark:text-slate-100">{row.trend}</p>
-                <div className="shrink-0 text-right">
-                  <p className="text-lg font-bold text-indigo-700">{row.score}</p>
-                  {row.delta && (
-                    <p
-                      className={`text-[11px] font-semibold ${
-                        row.delta.startsWith("-") ? "text-rose-600" : "text-emerald-600"
-                      }`}
-                    >
-                      {row.delta}pt
-                    </p>
-                  )}
-                  {row.badge && (
-                    <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-300">
-                      {row.badge}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden dark:bg-slate-700">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400"
-                  style={{ width: `${row.score}%` }}
-                />
-              </div>
-              {row.tags && row.tags.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-y-2 gap-x-1">
-                  {row.tags.map((tag, idx) => (
-                    <React.Fragment key={`${row.trend}-${tag}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center dark:bg-indigo-900/40 dark:text-indigo-300">
-                          {idx + 1}
-                        </span>
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{tag}</span>
-                      </div>
-                      {idx < (row.tags?.length ?? 0) - 1 && (
-                        <MoveRight className="w-4 h-4 text-slate-300 dark:text-slate-600" aria-hidden />
+        {needsLogin ? (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+            로그인하면 나의 관심·직무 기준 섹터 싱크로율을 볼 수 있습니다.
+          </div>
+        ) : (
+          <PanelStatus
+            isLoading={isLoading}
+            isError={isError}
+            isEmpty={trendSync.length === 0}
+            label="싱크로율"
+          >
+            <ul className="mt-4 space-y-3">
+              {trendSync.map((row) => (
+                <li
+                  key={row.trend}
+                  className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/50"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-800 leading-snug dark:text-slate-100">{row.trend}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold text-indigo-700">{row.score}</p>
+                      {row.badge && (
+                        <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-300">
+                          {row.badge}
+                        </p>
                       )}
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-              {row.note && (
-                <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{row.note}</p>
-              )}
-            </li>
-          ))}
-        </ul>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden dark:bg-slate-700">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400"
+                      style={{ width: `${row.score}%` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </PanelStatus>
+        )}
       </section>
     </div>
   );
 }
 
 function ChancePanel() {
-  const { data: live } = useOpportunities();
-  const items =
-    live && live.length
-      ? live.map((o) => ({
-          id: String(o.id),
-          title: o.title,
-          type: o.opportunity_type ?? "공고",
-          dday: ddayLabel(o.d_day_date),
-          match: null as number | null,
-          host: o.host_name ?? null,
-        }))
-      : CHANCE_OPPORTUNITIES.map((o) => ({
-          id: o.id as string,
-          title: o.title,
-          type: o.type,
-          dday: o.dday,
-          match: o.match as number | null,
-          host: null as string | null,
-        }));
+  const { data, isLoading, isError } = useOpportunities();
+  const items = data ?? [];
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">다이렉트 찬스</h2>
-      <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-        {items.map((item, idx) => (
-          <article
-            key={item.id}
-            className={`min-w-[280px] max-w-[320px] rounded-2xl border bg-white p-4 shadow-sm dark:bg-slate-800 ${
-              idx === 0
-                ? "border-violet-200 shadow-[0_0_0_2px_rgba(139,92,246,0.15)] dark:border-violet-900/50"
-                : "border-slate-200 dark:border-slate-700"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full dark:bg-indigo-900/30 dark:text-indigo-300">
-                {item.type}
-              </span>
-              {item.match != null ? (
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full inline-flex items-center gap-1 dark:bg-emerald-900/30 dark:text-emerald-300">
-                  <BadgeCheck className="w-3.5 h-3.5" />
-                  일치율 {item.match}%
+      <PanelStatus isLoading={isLoading} isError={isError} isEmpty={items.length === 0} label="다이렉트 찬스">
+        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+          {items.map((item, idx) => (
+            <article
+              key={item.id}
+              className={`min-w-[280px] max-w-[320px] rounded-2xl border bg-white p-4 shadow-sm dark:bg-slate-800 ${
+                idx === 0
+                  ? "border-violet-200 shadow-[0_0_0_2px_rgba(139,92,246,0.15)] dark:border-violet-900/50"
+                  : "border-slate-200 dark:border-slate-700"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full dark:bg-indigo-900/30 dark:text-indigo-300">
+                  {item.opportunity_type ?? "공고"}
                 </span>
-              ) : item.host ? (
-                <span className="text-xs font-medium text-slate-500 truncate max-w-[140px] dark:text-slate-400">
-                  {item.host}
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
-            <p className="mt-2 text-xs text-violet-700 font-bold dark:text-violet-300">{item.dday}</p>
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                type="button"
-                className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full dark:bg-slate-700 dark:text-slate-300"
-              >
-                저장
-              </button>
-              <Link
-                href={`/dashboard/chance/opportunities/${item.id}`}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1 dark:text-indigo-300 dark:hover:text-indigo-200"
-              >
-                자세히 보기 <MoveRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </article>
-        ))}
-      </div>
+                {item.host_name && (
+                  <span className="text-xs font-medium text-slate-500 truncate max-w-[140px] dark:text-slate-400">
+                    {item.host_name}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
+              <p className="mt-2 text-xs text-violet-700 font-bold dark:text-violet-300">{ddayLabel(item.d_day_date)}</p>
+              <div className="mt-4 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full dark:bg-slate-700 dark:text-slate-300"
+                >
+                  저장
+                </button>
+                <Link
+                  href={`/dashboard/chance/opportunities/${item.id}`}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1 dark:text-indigo-300 dark:hover:text-indigo-200"
+                >
+                  자세히 보기 <MoveRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </PanelStatus>
       <Link
         href="/coach"
         className="inline-flex text-sm font-medium text-indigo-600 hover:text-indigo-700 items-center gap-1 dark:text-indigo-300 dark:hover:text-indigo-200"

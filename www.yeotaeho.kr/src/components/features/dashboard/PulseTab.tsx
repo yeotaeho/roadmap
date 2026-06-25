@@ -17,8 +17,8 @@ import {
   CircleCheck,
   TrendingUp,
 } from "lucide-react";
-import { PULSE_SECTORS } from "@/data/pulseSectors";
 import { usePulse } from "@/hooks/useDashboard";
+import { PanelStatus } from "./PanelStatus";
 
 const MONTHLY_MOMENTUM = [58, 62, 66, 71, 74, 79, 76, 83, 87, 85, 90, 92];
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -200,27 +200,15 @@ function CrossoverLineChart() {
 }
 
 export function PulseTab() {
-  const { data: livePulse } = usePulse();
-  const sectorCards =
-    livePulse && livePulse.length
-      ? livePulse.slice(0, 6).map((s) => ({
-          slug: s.sector_slug,
-          title: s.sector_name,
-          status: s.status_badge,
-          score: s.score,
-          color: null as string | null,
-          accent: s.accent_color as string | null,
-          badgeInfo: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300",
-        }))
-      : PULSE_SECTORS.map((s) => ({
-          slug: s.slug as string,
-          title: s.title,
-          status: s.status,
-          score: s.score,
-          color: s.color as string | null,
-          accent: null as string | null,
-          badgeInfo: s.badgeInfo,
-        }));
+  const { data: livePulse, isLoading: pulseLoading, isError: pulseError } = usePulse();
+  const sectorCards = (livePulse ?? []).slice(0, 6).map((s) => ({
+    slug: s.sector_slug,
+    title: s.sector_name,
+    status: s.status_badge,
+    score: s.score,
+    accent: s.accent_color as string | null,
+    badgeInfo: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300",
+  }));
   return (
     <div className="w-full flex flex-col gap-6 font-sans">
       {/* 1. 글로벌 펄스 헤더 */}
@@ -331,32 +319,39 @@ export function PulseTab() {
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">분야별 트렌드 속도 현황</h2>
           <span className="text-sm text-slate-400 dark:text-slate-500">Top 6 섹터</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {sectorCards.map((sector) => (
-            <Link
-              key={sector.slug}
-              href={`/dashboard/pulse/sectors/${sector.slug}`}
-              className="block p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-sm transition dark:border-slate-700 dark:bg-slate-900/50 dark:hover:bg-slate-900 dark:hover:border-indigo-700"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-slate-700 dark:text-slate-200">{sector.title}</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${sector.badgeInfo}`}>
-                  {sector.status}
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-slate-900 mb-2 dark:text-slate-100">{sector.score}</div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden dark:bg-slate-700">
-                <div
-                  className={`${sector.color ?? ""} h-full`}
-                  style={{
-                    width: `${sector.score}%`,
-                    ...(sector.accent ? { backgroundColor: sector.accent } : {}),
-                  }}
-                />
-              </div>
-            </Link>
-          ))}
-        </div>
+        <PanelStatus
+          isLoading={pulseLoading}
+          isError={pulseError}
+          isEmpty={sectorCards.length === 0}
+          label="섹터 트렌드"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {sectorCards.map((sector) => (
+              <Link
+                key={sector.slug}
+                href={`/dashboard/pulse/sectors/${sector.slug}`}
+                className="block p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-sm transition dark:border-slate-700 dark:bg-slate-900/50 dark:hover:bg-slate-900 dark:hover:border-indigo-700"
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{sector.title}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${sector.badgeInfo}`}>
+                    {sector.status}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-slate-900 mb-2 dark:text-slate-100">{sector.score}</div>
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden dark:bg-slate-700">
+                  <div
+                    className="h-full bg-indigo-500"
+                    style={{
+                      width: `${sector.score}%`,
+                      ...(sector.accent ? { backgroundColor: sector.accent } : {}),
+                    }}
+                  />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </PanelStatus>
       </section>
 
       {/* 4. 메인 지표 영역 (속도계 & 브리핑) — 2:1 벤토 */}
