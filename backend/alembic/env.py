@@ -58,6 +58,10 @@ from domain.market_insight.models.bases.document_embeddings import (  # Silver/R
     DocumentEmbeddings,
 )
 from domain.market_insight.models.bases.user_embeddings import UserEmbeddings  # Silver
+from domain.market_insight.models.bases.refined_sync_inputs import (  # Silver
+    RefinedSyncInputs,
+)
+from domain.market_insight.models.bases.sync_scores_daily import SyncScoresDaily  # Gold
 
 target_metadata = Base.metadata
 

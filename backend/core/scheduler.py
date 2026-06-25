@@ -54,6 +54,7 @@ from domain.market_insight.hub.services.embed_service import (
     DocumentEmbedService,
     UserEmbedService,
 )
+from domain.market_insight.hub.services.sync_refine_service import SyncRefineService
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -576,6 +577,12 @@ async def _job_pulse_refine() -> dict[str, Any]:
         return await svc.refine_and_serve()
 
 
+async def _job_sync_refine() -> dict[str, Any]:
+    """사용자 임베딩×섹터 트렌드 적합도(Sync) 재계산(멱등, LLM 무관)."""
+    async with AsyncSessionLocal() as session:
+        return await SyncRefineService(session).refine_and_serve()
+
+
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("techblog_kr",       _job_techblog_kr),
@@ -606,6 +613,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("document_embed",    _job_document_embed),
     ("user_embed",        _job_user_embed),
     ("pulse_refine",      _job_pulse_refine),
+    ("sync_refine",       _job_sync_refine),
 )
 
 _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
