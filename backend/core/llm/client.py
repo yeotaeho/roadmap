@@ -11,6 +11,14 @@ _SYSTEM_PROMPT = (
     'JSON 객체만 출력하라. 형식: {"sector_slug": <슬러그 또는 null>, "confidence": <0~1 실수>}.'
 )
 
+_EXTRACT_SYSTEM_PROMPT = (
+    "너는 한국어 산업·투자·담론 텍스트에서 핵심 신호를 추출하는 분석기다. "
+    "텍스트의 핵심 토픽(기술·테마·이슈)을 짧은 한국어 명사구로 요약하고, 관련 핵심 키워드 3~7개를 뽑아라. "
+    "토픽이 불명확하면 signal_topic 을 null 로 두라. "
+    'JSON 객체만 출력하라. 형식: {"signal_topic": <명사구 또는 null>, '
+    '"extracted_keywords": [<키워드>...], "confidence": <0~1 실수>}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -39,6 +47,42 @@ def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     return {"sector_slug": slug, "confidence": conf}
 
 
+def _parse_extract(raw: str | None) -> dict:
+    """추출 LLM 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
+
+    {signal_topic: str|None, extracted_keywords: list[str], confidence: float}.
+    토픽 없거나 파싱 불가 → signal_topic=None·confidence=0.0. 키워드는 최대 10개.
+    """
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        obj = {}
+    if not isinstance(obj, dict):
+        obj = {}
+
+    topic = obj.get("signal_topic")
+    if not isinstance(topic, str) or not topic.strip():
+        topic = None
+
+    kws = obj.get("extracted_keywords")
+    if not isinstance(kws, list):
+        kws = []
+    kws = [str(k).strip() for k in kws if isinstance(k, (str, int, float)) and str(k).strip()][:10]
+
+    try:
+        conf = float(obj.get("confidence"))
+    except (TypeError, ValueError):
+        conf = 0.0
+    conf = max(0.0, min(1.0, conf))
+    if topic is None:
+        conf = 0.0
+    return {
+        "signal_topic": topic[:255] if topic else None,
+        "extracted_keywords": kws,
+        "confidence": conf,
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -62,3 +106,16 @@ class LlmClient:
             ],
         )
         return _parse_classification(resp.choices[0].message.content, sector_list)
+
+    async def extract_signal(self, text: str) -> dict:
+        """텍스트에서 신호 토픽·키워드를 추출한다. {signal_topic, extracted_keywords, confidence}."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _EXTRACT_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        return _parse_extract(resp.choices[0].message.content)

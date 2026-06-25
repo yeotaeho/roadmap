@@ -34,6 +34,12 @@ from domain.market_insight.models.bases.pulse_metrics_log import PulseMetricsLog
 from domain.market_insight.models.bases.refined_text_sector_class import (  # Silver
     RefinedTextSectorClass,
 )
+from domain.market_insight.models.bases.refined_innovation_signal import (  # Silver
+    RefinedInnovationSignal,
+)
+from domain.market_insight.models.bases.refined_signal_sources import (  # Silver 리니지
+    RefinedSignalSources,
+)
 
 target_metadata = Base.metadata
 

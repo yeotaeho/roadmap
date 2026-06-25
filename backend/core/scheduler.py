@@ -44,6 +44,9 @@ from domain.market_insight.hub.services.pulse_refine_service import PulseRefineS
 from domain.market_insight.hub.services.text_sector_classify_service import (
     TextSectorClassifyService,
 )
+from domain.market_insight.hub.services.text_entity_extract_service import (
+    TextEntityExtractService,
+)
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -501,6 +504,17 @@ async def _job_text_classify() -> dict[str, Any] | None:
         return await svc.classify_unclassified()
 
 
+async def _job_entity_extract() -> dict[str, Any] | None:
+    """분류된 자유텍스트에서 신호 토픽·키워드 LLM 추출(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 엔티티 추출 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = TextEntityExtractService(session)
+        return await svc.extract_unextracted()
+
+
 async def _job_pulse_refine() -> dict[str, Any]:
     """Silver/Gold 정제 — 누적 Bronze(혁신·경제·사람) 신호로 Pulse 재생성(멱등)."""
     async with AsyncSessionLocal() as session:
@@ -531,6 +545,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("saramin_recruit",   _job_saramin_recruit),
     ("news_rss",          _job_news_rss),
     ("text_classify",     _job_text_classify),
+    ("entity_extract",    _job_entity_extract),
     ("pulse_refine",      _job_pulse_refine),
 )
 
