@@ -50,6 +50,10 @@ from domain.market_insight.hub.services.text_entity_extract_service import (
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.chance_refine_service import ChanceRefineService
 from domain.market_insight.hub.services.chance_match_service import ChanceMatchService
+from domain.market_insight.hub.services.embed_service import (
+    DocumentEmbedService,
+    UserEmbedService,
+)
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -545,6 +549,26 @@ async def _job_chance_match() -> dict[str, Any]:
         return await ChanceMatchService(session).match_all()
 
 
+async def _job_document_embed() -> dict[str, Any] | None:
+    """Gap·Chance·신호 소스 텍스트 임베딩 적재(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 문서 임베딩 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await DocumentEmbedService(session).embed_documents()
+
+
+async def _job_user_embed() -> dict[str, Any] | None:
+    """사용자 프로필 임베딩 적재(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 사용자 임베딩 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await UserEmbedService(session).embed_users()
+
+
 async def _job_pulse_refine() -> dict[str, Any]:
     """Silver/Gold 정제 — 누적 Bronze(혁신·경제·사람) 신호로 Pulse 재생성(멱등)."""
     async with AsyncSessionLocal() as session:
@@ -579,6 +603,8 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("gap_refine",        _job_gap_refine),
     ("chance_refine",     _job_chance_refine),
     ("chance_match",      _job_chance_match),
+    ("document_embed",    _job_document_embed),
+    ("user_embed",        _job_user_embed),
     ("pulse_refine",      _job_pulse_refine),
 )
 

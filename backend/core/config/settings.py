@@ -154,6 +154,10 @@ class Settings(BaseSettings):
     llm_classify_confidence_min: float = Field(
         default=0.6, validation_alias="LLM_CLASSIFY_CONFIDENCE_MIN"
     )
+    llm_embed_model: str = Field(
+        default="text-embedding-3-large", validation_alias="LLM_EMBED_MODEL"
+    )
+    llm_embed_dim: int = Field(default=3072, validation_alias="LLM_EMBED_DIM")
 
     # Open DART (Bronze — raw_economic_data 등)
     dart_api_key: Optional[str] = Field(

@@ -54,6 +54,10 @@ from domain.market_insight.models.bases.chance_opportunities import (  # Gold
 from domain.market_insight.models.bases.user_chance_matches import (  # Gold
     UserChanceMatches,
 )
+from domain.market_insight.models.bases.document_embeddings import (  # Silver/RAG
+    DocumentEmbeddings,
+)
+from domain.market_insight.models.bases.user_embeddings import UserEmbeddings  # Silver
 
 target_metadata = Base.metadata
 

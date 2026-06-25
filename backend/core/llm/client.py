@@ -176,12 +176,18 @@ def _parse_chance(raw: str | None, sector_list: list[str]) -> dict:
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        embed_model: str = "text-embedding-3-large",
+    ) -> None:
         # openai 는 사용 시점에만 임포트 — 순수 파서(_parse_classification) 테스트가 의존하지 않도록.
         from openai import AsyncOpenAI
 
         self._client = AsyncOpenAI(api_key=api_key)
         self._model = model
+        self._embed_model = embed_model
 
     async def classify_sector(self, text: str, sector_list: list[str]) -> dict:
         """텍스트를 단일 섹터로 분류한다. {"sector_slug": str|None, "confidence": float} 를 반환."""
@@ -236,3 +242,10 @@ class LlmClient:
             ],
         )
         return _parse_chance(resp.choices[0].message.content, sector_list)
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""
+        if not texts:
+            return []
+        resp = await self._client.embeddings.create(model=self._embed_model, input=texts)
+        return [d.embedding for d in resp.data]
