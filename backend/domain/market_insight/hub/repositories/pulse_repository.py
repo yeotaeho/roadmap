@@ -473,7 +473,10 @@ class PulseRepository(BaseRepository):
             for r in (await self.session.execute(_OVERVIEW_WEEKLY_SQL, {"weeks": heatmap_weeks})).all()
         ]
         daily_avgs = [
-            {"recorded_date": r.recorded_date.isoformat(), "avg_score": float(r.avg_score)}
+            {
+                "recorded_date": r.recorded_date.isoformat(),
+                "avg_score": float(r.avg_score) if r.avg_score is not None else None,
+            }
             for r in (await self.session.execute(_OVERVIEW_DAILY_AVG_SQL)).all()
         ]
         return assemble_overview(latest, monthly, weekly, daily_avgs)
