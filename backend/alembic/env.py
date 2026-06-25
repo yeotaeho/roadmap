@@ -40,6 +40,11 @@ from domain.market_insight.models.bases.refined_innovation_signal import (  # Si
 from domain.market_insight.models.bases.refined_signal_sources import (  # Silver 리니지
     RefinedSignalSources,
 )
+from domain.market_insight.models.bases.refined_gap_insights import (  # Silver
+    RefinedGapInsights,
+)
+from domain.market_insight.models.bases.gap_issues import GapIssues  # Gold
+from domain.market_insight.models.bases.issue_evidences import IssueEvidences  # Gold
 
 target_metadata = Base.metadata
 

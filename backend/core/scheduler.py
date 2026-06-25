@@ -47,6 +47,7 @@ from domain.market_insight.hub.services.text_sector_classify_service import (
 from domain.market_insight.hub.services.text_entity_extract_service import (
     TextEntityExtractService,
 )
+from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -515,6 +516,17 @@ async def _job_entity_extract() -> dict[str, Any] | None:
         return await svc.extract_unextracted()
 
 
+async def _job_gap_refine() -> dict[str, Any] | None:
+    """discourse → 미해결 문제·기회 추출 → Gap 카드 재생성(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — Gap 정제 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = GapRefineService(session)
+        return await svc.refine_and_serve()
+
+
 async def _job_pulse_refine() -> dict[str, Any]:
     """Silver/Gold 정제 — 누적 Bronze(혁신·경제·사람) 신호로 Pulse 재생성(멱등)."""
     async with AsyncSessionLocal() as session:
@@ -546,6 +558,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("news_rss",          _job_news_rss),
     ("text_classify",     _job_text_classify),
     ("entity_extract",    _job_entity_extract),
+    ("gap_refine",        _job_gap_refine),
     ("pulse_refine",      _job_pulse_refine),
 )
 

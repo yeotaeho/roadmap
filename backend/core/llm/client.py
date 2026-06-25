@@ -19,6 +19,16 @@ _EXTRACT_SYSTEM_PROMPT = (
     '"extracted_keywords": [<키워드>...], "confidence": <0~1 실수>}.'
 )
 
+_GAP_SYSTEM_PROMPT = (
+    "너는 한국어 뉴스·보도자료에서 '세상의 미해결 문제'와 그에서 파생되는 '청년의 기회'를 찾는 분석기다. "
+    "기사에 사회·산업의 구체적 미해결 문제와 청년이 잡을 수 있는 기회가 함께 드러나면 추출하라. "
+    "단순 홍보·실적·인사 기사처럼 문제·기회 구조가 없으면 problem 을 null 로 두라(억지 생성 금지). "
+    "problem·opportunity 는 각각 한 문장, detail 은 2~3문장, stakeholders 는 관련 주체 2~4개, "
+    "next_actions 는 청년의 실행 액션 2~4개로 적어라. "
+    'JSON 객체만 출력하라. 형식: {"problem": <문장 또는 null>, "opportunity": <문장 또는 null>, '
+    '"detail": <문자열>, "stakeholders": [<주체>...], "next_actions": [<액션>...]}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -83,6 +93,47 @@ def _parse_extract(raw: str | None) -> dict:
     }
 
 
+def _str_list(value, limit: int) -> list[str]:
+    """JSON 값에서 비어있지 않은 문자열 목록을 limit 개까지 추출하는 헬퍼."""
+    if not isinstance(value, list):
+        return []
+    return [str(x).strip() for x in value if isinstance(x, (str, int, float)) and str(x).strip()][:limit]
+
+
+def _parse_gap(raw: str | None) -> dict:
+    """Gap 추출 LLM 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
+
+    problem·opportunity 둘 다 있어야 유효한 gap. 하나라도 없으면 전부 None(무귀속).
+    """
+    empty = {
+        "problem": None, "opportunity": None, "detail": None,
+        "stakeholders": [], "next_actions": [],
+    }
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+
+    problem = obj.get("problem")
+    problem = problem.strip() if isinstance(problem, str) and problem.strip() else None
+    opp = obj.get("opportunity")
+    opp = opp.strip() if isinstance(opp, str) and opp.strip() else None
+    if problem is None or opp is None:
+        return empty
+
+    detail = obj.get("detail")
+    detail = detail.strip() if isinstance(detail, str) and detail.strip() else None
+    return {
+        "problem": problem,
+        "opportunity": opp,
+        "detail": detail,
+        "stakeholders": _str_list(obj.get("stakeholders"), 6),
+        "next_actions": _str_list(obj.get("next_actions"), 6),
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -119,3 +170,16 @@ class LlmClient:
             ],
         )
         return _parse_extract(resp.choices[0].message.content)
+
+    async def extract_gap(self, text: str) -> dict:
+        """텍스트에서 미해결 문제·청년 기회를 추출한다. problem None 이면 gap 아님."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _GAP_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        return _parse_gap(resp.choices[0].message.content)
