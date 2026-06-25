@@ -29,6 +29,15 @@ _GAP_SYSTEM_PROMPT = (
     '"detail": <문자열>, "stakeholders": [<주체>...], "next_actions": [<액션>...]}.'
 )
 
+_CHANCE_SYSTEM_PROMPT = (
+    "너는 한국어 채용·지원사업·공모전·교육 공고를 분석하는 추출기다. "
+    "공고 유형(채용/인턴/부트캠프/공모전/지원사업/교육/해커톤/기타 중 하나), 지원 대상 2~4개, "
+    "혜택·보상 2~4개, 자격 요건 2~4개를 뽑고, 가장 관련된 섹터 슬러그 하나를 고르라(불명확하면 null). "
+    "공고가 아니면 type 을 null 로 두라. "
+    'JSON 객체만 출력하라. 형식: {"sector_slug": <슬러그 또는 null>, "type": <유형 또는 null>, '
+    '"target": [<대상>...], "benefits": [<혜택>...], "qualifications": [<자격>...]}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -134,6 +143,36 @@ def _parse_gap(raw: str | None) -> dict:
     }
 
 
+def _parse_chance(raw: str | None, sector_list: list[str]) -> dict:
+    """Chance 추출 LLM 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
+
+    type 없으면 공고 아님(무귀속). sector_slug 는 목록 외면 None(강제 매핑 금지).
+    """
+    empty = {"sector_slug": None, "type": None, "target": [], "benefits": [], "qualifications": []}
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+
+    typ = obj.get("type")
+    typ = typ.strip() if isinstance(typ, str) and typ.strip() else None
+    if typ is None:
+        return empty
+
+    slug = obj.get("sector_slug")
+    if not isinstance(slug, str) or slug not in sector_list:
+        slug = None
+    return {
+        "sector_slug": slug,
+        "type": typ[:50],
+        "target": _str_list(obj.get("target"), 6),
+        "benefits": _str_list(obj.get("benefits"), 6),
+        "qualifications": _str_list(obj.get("qualifications"), 6),
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -183,3 +222,17 @@ class LlmClient:
             ],
         )
         return _parse_gap(resp.choices[0].message.content)
+
+    async def extract_chance(self, text: str, sector_list: list[str]) -> dict:
+        """공고에서 유형·대상·혜택·자격·섹터를 추출한다. type None 이면 공고 아님."""
+        user = f"섹터 슬러그 목록: {', '.join(sector_list)}\n\n공고 텍스트:\n{text}"
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _CHANCE_SYSTEM_PROMPT},
+                {"role": "user", "content": user},
+            ],
+        )
+        return _parse_chance(resp.choices[0].message.content, sector_list)

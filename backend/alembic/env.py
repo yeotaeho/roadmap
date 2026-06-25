@@ -45,6 +45,15 @@ from domain.market_insight.models.bases.refined_gap_insights import (  # Silver
 )
 from domain.market_insight.models.bases.gap_issues import GapIssues  # Gold
 from domain.market_insight.models.bases.issue_evidences import IssueEvidences  # Gold
+from domain.market_insight.models.bases.refined_chance_insights import (  # Silver
+    RefinedChanceInsights,
+)
+from domain.market_insight.models.bases.chance_opportunities import (  # Gold
+    ChanceOpportunities,
+)
+from domain.market_insight.models.bases.user_chance_matches import (  # Gold
+    UserChanceMatches,
+)
 
 target_metadata = Base.metadata
 
