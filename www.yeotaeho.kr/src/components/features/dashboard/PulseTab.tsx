@@ -132,7 +132,7 @@ export function PulseTab() {
       {/* 2. 연간 모멘텀 + 관심 점유율 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <section className="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-          <h2 className="text-md font-bold text-slate-800 dark:text-slate-100 mb-4">연간 모멘텀 트렌드</h2>
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">연간 모멘텀 트렌드</h2>
           <PanelStatus
             isLoading={ovLoading}
             isError={ovError}
@@ -143,7 +143,7 @@ export function PulseTab() {
           </PanelStatus>
         </section>
         <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-          <h2 className="text-md font-bold text-slate-800 dark:text-slate-100 mb-4">관심 점유율</h2>
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">관심 점유율</h2>
           <PanelStatus
             isLoading={ovLoading}
             isError={ovError}
@@ -170,7 +170,7 @@ export function PulseTab() {
       {/* 3. 섹터 × 시간 히트맵 */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-md font-bold text-slate-800 dark:text-slate-100">Top 섹터 히트맵</h2>
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Top 섹터 히트맵</h2>
           <span className="text-xs text-slate-400">분야 × 시간</span>
         </div>
         <PanelStatus
