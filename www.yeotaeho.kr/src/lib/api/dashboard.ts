@@ -182,6 +182,21 @@ export async function fetchTrendingKeywords(): Promise<TrendingKeywords> {
   return { cloud: data.cloud ?? [], ticker: data.ticker ?? [] };
 }
 
+export interface BriefingLine {
+  line_number: number;
+  content: string;
+  trend_icon: 'UP_RIGHT' | 'DOWN_RIGHT' | 'WAVE';
+}
+export interface Briefing {
+  published_date: string | null;
+  briefings: BriefingLine[];
+}
+
+export async function fetchBriefing(): Promise<Briefing> {
+  const { data } = await apiClient.get('/api/insight/briefing');
+  return { published_date: data.published_date ?? null, briefings: data.briefings ?? [] };
+}
+
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
 export function ddayLabel(dDayDate: string | null): string {
   if (!dDayDate) return '상시';

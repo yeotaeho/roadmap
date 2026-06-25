@@ -55,6 +55,7 @@ from domain.market_insight.hub.services.embed_service import (
     UserEmbedService,
 )
 from domain.market_insight.hub.services.sync_refine_service import SyncRefineService
+from domain.market_insight.hub.services.briefing_service import BriefingRefineService
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
 )
@@ -583,6 +584,12 @@ async def _job_sync_refine() -> dict[str, Any]:
         return await SyncRefineService(session).refine_and_serve()
 
 
+async def _job_briefing_refine() -> dict[str, Any]:
+    """당일 경제 신호 → 3줄 브리핑 생성(LLM, 키 없으면 템플릿 폴백). 멱등(당일 존재 시 스킵)."""
+    async with AsyncSessionLocal() as session:
+        return await BriefingRefineService(session).refine_and_serve()
+
+
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("techblog_kr",       _job_techblog_kr),
@@ -613,6 +620,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("document_embed",    _job_document_embed),
     ("user_embed",        _job_user_embed),
     ("pulse_refine",      _job_pulse_refine),
+    ("briefing_refine",   _job_briefing_refine),
     ("sync_refine",       _job_sync_refine),
 )
 

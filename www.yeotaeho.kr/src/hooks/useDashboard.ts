@@ -8,6 +8,7 @@ import {
   fetchGapIssues,
   fetchOpportunities,
   fetchOpportunityDetail,
+  fetchBriefing,
   fetchPulse,
   fetchPulseHistory,
   fetchPulseOverview,
@@ -87,6 +88,15 @@ export function useTrendingKeywords() {
   return useQuery({
     queryKey: ['trending-keywords'],
     queryFn: fetchTrendingKeywords,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useBriefing() {
+  return useQuery({
+    queryKey: ['briefing'],
+    queryFn: fetchBriefing,
     staleTime: STALE,
     retry: 1,
   });

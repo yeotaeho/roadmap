@@ -38,6 +38,17 @@ _CHANCE_SYSTEM_PROMPT = (
     '"target": [<대상>...], "benefits": [<혜택>...], "qualifications": [<자격>...]}.'
 )
 
+# trend_icon 닫힌 집합 — 프론트 표시 분기와 동기화.
+_BRIEFING_TREND_ICONS = ("UP_RIGHT", "DOWN_RIGHT", "WAVE")
+
+_BRIEFING_SYSTEM_PROMPT = (
+    "너는 한국 청년(10대 후반~30대 초반)에게 오늘의 경제·산업 신호를 진로 관점에서 요약하는 브리핑 작가다. "
+    "주어진 당일 경제 헤드라인·섹터 모멘텀·기회 정보를 바탕으로 '세상의 변화 → 청년에게 주는 의미'를 잇는 "
+    "핵심 3줄을 작성하라. 각 줄은 40자 이내 한 문장, 구체적이고 과장 없이. "
+    "각 줄에 trend_icon 을 UP_RIGHT(상승·기회 확대)/DOWN_RIGHT(하락·부담)/WAVE(혼조·관망) 중 하나로 붙여라. "
+    'JSON 객체만 출력하라. 형식: {"lines": [{"content": <문장>, "trend_icon": <아이콘>}, ...] — 정확히 3개}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -173,6 +184,37 @@ def _parse_chance(raw: str | None, sector_list: list[str]) -> dict:
     }
 
 
+def _parse_briefing(raw: str | None) -> list[dict]:
+    """3줄 경제 브리핑 LLM 응답을 검증된 줄 목록으로 파싱한다. 무네트워크 순수 함수.
+
+    정확히 3줄(content 비어있지 않음)이 아니면 [] 반환(템플릿 폴백 신호).
+    trend_icon 은 닫힌 집합 외/누락 시 WAVE 로 보정, content 는 255자 컷.
+    """
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(obj, dict):
+        return []
+    lines = obj.get("lines")
+    if not isinstance(lines, list):
+        return []
+    out: list[dict] = []
+    for item in lines:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        icon = item.get("trend_icon")
+        if icon not in _BRIEFING_TREND_ICONS:
+            icon = "WAVE"
+        out.append({"content": content.strip()[:255], "trend_icon": icon})
+        if len(out) == 3:
+            break
+    return out if len(out) == 3 else []
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -242,6 +284,19 @@ class LlmClient:
             ],
         )
         return _parse_chance(resp.choices[0].message.content, sector_list)
+
+    async def generate_briefing(self, context: str) -> list[dict]:
+        """경제 맥락에서 청년 진로 관점 3줄 브리핑을 생성한다. 무효/실패 시 []."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _BRIEFING_SYSTEM_PROMPT},
+                {"role": "user", "content": context},
+            ],
+        )
+        return _parse_briefing(resp.choices[0].message.content)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""

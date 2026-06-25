@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from domain.market_insight.hub.repositories.briefing_repository import BriefingRepository
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 from domain.market_insight.hub.repositories.pulse_repository import PulseRepository
 from domain.market_insight.hub.repositories.signal_repository import SignalRepository
+from domain.market_insight.hub.services.briefing_service import BriefingRefineService
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
@@ -105,6 +107,31 @@ async def get_trending_keywords(
     except Exception as e:
         logger.error(f"트렌딩 키워드 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"트렌딩 키워드 조회 실패: {str(e)}")
+
+
+@router.get("/briefing")
+async def get_briefing(db: AsyncSession = Depends(get_db)):
+    """3줄 경제 브리핑 서빙 — 최신일 economic_briefings."""
+    try:
+        data = await BriefingRepository(db).fetch_latest()
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"브리핑 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"브리핑 조회 실패: {str(e)}")
+
+
+@router.post("/briefing/refine")
+async def refine_briefing(
+    force: bool = Query(default=False, description="당일 존재해도 재생성"),
+    db: AsyncSession = Depends(get_db),
+):
+    """브리핑 생성·서빙 수동 트리거 — 당일 경제 신호 → LLM/템플릿 3줄."""
+    try:
+        result = await BriefingRefineService(db).refine_and_serve(force=force)
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"브리핑 정제 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"브리핑 정제 실패: {str(e)}")
 
 
 @router.get("/gap")

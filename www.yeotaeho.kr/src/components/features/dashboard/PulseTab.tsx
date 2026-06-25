@@ -4,7 +4,7 @@
  * 실시간 펄스(Pulse) 탭 — 섹터 카드 + 속도계·모멘텀·히트맵·점유율(Pulse Gold 즉석 집계).
  */
 
-import { usePulse, usePulseOverview, useTrendingKeywords } from "@/hooks/useDashboard";
+import { useBriefing, usePulse, usePulseOverview, useTrendingKeywords } from "@/hooks/useDashboard";
 import type { PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
 
@@ -101,6 +101,7 @@ export function PulseTab() {
   const { data: livePulse, isLoading, isError } = usePulse();
   const { data: overview, isLoading: ovLoading, isError: ovError } = usePulseOverview();
   const { data: keywords, isLoading: kwLoading, isError: kwError } = useTrendingKeywords();
+  const { data: briefing, isLoading: brLoading, isError: brError } = useBriefing();
 
   const sectorCards = (livePulse ?? []).map((s) => ({
     slug: s.sector_slug,
@@ -153,6 +154,36 @@ export function PulseTab() {
           </div>
         </div>
       </PanelStatus>
+
+      {/* 1.5 오늘의 경제 브리핑 (3줄) */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-3">오늘의 경제 브리핑</h2>
+        <PanelStatus
+          isLoading={brLoading}
+          isError={brError}
+          isEmpty={(briefing?.briefings.length ?? 0) === 0}
+          label="브리핑"
+        >
+          <ul className="flex flex-col gap-2">
+            {(briefing?.briefings ?? []).map((b) => (
+              <li key={b.line_number} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <span
+                  className={`mt-0.5 font-bold ${
+                    b.trend_icon === "UP_RIGHT"
+                      ? "text-emerald-600"
+                      : b.trend_icon === "DOWN_RIGHT"
+                        ? "text-rose-600"
+                        : "text-slate-400"
+                  }`}
+                >
+                  {b.trend_icon === "UP_RIGHT" ? "↗" : b.trend_icon === "DOWN_RIGHT" ? "↘" : "〰"}
+                </span>
+                <span>{b.content}</span>
+              </li>
+            ))}
+          </ul>
+        </PanelStatus>
+      </section>
 
       {/* 2. 연간 모멘텀 + 관심 점유율 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">

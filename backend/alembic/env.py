@@ -62,6 +62,7 @@ from domain.market_insight.models.bases.refined_sync_inputs import (  # Silver
     RefinedSyncInputs,
 )
 from domain.market_insight.models.bases.sync_scores_daily import SyncScoresDaily  # Gold
+from domain.market_insight.models.bases.economic_briefings import EconomicBriefing  # Gold
 
 target_metadata = Base.metadata
 
