@@ -94,12 +94,31 @@ def test_top_mover_none_momentum() -> None:
     check("모멘텀 전부 null → top_mover null", out["gauge"]["top_mover"] is None)
 
 
+def test_heatmap_excludes_no_window_sector() -> None:
+    """latest에는 있지만 weekly 윈도우에 없는 섹터는 히트맵 rows에서 제외되어야 한다."""
+    out = assemble_overview(
+        _latest(),
+        monthly=[],
+        weekly=[
+            # ai-data만 weekly에 존재, fintech는 없음
+            {"sector_slug": "ai-data", "bucket": "2026-W25", "score": 88},
+        ],
+        daily_avgs=[],
+    )
+    hm = out["heatmap"]
+    slugs = [r["sector_slug"] for r in hm["rows"]]
+    check("weekly 없는 섹터(fintech) rows 미포함", "fintech" not in slugs)
+    check("weekly 있는 섹터(ai-data) rows 포함", "ai-data" in slugs)
+    check("rows 길이 = 1", len(hm["rows"]) == 1)
+
+
 def main() -> int:
     test_gauge_normal()
     test_momentum_sorted()
     test_heatmap_pivot_and_null()
     test_share_and_empty()
     test_top_mover_none_momentum()
+    test_heatmap_excludes_no_window_sector()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

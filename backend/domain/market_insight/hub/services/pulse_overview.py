@@ -48,6 +48,7 @@ def _heatmap(rows_latest: list[dict], weekly: list[dict]) -> dict:
             ],
         }
         for r in rows_latest
+        if r["sector_slug"] in by_sector
     ]
     return {"buckets": buckets, "rows": rows}
 

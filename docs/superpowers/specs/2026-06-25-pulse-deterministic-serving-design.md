@@ -77,13 +77,13 @@ GET /api/insight/pulse/{sector}/history → PulseRepository.fetch_history()
 
 모두 `pulse_metrics_log`(컬럼: `sector_slug`·`recorded_date`·`score`·`status_badge`·`momentum_pct`)에서 산출. 섹터 메타(`name_ko`·`accent_color`)는 `sectors` JOIN.
 
-- **weekly_index** = 최신일 기준 섹터별 1행(`DISTINCT ON (sector_slug) … ORDER BY recorded_date DESC`)의 `score` 단순평균, 반올림.
+- **weekly_index** = 최신일 기준 섹터별 1행(`DISTINCT ON (sector_slug) … ORDER BY recorded_date DESC`)의 `score` 단순평균, 반올림. 이 "최신"은 섹터별 각자 최신 행을 뜻하며(단일 글로벌 최신일이 아님), 기존 `GET /api/insight/pulse` 탭의 `_LATEST_GOLD_SQL` 기준과 동일해 두 탭의 수치가 일관된다.
 - **speed_kmh** = `round(weekly_index × 1.8)` (지수 100 → 180km/h, 기존 mock 상한과 일치).
 - **day_delta_pct** = 전 섹터 **일평균 score**의 최근 2개 날짜 비교 `(d0−d1)/d1×100`. 날짜 2개 미만 또는 d1=0 → `null`.
-- **top_mover** = 최신일 `momentum_pct` 최대 섹터. 전부 null이거나 데이터 없음 → `null`.
+- **top_mover** = 최신일 `momentum_pct` 최대 섹터. 전부 null이거나 데이터 없음 → `null`. top_mover의 "최신"도 weekly_index와 동일하게 섹터별 각자 최신 행 기준이다.
 - **momentum_series** = `to_char(recorded_date,'YYYY-MM')` 버킷별 `round(avg(score))`, 최근 `momentum_months`개, 과거→현재.
 - **heatmap.buckets** = 최근 `heatmap_weeks`개 ISO주 라벨(`to_char(date_trunc('week',recorded_date),'IYYY-"W"IW')`), 과거→현재.
-- **heatmap.rows[].cells** = (섹터 × 주) 그 주 *마지막* score(`DISTINCT ON (sector, week) … ORDER BY recorded_date DESC`). 데이터 없는 칸 `score: null`. 행은 최신 score 내림차순.
+- **heatmap.rows[].cells** = (섹터 × 주) 그 주 *마지막* score(`DISTINCT ON (sector, week) … ORDER BY recorded_date DESC`). 데이터 없는 칸 `score: null`. 행은 최신 score 내림차순. **heatmap.rows는 `heatmap_weeks` 윈도우 내 데이터가 하나라도 있는 섹터로만 한정**한다(전부-null 행 제외). 순서는 최신 score 내림차순.
 - **share[].pct** = 섹터 최신 score ÷ Σ(최신 score) × 100, 소수 1자리. 최신 score 내림차순. Σ=0 → 빈 배열.
 
 ## 4. 리포지토리 / 순수함수 분리
