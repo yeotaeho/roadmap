@@ -16,6 +16,15 @@ function heatTone(score: number | null): string {
   return "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200";
 }
 
+// 신호가 빈약해 전 구간 중립(50)으로 게이트된 섹터 표식.
+function DataPendingBadge() {
+  return (
+    <span className="ml-1.5 align-middle text-[9px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400 whitespace-nowrap">
+      데이터 수집 중
+    </span>
+  );
+}
+
 function MomentumChart({ points }: { points: PulseMomentumPoint[] }) {
   if (points.length === 0) {
     return <p className="text-sm text-slate-400">시계열 데이터가 아직 없습니다.</p>;
@@ -59,8 +68,17 @@ function Heatmap({ buckets, rows }: { buckets: string[]; rows: PulseHeatmapRow[]
         <tbody>
           {rows.map((row) => (
             <tr key={row.sector_slug}>
-              <td className="text-xs font-medium text-slate-600 dark:text-slate-300 pr-2 whitespace-nowrap">
-                {row.sector_name}
+              <td className="text-xs font-medium pr-2 whitespace-nowrap">
+                <span
+                  className={
+                    row.data_status === "insufficient"
+                      ? "text-slate-400 dark:text-slate-500"
+                      : "text-slate-600 dark:text-slate-300"
+                  }
+                >
+                  {row.sector_name}
+                </span>
+                {row.data_status === "insufficient" && <DataPendingBadge />}
               </td>
               {row.cells.map((c) => (
                 <td
@@ -93,6 +111,11 @@ export function PulseTab() {
   }));
 
   const g = overview?.gauge;
+  const insufficientSlugs = new Set(
+    (overview?.heatmap.rows ?? [])
+      .filter((r) => r.data_status === "insufficient")
+      .map((r) => r.sector_slug),
+  );
 
   return (
     <div className="w-full flex flex-col gap-6 font-sans">
@@ -190,36 +213,51 @@ export function PulseTab() {
       </div>
       <PanelStatus isLoading={isLoading} isError={isError} isEmpty={sectorCards.length === 0} label="섹터 트렌드">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sectorCards.map((sector) => (
-            <div
-              key={sector.slug}
-              className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-slate-700 dark:text-slate-200">{sector.title}</span>
-                <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
-                  {sector.status}
-                </span>
-              </div>
-              <div className="flex items-end justify-between mb-2">
-                <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{sector.score}</span>
-                {sector.momentum != null && (
-                  <span
-                    className={`text-xs font-semibold ${sector.momentum < 0 ? "text-rose-600" : "text-emerald-600"}`}
-                  >
-                    {sector.momentum > 0 ? "+" : ""}
-                    {sector.momentum}%
-                  </span>
-                )}
-              </div>
-              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden dark:bg-slate-700">
+          {sectorCards.map((sector) => {
+            const pending = insufficientSlugs.has(sector.slug);
+            return (
+              <div
+                key={sector.slug}
+                className={`p-4 border rounded-xl ${
+                  pending
+                    ? "border-slate-200 bg-slate-100/60 dark:border-slate-700 dark:bg-slate-800/40"
+                    : "border-slate-100 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50"
+                }`}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{sector.title}</span>
+                  {pending ? (
+                    <DataPendingBadge />
+                  ) : (
+                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      {sector.status}
+                    </span>
+                  )}
+                </div>
+                <div className={`flex items-end justify-between mb-2 ${pending ? "opacity-40" : ""}`}>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{sector.score}</span>
+                  {sector.momentum != null && (
+                    <span
+                      className={`text-xs font-semibold ${sector.momentum < 0 ? "text-rose-600" : "text-emerald-600"}`}
+                    >
+                      {sector.momentum > 0 ? "+" : ""}
+                      {sector.momentum}%
+                    </span>
+                  )}
+                </div>
                 <div
-                  className="h-full bg-indigo-500"
-                  style={{ width: `${sector.score}%`, ...(sector.accent ? { backgroundColor: sector.accent } : {}) }}
-                />
+                  className={`w-full bg-slate-200 h-2 rounded-full overflow-hidden dark:bg-slate-700 ${
+                    pending ? "opacity-40" : ""
+                  }`}
+                >
+                  <div
+                    className="h-full bg-indigo-500"
+                    style={{ width: `${sector.score}%`, ...(sector.accent ? { backgroundColor: sector.accent } : {}) }}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </PanelStatus>
     </div>

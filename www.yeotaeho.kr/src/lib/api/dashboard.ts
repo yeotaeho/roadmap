@@ -115,6 +115,7 @@ export interface PulseHeatmapRow {
   sector_slug: string;
   sector_name: string;
   accent_color: string;
+  data_status: 'active' | 'insufficient';
   cells: PulseHeatmapCell[];
 }
 export interface PulseShareItem {

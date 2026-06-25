@@ -112,6 +112,30 @@ def test_heatmap_excludes_no_window_sector() -> None:
     check("rows 길이 = 1", len(hm["rows"]) == 1)
 
 
+def test_heatmap_data_status() -> None:
+    """윈도우 비-null 셀이 전부 50인 섹터는 insufficient, 비-50 값이 하나라도 있으면 active."""
+    out = assemble_overview(
+        [
+            {"sector_slug": "ai-data", "sector_name": "AI·데이터", "accent_color": "#6366f1", "score": 88, "momentum_pct": 10.0},
+            {"sector_slug": "fintech", "sector_name": "핀테크", "accent_color": "#10b981", "score": 50, "momentum_pct": 0.0},
+            {"sector_slug": "logistics", "sector_name": "물류", "accent_color": "#f59e0b", "score": 50, "momentum_pct": 0.0},
+        ],
+        monthly=[],
+        weekly=[
+            {"sector_slug": "ai-data", "bucket": "2026-W24", "score": 88},
+            {"sector_slug": "ai-data", "bucket": "2026-W25", "score": 44},
+            {"sector_slug": "fintech", "bucket": "2026-W24", "score": 50},
+            {"sector_slug": "fintech", "bucket": "2026-W25", "score": 50},
+            {"sector_slug": "logistics", "bucket": "2026-W25", "score": 50},  # W24 결측(None)
+        ],
+        daily_avgs=[],
+    )
+    status = {r["sector_slug"]: r["data_status"] for r in out["heatmap"]["rows"]}
+    check("비-50 포함 섹터 active(ai-data)", status["ai-data"] == "active")
+    check("전부-50 섹터 insufficient(fintech)", status["fintech"] == "insufficient")
+    check("None+50 혼합 섹터 insufficient(logistics)", status["logistics"] == "insufficient")
+
+
 def main() -> int:
     test_gauge_normal()
     test_momentum_sorted()
@@ -119,6 +143,7 @@ def main() -> int:
     test_share_and_empty()
     test_top_mover_none_momentum()
     test_heatmap_excludes_no_window_sector()
+    test_heatmap_data_status()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

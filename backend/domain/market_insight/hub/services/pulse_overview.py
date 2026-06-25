@@ -38,18 +38,25 @@ def _heatmap(rows_latest: list[dict], weekly: list[dict]) -> dict:
     by_sector: dict[str, dict[str, int]] = {}
     for w in weekly:
         by_sector.setdefault(w["sector_slug"], {})[w["bucket"]] = w["score"]
-    rows = [
-        {
-            "sector_slug": r["sector_slug"],
-            "sector_name": r["sector_name"],
-            "accent_color": r["accent_color"],
-            "cells": [
-                {"bucket": b, "score": by_sector.get(r["sector_slug"], {}).get(b)} for b in buckets
-            ],
-        }
-        for r in rows_latest
-        if r["sector_slug"] in by_sector
-    ]
+    rows = []
+    for r in rows_latest:
+        if r["sector_slug"] not in by_sector:
+            continue
+        cells = [
+            {"bucket": b, "score": by_sector.get(r["sector_slug"], {}).get(b)} for b in buckets
+        ]
+        # 비-null 셀이 전부 50이면 희소-0 게이트가 전 구간 중립화한 것 = 실신호 없음.
+        non_null = [c["score"] for c in cells if c["score"] is not None]
+        data_status = "insufficient" if non_null and all(s == 50 for s in non_null) else "active"
+        rows.append(
+            {
+                "sector_slug": r["sector_slug"],
+                "sector_name": r["sector_name"],
+                "accent_color": r["accent_color"],
+                "data_status": data_status,
+                "cells": cells,
+            }
+        )
     return {"buckets": buckets, "rows": rows}
 
 
