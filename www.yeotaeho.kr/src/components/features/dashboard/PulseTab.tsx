@@ -38,7 +38,7 @@ function MomentumChart({ points }: { points: PulseMomentumPoint[] }) {
   const yAt = (v: number) => h - ((v - min) / span) * h;
   const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p.value)}`).join(" ");
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-40" role="img" aria-label="연간 모멘텀 트렌드 차트">
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-52" role="img" aria-label="연간 모멘텀 트렌드 차트">
       <path d={`${line} L${xAt(points.length - 1)},${h} L${xAt(0)},${h} Z`} fill="#6366f1" fillOpacity="0.12" />
       <path d={line} fill="none" stroke="#6366f1" strokeWidth="2" />
       {points.map((p, i) => (
@@ -153,7 +153,7 @@ export function PulseTab() {
       </PanelStatus>
 
       {/* 2. 연간 모멘텀 + 관심 점유율 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
         <section className="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
           <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">연간 모멘텀 트렌드</h2>
           <PanelStatus
