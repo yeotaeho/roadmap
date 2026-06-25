@@ -12,6 +12,7 @@ import {
   fetchPulseHistory,
   fetchPulseOverview,
   fetchSyncScores,
+  fetchTrendingKeywords,
 } from '@/lib/api/dashboard';
 
 const STALE = 5 * 60 * 1000; // 5분
@@ -77,6 +78,15 @@ export function usePulseHistory(sector?: string) {
     queryKey: ['pulse-history', sector],
     queryFn: () => fetchPulseHistory(sector as string),
     enabled: !!sector,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useTrendingKeywords() {
+  return useQuery({
+    queryKey: ['trending-keywords'],
+    queryFn: fetchTrendingKeywords,
     staleTime: STALE,
     retry: 1,
   });

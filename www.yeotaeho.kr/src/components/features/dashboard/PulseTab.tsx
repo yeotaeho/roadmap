@@ -4,7 +4,7 @@
  * 실시간 펄스(Pulse) 탭 — 섹터 카드 + 속도계·모멘텀·히트맵·점유율(Pulse Gold 즉석 집계).
  */
 
-import { usePulse, usePulseOverview } from "@/hooks/useDashboard";
+import { usePulse, usePulseOverview, useTrendingKeywords } from "@/hooks/useDashboard";
 import type { PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
 
@@ -100,6 +100,7 @@ function Heatmap({ buckets, rows }: { buckets: string[]; rows: PulseHeatmapRow[]
 export function PulseTab() {
   const { data: livePulse, isLoading, isError } = usePulse();
   const { data: overview, isLoading: ovLoading, isError: ovError } = usePulseOverview();
+  const { data: keywords, isLoading: kwLoading, isError: kwError } = useTrendingKeywords();
 
   const sectorCards = (livePulse ?? []).map((s) => ({
     slug: s.sector_slug,
@@ -111,6 +112,7 @@ export function PulseTab() {
   }));
 
   const g = overview?.gauge;
+  const cloudMax = Math.max(...(keywords?.cloud ?? []).map((c) => c.weight), 1);
   const insufficientSlugs = new Set(
     (overview?.heatmap.rows ?? [])
       .filter((r) => r.data_status === "insufficient")
@@ -189,6 +191,53 @@ export function PulseTab() {
           </PanelStatus>
         </section>
       </div>
+
+      {/* 2.5 트렌딩 키워드 — 상승 티커 + 빈도 클라우드 */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">트렌딩 키워드</h2>
+        <PanelStatus
+          isLoading={kwLoading}
+          isError={kwError}
+          isEmpty={(keywords?.cloud.length ?? 0) === 0 && (keywords?.ticker.length ?? 0) === 0}
+          label="트렌딩 키워드"
+        >
+          <div className="flex flex-col gap-5">
+            {(keywords?.ticker.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {(keywords?.ticker ?? []).map((t) => (
+                  <span
+                    key={t.keyword}
+                    className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  >
+                    <span className="font-medium">{t.keyword}</span>
+                    <span
+                      className={`font-semibold ${
+                        t.delta_pct === null ? "text-indigo-500" : "text-emerald-600"
+                      }`}
+                    >
+                      {t.value_label}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {(keywords?.cloud.length ?? 0) > 0 && (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                {(keywords?.cloud ?? []).map((c) => (
+                  <span
+                    key={c.keyword}
+                    className="text-slate-600 dark:text-slate-300 leading-tight"
+                    style={{ fontSize: `${0.8 + (c.weight / cloudMax) * 1.0}rem` }}
+                    title={`${c.weight}회`}
+                  >
+                    {c.keyword}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </PanelStatus>
+      </section>
 
       {/* 3. 섹터 × 시간 히트맵 */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">

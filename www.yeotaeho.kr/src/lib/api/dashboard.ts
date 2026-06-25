@@ -161,6 +161,27 @@ export async function fetchPulseHistory(sector: string): Promise<PulseHistory> {
   };
 }
 
+export interface KeywordCloudItem {
+  keyword: string;
+  weight: number;
+  rank: number;
+}
+export interface KeywordTickerItem {
+  keyword: string;
+  value_label: string;
+  delta_pct: number | null;
+  rank: number;
+}
+export interface TrendingKeywords {
+  cloud: KeywordCloudItem[];
+  ticker: KeywordTickerItem[];
+}
+
+export async function fetchTrendingKeywords(): Promise<TrendingKeywords> {
+  const { data } = await apiClient.get('/api/insight/keywords');
+  return { cloud: data.cloud ?? [], ticker: data.ticker ?? [] };
+}
+
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
 export function ddayLabel(dDayDate: string | null): string {
   if (!dDayDate) return '상시';

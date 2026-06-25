@@ -76,6 +76,32 @@ _INSERT_SOURCE_LINK = text(
     """
 )
 
+# 트렌딩 키워드 — extracted_keywords 를 unnest 해 키워드별 신호 수(df)를 윈도우별 집계.
+_KEYWORD_FREQ_RECENT = text(
+    """
+    SELECT kw, count(DISTINCT s.id) AS df
+    FROM refined_innovation_signal s,
+         LATERAL jsonb_array_elements_text(s.extracted_keywords) AS kw
+    WHERE jsonb_typeof(s.extracted_keywords) = 'array'
+      AND s.reference_period_end >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND (CAST(:sector AS TEXT) IS NULL OR s.sector_slug = :sector)
+    GROUP BY kw
+    """
+)
+
+_KEYWORD_FREQ_PRIOR = text(
+    """
+    SELECT kw, count(DISTINCT s.id) AS df
+    FROM refined_innovation_signal s,
+         LATERAL jsonb_array_elements_text(s.extracted_keywords) AS kw
+    WHERE jsonb_typeof(s.extracted_keywords) = 'array'
+      AND s.reference_period_end >= CURRENT_DATE - CAST(:win2 AS INTEGER)
+      AND s.reference_period_end <  CURRENT_DATE - CAST(:win AS INTEGER)
+      AND (CAST(:sector AS TEXT) IS NULL OR s.sector_slug = :sector)
+    GROUP BY kw
+    """
+)
+
 
 class SignalRepository(BaseRepository):
     async def fetch_unextracted_rows(
@@ -108,3 +134,22 @@ class SignalRepository(BaseRepository):
             _INSERT_SOURCE_LINK,
             {"signal_id": signal_id, "raw_table_ref": raw_table_ref, "raw_id": raw_id, "weight": weight},
         )
+
+    async def fetch_keyword_freqs(
+        self, window_days: int, sector: str | None
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        """recent/prior 윈도우의 키워드별 신호 수(df)를 (recent, prior) dict로 반환한다."""
+        recent_rows = (
+            await self.session.execute(
+                _KEYWORD_FREQ_RECENT, {"win": window_days, "sector": sector}
+            )
+        ).all()
+        prior_rows = (
+            await self.session.execute(
+                _KEYWORD_FREQ_PRIOR,
+                {"win": window_days, "win2": window_days * 2, "sector": sector},
+            )
+        ).all()
+        recent = {r.kw: int(r.df) for r in recent_rows}
+        prior = {r.kw: int(r.df) for r in prior_rows}
+        return recent, prior

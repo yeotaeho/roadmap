@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 from domain.market_insight.hub.repositories.pulse_repository import PulseRepository
+from domain.market_insight.hub.repositories.signal_repository import SignalRepository
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
+from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,24 @@ async def get_pulse_history(
     except Exception as e:
         logger.error(f"Pulse history 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Pulse history 조회 실패: {str(e)}")
+
+
+@router.get("/keywords")
+async def get_trending_keywords(
+    window_days: int = Query(default=30, ge=1, le=365, description="집계 윈도우(일)"),
+    cloud_limit: int = Query(default=30, ge=1, le=100, description="클라우드 키워드 수"),
+    ticker_limit: int = Query(default=12, ge=1, le=50, description="티커 키워드 수"),
+    sector: str | None = Query(default=None, description="섹터 슬러그 필터(기본 전체)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """트렌딩 키워드 서빙 — refined_innovation_signal 키워드 빈도 CLOUD·상승 델타 TICKER."""
+    try:
+        recent, prior = await SignalRepository(db).fetch_keyword_freqs(window_days, sector)
+        data = assemble_keywords(recent, prior, cloud_limit=cloud_limit, ticker_limit=ticker_limit)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"트렌딩 키워드 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"트렌딩 키워드 조회 실패: {str(e)}")
 
 
 @router.get("/gap")
