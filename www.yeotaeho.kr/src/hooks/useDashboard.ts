@@ -9,6 +9,8 @@ import {
   fetchOpportunities,
   fetchOpportunityDetail,
   fetchPulse,
+  fetchPulseHistory,
+  fetchPulseOverview,
   fetchSyncScores,
 } from '@/lib/api/dashboard';
 
@@ -56,6 +58,25 @@ export function useOpportunityDetail(id: string) {
     queryKey: ['chance-opportunity', id],
     queryFn: () => fetchOpportunityDetail(id),
     enabled: !!id,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function usePulseOverview() {
+  return useQuery({
+    queryKey: ['pulse-overview'],
+    queryFn: fetchPulseOverview,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function usePulseHistory(sector?: string) {
+  return useQuery({
+    queryKey: ['pulse-history', sector],
+    queryFn: () => fetchPulseHistory(sector as string),
+    enabled: !!sector,
     staleTime: STALE,
     retry: 1,
   });

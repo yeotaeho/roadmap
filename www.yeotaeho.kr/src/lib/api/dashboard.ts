@@ -97,6 +97,65 @@ export async function fetchSyncScores(userId: string): Promise<SyncScoreLive[]> 
   return data?.scores ?? [];
 }
 
+export interface PulseGauge {
+  weekly_index: number | null;
+  speed_kmh: number | null;
+  day_delta_pct: number | null;
+  top_mover: { sector_slug: string; sector_name: string; momentum_pct: number } | null;
+}
+export interface PulseMomentumPoint {
+  bucket: string;
+  value: number;
+}
+export interface PulseHeatmapCell {
+  bucket: string;
+  score: number | null;
+}
+export interface PulseHeatmapRow {
+  sector_slug: string;
+  sector_name: string;
+  accent_color: string;
+  cells: PulseHeatmapCell[];
+}
+export interface PulseShareItem {
+  sector_slug: string;
+  sector_name: string;
+  pct: number;
+}
+export interface PulseOverview {
+  gauge: PulseGauge;
+  momentum_series: PulseMomentumPoint[];
+  heatmap: { buckets: string[]; rows: PulseHeatmapRow[] };
+  share: PulseShareItem[];
+}
+
+export async function fetchPulseOverview(): Promise<PulseOverview> {
+  const { data } = await apiClient.get('/api/insight/pulse/overview');
+  return {
+    gauge: data.gauge,
+    momentum_series: data.momentum_series ?? [],
+    heatmap: data.heatmap ?? { buckets: [], rows: [] },
+    share: data.share ?? [],
+  };
+}
+
+export interface PulseHistoryPoint {
+  recorded_date: string;
+  score: number;
+  momentum_pct: number | null;
+  status_badge: string;
+}
+export interface PulseHistory {
+  sector_slug: string;
+  sector_name: string;
+  points: PulseHistoryPoint[];
+}
+
+export async function fetchPulseHistory(sector: string): Promise<PulseHistory> {
+  const { data } = await apiClient.get(`/api/insight/pulse/${sector}/history`);
+  return data;
+}
+
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
 export function ddayLabel(dDayDate: string | null): string {
   if (!dDayDate) return '상시';
