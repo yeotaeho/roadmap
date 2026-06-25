@@ -44,6 +44,45 @@ export async function fetchOpportunities(): Promise<ChanceOpportunityLive[]> {
   return data?.opportunities ?? [];
 }
 
+export interface GapIssueDetail {
+  id: number;
+  sector_slug: string;
+  sector_name: string;
+  accent_color: string;
+  problem_summary: string;
+  chance_summary: string;
+  detail_summary: string | null;
+  stakeholders: string[];
+  next_actions: string[];
+  published_date: string | null;
+  evidences: { type: string | null; title: string; url: string | null }[];
+}
+
+export async function fetchGapIssueDetail(id: string): Promise<GapIssueDetail> {
+  const { data } = await apiClient.get(`/api/insight/gap/${id}`);
+  return data.issue;
+}
+
+export interface ChanceOpportunityDetail {
+  id: number;
+  sector_slug: string | null;
+  title: string;
+  opportunity_type: string | null;
+  host_name: string | null;
+  benefit_summary: string | null;
+  target_audience: string | null;
+  d_day_date: string | null;
+  brief_description: string | null;
+  eligibility_checks: string[];
+  actionable_preps: string[];
+  reference_links: string[];
+}
+
+export async function fetchOpportunityDetail(id: string): Promise<ChanceOpportunityDetail> {
+  const { data } = await apiClient.get(`/api/chance/opportunities/${id}`);
+  return data.opportunity;
+}
+
 export interface SyncScoreLive {
   sector_slug: string;
   sector_name: string;

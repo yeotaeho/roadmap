@@ -7,7 +7,6 @@ import {
   Compass,
   Link2,
   MoveRight,
-  Sparkles,
   Rocket,
   TrendingUp,
   Workflow,
@@ -113,37 +112,14 @@ export function DashboardView() {
   );
 }
 
-function OpportunityRadar() {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">기회 레이더 (Mock)</h3>
-      <svg viewBox="0 0 260 180" className="w-full h-44 mt-3">
-        <polygon points="130,20 220,75 190,155 70,155 40,75" fill="#eef2ff" />
-        <polygon points="130,40 200,82 178,142 82,142 60,82" fill="#e0e7ff" />
-        <polygon points="130,56 186,88 168,132 92,132 74,88" fill="#c7d2fe" />
-        <polygon
-          points="130,50 198,86 164,130 86,126 70,88"
-          fill="rgba(16,185,129,0.35)"
-          stroke="#10b981"
-          strokeWidth="2"
-        />
-      </svg>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        자본 유입 대비 인재 공급이 낮은 영역이 블루오션입니다.
-      </p>
-    </div>
-  );
-}
-
 function GapPanel() {
   const { data, isLoading, isError } = useGapIssues();
   const items = data ?? [];
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">블루오션 (세상의 결핍)</h2>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <PanelStatus isLoading={isLoading} isError={isError} isEmpty={items.length === 0} label="블루오션">
-          <div className="space-y-3">
+      <PanelStatus isLoading={isLoading} isError={isError} isEmpty={items.length === 0} label="블루오션">
+        <div className="space-y-3">
             {items.map((card) => (
               <article key={card.id} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
                 <div className="grid sm:grid-cols-2">
@@ -166,43 +142,8 @@ function GapPanel() {
                 </div>
               </article>
             ))}
-          </div>
-        </PanelStatus>
-        <OpportunityRadar />
-      </div>
-    </div>
-  );
-}
-
-function SyncRadar() {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">나의 스탯 육각형</h3>
-      <svg viewBox="0 0 260 180" className="w-full h-44 mt-3">
-        <polygon points="130,20 220,70 220,130 130,160 40,130 40,70" fill="#f8fafc" />
-        <polygon points="130,40 196,78 196,122 130,144 64,122 64,78" fill="#eef2ff" />
-        <polygon
-          points="130,52 186,86 178,122 130,136 82,120 74,88"
-          fill="rgba(79,70,229,0.32)"
-          stroke="#4f46e5"
-          strokeWidth="2"
-        />
-        <polygon
-          points="130,44 198,80 188,124 130,148 76,124 62,86"
-          fill="rgba(16,185,129,0.2)"
-          stroke="#10b981"
-          strokeWidth="2"
-          strokeDasharray="4 3"
-        />
-      </svg>
-      <div className="mt-2 flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
-        <span className="inline-flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" /> 내 역량
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" /> 목표 직무 요구치
-        </span>
-      </div>
+        </div>
+      </PanelStatus>
     </div>
   );
 }
@@ -212,7 +153,6 @@ type SyncRow = { trend: string; score: number; badge?: string };
 function SyncPanel() {
   const profile = useStore((s) => s.profile);
   const { data, isLoading, isError } = useSyncScores(profile?.id);
-  const growth = ["Python", "FastAPI", "LangGraph", "RAG", "AI 아키텍처"];
   const needsLogin = !profile?.id;
   const trendSync: SyncRow[] = (data ?? []).map((s) => ({
     trend: s.sector_name,
@@ -222,36 +162,6 @@ function SyncPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 flex items-start gap-3 dark:border-indigo-900/40 dark:bg-indigo-900/20">
-        <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5" />
-        <p className="text-sm text-indigo-900 dark:text-indigo-200">
-          태호님은 백엔드 기반이 탄탄해서 AI 아키텍처로 확장하기 좋은 타이밍입니다.
-        </p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SyncRadar />
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">성장 궤적</h3>
-          <div className="mt-4 space-y-3">
-            {growth.map((step, idx) => (
-              <div key={step} className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center dark:bg-indigo-900/40 dark:text-indigo-300">
-                  {idx + 1}
-                </span>
-                <span className="text-sm text-slate-700 dark:text-slate-300">{step}</span>
-                {idx < growth.length - 1 && (
-                  <MoveRight className="w-4 h-4 text-slate-300 dark:text-slate-600" />
-                )}
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-            저장한 관심 키워드의 변화로 성장 흐름을 시각화합니다.
-          </p>
-        </div>
-      </div>
-
       <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 inline-flex items-center gap-2 dark:text-slate-100">

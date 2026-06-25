@@ -4,8 +4,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import {
+  fetchGapIssueDetail,
   fetchGapIssues,
   fetchOpportunities,
+  fetchOpportunityDetail,
   fetchPulse,
   fetchSyncScores,
 } from '@/lib/api/dashboard';
@@ -34,6 +36,26 @@ export function useSyncScores(userId?: string) {
     queryKey: ['sync-scores', userId],
     queryFn: () => fetchSyncScores(userId as string),
     enabled: !!userId,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useGapIssueDetail(id: string) {
+  return useQuery({
+    queryKey: ['gap-issue', id],
+    queryFn: () => fetchGapIssueDetail(id),
+    enabled: !!id,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useOpportunityDetail(id: string) {
+  return useQuery({
+    queryKey: ['chance-opportunity', id],
+    queryFn: () => fetchOpportunityDetail(id),
+    enabled: !!id,
     staleTime: STALE,
     retry: 1,
   });
