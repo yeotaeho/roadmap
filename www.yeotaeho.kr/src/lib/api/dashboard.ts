@@ -153,7 +153,11 @@ export interface PulseHistory {
 
 export async function fetchPulseHistory(sector: string): Promise<PulseHistory> {
   const { data } = await apiClient.get(`/api/insight/pulse/${sector}/history`);
-  return data;
+  return {
+    sector_slug: data.sector_slug,
+    sector_name: data.sector_name,
+    points: data.points ?? [],
+  };
 }
 
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
