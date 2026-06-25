@@ -53,6 +53,40 @@ async def refine_pulse(
         raise HTTPException(status_code=500, detail=f"Pulse 정제 실패: {str(e)}")
 
 
+@router.get("/pulse/overview")
+async def get_pulse_overview(
+    heatmap_weeks: int = Query(default=8, ge=1, le=52, description="히트맵 주 수"),
+    momentum_months: int = Query(default=12, ge=1, le=36, description="모멘텀 차트 월 수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pulse overview 서빙 — 속도계·모멘텀 시계열·섹터×시간 히트맵·관심 점유율."""
+    try:
+        data = await PulseRepository(db).fetch_overview(heatmap_weeks, momentum_months)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Pulse overview 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Pulse overview 조회 실패: {str(e)}")
+
+
+@router.get("/pulse/{sector}/history")
+async def get_pulse_history(
+    sector: str,
+    weeks: int = Query(default=26, ge=1, le=104, description="조회 주 범위"),
+    db: AsyncSession = Depends(get_db),
+):
+    """단일 섹터 Pulse 시계열(드릴다운)."""
+    try:
+        data = await PulseRepository(db).fetch_history(sector, weeks)
+        if data is None:
+            raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다.")
+        return {"success": True, **data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pulse history 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Pulse history 조회 실패: {str(e)}")
+
+
 @router.get("/gap")
 async def get_gap(
     sector: str | None = Query(default=None, description="섹터 슬러그 필터"),
