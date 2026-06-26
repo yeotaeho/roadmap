@@ -68,6 +68,16 @@ def test_normalize_band() -> None:
     )
 
 
+def test_winsor_isolates_spike() -> None:
+    # 성숙 데이터(다수 점)에서 단발 스파이크가 타 섹터를 0 근처로 압축하지 않는다.
+    sigs = [AxisSignal(f"s{v}", D, "innovation", float(v)) for v in range(10, 30)]  # 10~29
+    sigs.append(AxisSignal("spike", D, "innovation", 1000.0))
+    out = {s.sector_slug: s.value for s in _normalize_axes(sigs)}
+    check("스파이크 상단 클립(100)", out["spike"] == 100.0)
+    normals = [out[f"s{v}"] for v in range(10, 30)]
+    check("비-스파이크가 압축되지 않고 넓게 퍼짐(>50)", (max(normals) - min(normals)) > 50)
+
+
 def test_span_zero_neutral() -> None:
     # 단일/동일값 축은 50(중립).
     out = _normalize_axes([AxisSignal("fintech", D, "people", 7.0)])
@@ -100,7 +110,7 @@ def test_market_source_map() -> None:
 
 
 def main() -> int:
-    for fn in (test_normalize_band, test_span_zero_neutral, test_fuse_commensurate, test_market_source_map):
+    for fn in (test_normalize_band, test_winsor_isolates_spike, test_span_zero_neutral, test_fuse_commensurate, test_market_source_map):
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

@@ -307,12 +307,32 @@ _CROSSOVER_SQL = text(
 )
 
 
+# 정규화 윈저화 분위수 — min/max 대신 5/95 퍼센타일을 band 경계로 써,
+# 한 섹터의 단발 스파이크가 스케일을 장악해 타 섹터를 0 근처로 압축(노이즈 전이)하는 것을 막는다.
+NORM_CLIP_Q = 0.05
+
+
+def _percentile(sorted_vals: list[float], q: float) -> float:
+    """정렬된 값 목록의 분위수(선형 보간). q in [0,1]. 순수 함수."""
+    n = len(sorted_vals)
+    if n == 0:
+        return 0.0
+    if n == 1:
+        return sorted_vals[0]
+    pos = q * (n - 1)
+    lo_i = int(pos)
+    if lo_i + 1 >= n:
+        return sorted_vals[-1]
+    return sorted_vals[lo_i] + (sorted_vals[lo_i + 1] - sorted_vals[lo_i]) * (pos - lo_i)
+
+
 def _normalize_axes(signals: list[AxisSignal]) -> list[AxisSignal]:
-    """축별로 값을 0~100 양수 band로 min-max 정규화(이종 단위 통약).
+    """축별로 값을 0~100 양수 band로 정규화(이종 단위 통약).
 
     혁신 카운트(1~50)와 시장 거래대금(수십억)을 동등 비교 가능하게 만든다.
-    모멘텀은 compute_silver의 윈도우 상대변화로 산출되므로, 정규화가 섹터의
-    시간 변동(상대 추세)은 보존하면서 축간 스케일 격차만 제거한다. 단일/동일값
+    band 경계를 min/max가 아니라 5/95 퍼센타일로 잡아(윈저화) 단발 스파이크가
+    스케일을 장악하지 못하게 하고, 경계 밖 값은 0/100 으로 클립한다. 모멘텀은
+    compute_silver의 윈도우 상대변화로 산출되므로 시간 변동은 보존된다. 단일/동일값
     축(span=0)은 50(중립)으로 둔다.
     """
     by_axis: dict[str, list[AxisSignal]] = {}
@@ -321,11 +341,15 @@ def _normalize_axes(signals: list[AxisSignal]) -> list[AxisSignal]:
 
     out: list[AxisSignal] = []
     for axis, items in by_axis.items():
-        values = [s.value for s in items]
-        lo, hi = min(values), max(values)
+        values = sorted(s.value for s in items)
+        lo = _percentile(values, NORM_CLIP_Q)
+        hi = _percentile(values, 1.0 - NORM_CLIP_Q)
         span = hi - lo
         for s in items:
-            norm = 50.0 if span == 0 else (s.value - lo) / span * 100.0
+            if span == 0:
+                norm = 50.0
+            else:
+                norm = max(0.0, min(100.0, (s.value - lo) / span * 100.0))
             out.append(AxisSignal(s.sector_slug, s.reference_date, axis, round(norm, 4)))
     return out
 
