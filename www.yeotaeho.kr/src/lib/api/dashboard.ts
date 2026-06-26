@@ -92,8 +92,9 @@ export interface SyncScoreLive {
   recorded_date: string | null;
 }
 
-export async function fetchSyncScores(userId: string): Promise<SyncScoreLive[]> {
-  const { data } = await apiClient.get('/api/sync/scores', { params: { user_id: userId } });
+export async function fetchSyncScores(): Promise<SyncScoreLive[]> {
+  // user_id 는 서버가 Bearer 토큰에서 도출한다(IDOR 차단). 쿼리 파라미터로 보내지 않는다.
+  const { data } = await apiClient.get('/api/sync/scores');
   return data?.scores ?? [];
 }
 

@@ -40,7 +40,7 @@ export function useOpportunities() {
 export function useSyncScores(userId?: string) {
   return useQuery({
     queryKey: ['sync-scores', userId],
-    queryFn: () => fetchSyncScores(userId as string),
+    queryFn: fetchSyncScores,
     enabled: !!userId,
     staleTime: STALE,
     retry: 1,
