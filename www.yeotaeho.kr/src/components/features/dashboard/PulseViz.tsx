@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Flame, Minus, TrendingDown } from "lucide-react";
+import { ArrowRight, Flame, Minus, TrendingDown } from "lucide-react";
 
 // 시간축 점수 배열을 미니 추이 선으로. 추세 방향에 따라 색이 바뀐다.
 export function Sparkline({
@@ -88,5 +88,99 @@ export function TrendStatusBadge({ momentum }: { momentum: number | null | undef
       <Icon className="w-3 h-3" aria-hidden />
       {label}
     </span>
+  );
+}
+
+function CausalStep({
+  label,
+  text,
+  tone,
+}: {
+  label: string;
+  text: string;
+  tone: "slate" | "indigo" | "emerald";
+}) {
+  const cls = {
+    slate: "bg-slate-50 dark:bg-slate-800",
+    indigo: "bg-indigo-50 dark:bg-indigo-900/20",
+    emerald: "bg-emerald-50 dark:bg-emerald-900/20",
+  }[tone];
+  const labelCls = {
+    slate: "text-slate-400",
+    indigo: "text-indigo-400",
+    emerald: "text-emerald-500",
+  }[tone];
+  const textCls = {
+    slate: "text-slate-700 dark:text-slate-200",
+    indigo: "text-indigo-900 dark:text-indigo-200",
+    emerald: "text-emerald-900 dark:text-emerald-200 font-semibold",
+  }[tone];
+  return (
+    <div className={`flex-1 rounded-lg p-2.5 ${cls}`}>
+      <p className={`text-[10px] ${labelCls}`}>{label}</p>
+      <p className={`mt-1 text-xs leading-snug ${textCls}`}>{text}</p>
+    </div>
+  );
+}
+
+// 인과사슬 가로 플로우 — 거시 → 산업 → 청년 기회. 모바일은 세로, 데스크톱은 가로 화살표.
+export function CausalFlow({
+  sectorName,
+  accentColor,
+  macro,
+  industry,
+  chance,
+}: {
+  sectorName: string;
+  accentColor?: string | null;
+  macro: string;
+  industry: string;
+  chance: string;
+}) {
+  const arrow = (
+    <div className="flex items-center justify-center shrink-0">
+      <ArrowRight className="w-4 h-4 text-indigo-500 rotate-90 sm:rotate-0" aria-hidden />
+    </div>
+  );
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+      <span className="text-xs font-semibold" style={accentColor ? { color: accentColor } : undefined}>
+        {sectorName}
+      </span>
+      <div className="mt-2 flex flex-col sm:flex-row sm:items-stretch gap-1.5">
+        <CausalStep label="거시 이벤트" text={macro} tone="slate" />
+        {arrow}
+        <CausalStep label="산업 영향" text={industry} tone="indigo" />
+        {arrow}
+        <CausalStep label="청년 기회" text={chance} tone="emerald" />
+      </div>
+    </div>
+  );
+}
+
+// 원형 게이지 — 0~100 점수를 링으로. 라벨/추이는 호출부에서 옆에 배치.
+export function SyncGauge({ value, size = 64 }: { value: number; size?: number }) {
+  const pct = Math.max(0, Math.min(100, value));
+  const r = 30;
+  const circ = 2 * Math.PI * r;
+  const filled = (pct / 100) * circ;
+  return (
+    <svg viewBox="0 0 72 72" width={size} height={size} className="shrink-0" role="img" aria-label={`싱크 ${Math.round(pct)}%`}>
+      <circle cx="36" cy="36" r={r} fill="none" stroke="currentColor" strokeWidth="7" className="text-slate-200 dark:text-slate-700" />
+      <circle
+        cx="36"
+        cy="36"
+        r={r}
+        fill="none"
+        stroke="#4f46e5"
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={`${filled.toFixed(1)} ${circ.toFixed(1)}`}
+        transform="rotate(-90 36 36)"
+      />
+      <text x="36" y="41" textAnchor="middle" fontSize="17" fontWeight="bold" className="fill-slate-900 dark:fill-slate-100">
+        {Math.round(pct)}
+      </text>
+    </svg>
   );
 }

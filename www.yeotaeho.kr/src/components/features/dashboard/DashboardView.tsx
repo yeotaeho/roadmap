@@ -12,10 +12,11 @@ import {
   Workflow,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { useGapIssues, useOpportunities, useSyncScores } from "@/hooks/useDashboard";
+import { useGapIssues, useOpportunities, useSyncHistory, useSyncScores } from "@/hooks/useDashboard";
 import { ddayLabel } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
 import { PulseTab } from "./PulseTab";
+import { Sparkline, SyncGauge } from "./PulseViz";
 
 const SUB_TABS = [
   {
@@ -153,12 +154,18 @@ type SyncRow = { trend: string; score: number; badge?: string };
 function SyncPanel() {
   const profile = useStore((s) => s.profile);
   const { data, isLoading, isError } = useSyncScores(profile?.id);
+  const { data: history } = useSyncHistory(profile?.id);
   const needsLogin = !profile?.id;
   const trendSync: SyncRow[] = (data ?? []).map((s) => ({
     trend: s.sector_name,
     score: s.score,
     badge: s.badge ?? undefined,
   }));
+  const overall = trendSync.length
+    ? Math.round(trendSync.reduce((acc, r) => acc + r.score, 0) / trendSync.length)
+    : 0;
+  const trajectory = (history ?? []).map((h) => h.score);
+  const delta = trajectory.length >= 2 ? trajectory[trajectory.length - 1] - trajectory[0] : null;
 
   return (
     <div className="space-y-4">
@@ -184,6 +191,24 @@ function SyncPanel() {
             isEmpty={trendSync.length === 0}
             label="싱크로율"
           >
+            <div className="mt-4 flex items-center gap-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/40 dark:bg-indigo-900/10">
+              <SyncGauge value={overall} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">나와의 싱크 {overall}%</p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  관심·직무 기준 섹터 적합도. {trendSync[0]?.trend}가 당신과 가장 정렬됐어요.
+                  {delta != null && delta !== 0 && (
+                    <span className={delta > 0 ? "text-emerald-600" : "text-rose-600"}>
+                      {" "}지난 추이 {delta > 0 ? "+" : ""}
+                      {delta}p.
+                    </span>
+                  )}
+                </p>
+              </div>
+              {trajectory.length >= 2 && (
+                <Sparkline values={trajectory} width={84} height={32} className="w-20 h-8 shrink-0" />
+              )}
+            </div>
             <ul className="mt-4 space-y-3">
               {trendSync.map((row) => (
                 <li

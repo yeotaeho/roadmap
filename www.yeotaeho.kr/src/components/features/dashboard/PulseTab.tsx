@@ -16,7 +16,7 @@ import {
 } from "@/hooks/useDashboard";
 import type { Crossover, PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
-import { Sparkline, TrendStatusBadge } from "./PulseViz";
+import { CausalFlow, Sparkline, TrendStatusBadge } from "./PulseViz";
 
 function heatTone(score: number | null): string {
   if (score == null) return "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500";
@@ -338,30 +338,16 @@ export function PulseTab() {
           isEmpty={(causal?.length ?? 0) === 0}
           label="인과사슬"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(causal ?? []).slice(0, 6).map((c) => (
-              <div
+          <div className="flex flex-col gap-3">
+            {(causal ?? []).slice(0, 4).map((c) => (
+              <CausalFlow
                 key={c.sector_slug}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 flex flex-col gap-1.5"
-              >
-                <span className="text-xs font-semibold" style={{ color: c.accent_color }}>
-                  {c.sector_name}
-                </span>
-                <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
-                  <p className="text-[10px] text-slate-400">거시 이벤트</p>
-                  <p className="text-xs text-slate-700 dark:text-slate-200">{c.macro_event}</p>
-                </div>
-                <div className="text-center text-slate-300 text-xs leading-none">↓</div>
-                <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-2">
-                  <p className="text-[10px] text-indigo-400">산업 영향</p>
-                  <p className="text-xs text-indigo-900 dark:text-indigo-200">{c.industry_impact}</p>
-                </div>
-                <div className="text-center text-slate-300 text-xs leading-none">↓</div>
-                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 p-2">
-                  <p className="text-[10px] text-emerald-500">청년 기회</p>
-                  <p className="text-xs text-emerald-900 dark:text-emerald-200">{c.youth_chance}</p>
-                </div>
-              </div>
+                sectorName={c.sector_name}
+                accentColor={c.accent_color}
+                macro={c.macro_event}
+                industry={c.industry_impact}
+                chance={c.youth_chance}
+              />
             ))}
           </div>
         </PanelStatus>

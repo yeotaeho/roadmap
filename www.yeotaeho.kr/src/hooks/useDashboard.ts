@@ -15,6 +15,7 @@ import {
   fetchPulseHistory,
   fetchPulseOverview,
   fetchSyncScores,
+  fetchSyncHistory,
   fetchTrendingKeywords,
 } from '@/lib/api/dashboard';
 
@@ -41,6 +42,16 @@ export function useSyncScores(userId?: string) {
   return useQuery({
     queryKey: ['sync-scores', userId],
     queryFn: fetchSyncScores,
+    enabled: !!userId,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useSyncHistory(userId?: string) {
+  return useQuery({
+    queryKey: ['sync-history', userId],
+    queryFn: fetchSyncHistory,
     enabled: !!userId,
     staleTime: STALE,
     retry: 1,

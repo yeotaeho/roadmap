@@ -98,6 +98,16 @@ export async function fetchSyncScores(): Promise<SyncScoreLive[]> {
   return data?.scores ?? [];
 }
 
+export interface SyncHistoryPoint {
+  date: string | null;
+  score: number;
+}
+
+export async function fetchSyncHistory(): Promise<SyncHistoryPoint[]> {
+  const { data } = await apiClient.get('/api/sync/scores/history');
+  return data?.history ?? [];
+}
+
 export interface PulseGauge {
   weekly_index: number | null;
   speed_kmh: number | null;
