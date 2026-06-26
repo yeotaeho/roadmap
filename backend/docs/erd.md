@@ -22,6 +22,14 @@
 - `e2c5a7b9d3f4`(raw_discourse_data·verified_company_master)는 Neon **미적용 가능성**이 있다. 배포 전 `alembic current` 확인이 필수다.
 - `9f2a6d4e1b0c`(2026-05-06, reset)가 `alembic_version`을 제외한 **public 전 테이블을 DROP CASCADE** 후 `users`·`user_sync_profiles`만 재생성했다. 그 이전 마이그레이션이 만든 `user_competency`·`user_roadmap_status`·`refresh_tokens`·`playing_with_neon`은 **현재 존재하지 않는다**. 이후 마이그레이션이 raw_*·sectors계열·refined_innovation 계열을 추가했다.
 
+> **⚠️ 2026-06-26 갱신 — 아래 §0 목록(2026-06-24 기준)은 마이그레이션 파일이 그 이후 크게 진척돼 일부 stale 하다.**
+> - **마이그레이션 파일 head = `b8e4c2a6f1d9`** (체인: `e2c5a7b9d3f4` → … → `f1a2b3c4d5e6`(Pulse) → `b2d4f6a8c0e1`(text_sector) → `c3e7f1a9b5d2` → `d4f8a2c6e0b3`(Gap) → `e5a9c3f7b1d4`(Chance) → `f6b1d4e8a2c5`(pgvector) → `f8c2e6a0d3b7`(Sync) → `a7d3f1b9c2e4`(Briefing) → `b8e4c2a6f1d9`(Causal)). **파일 존재 ≠ Neon 적용** — 배포 전 `alembic current` 로 실제 적용 head 확인 필수.
+> - 위 마이그레이션으로 **Silver §5.1~5.3 + Gold §6 의 인사이트 6수직 테이블이 파일상 정의됨**: `refined_gap_insights`·`refined_chance_insights`·`refined_pulse_metric_silver`·`refined_sync_inputs`·`document_embeddings`·`user_embeddings`·`pulse_metrics_log`·`gap_issues`·`issue_evidences`·`chance_opportunities`·`user_chance_matches`·`sync_scores_daily`·`economic_briefings`·`causal_chains`. 따라서 이들은 더 이상 🔴(목표 모델)이 아니라 **마이그레이션 정의됨**(Neon 적용은 별도 확인).
+> - **미문서 실재 테이블 2종(ORM+마이그레이션 존재, 본 카탈로그 누락)**: `refined_text_sector_class`(`b2d4f6a8c0e1` — economic_text·discourse 섹터 분류 Silver, raw_table_ref VARCHAR(40)) · `refined_causal_chain_insights`(`b8e4c2a6f1d9` — Causal Silver, causal_chains 의 정제원). 추후 정식 절로 편입 필요.
+> - **`trending_keywords`·`crossover_metrics` 는 ORM/마이그레이션이 없다.** 본 절 §6 DDL 은 미실현 설계이며, 실제로는 런타임 즉석 산출(`domain/market_insight/hub/services/keyword_trends.py`·`crossover_metrics.py`)로 대체됐다. 물리 테이블을 만들지 않는다.
+> - 여전히 🔴 미실현: Roadmap/Coach §6·Consult/Profile §7 (해당 도메인 스캐폴딩 단계).
+> - 아키텍처 메모: 인사이트 수직의 실제 구현은 LangGraph/MCP 가 아니라 "얇은 라우터 → RefineService → raw SQL repository → DB" 의 직선 파이프라인이다.
+
 **현재 물리 존재 테이블 (✅, 총 14)**
 `users` · `user_sync_profiles` · `sectors` · `sub_sectors` · `sector_source_map` · `raw_economic_data` · `raw_market_timeseries` · `raw_innovation_data` · `raw_people_data` · `raw_opportunity_data` · `raw_discourse_data`\* · `verified_company_master`\* · `refined_innovation_signal`🟡 · `refined_signal_sources`🟡
 (\* = `e2c5a7b9d3f4` 적용 시 존재. refined_* 2종은 DDL만 있고 정제 로직이 없어 🟡)
@@ -918,7 +926,7 @@ CREATE TABLE user_competencies (
 
 ---
 
-문서 버전: v2.8  
-최종 업데이트: 2026-06-24 (v2.8 — P0 개정: §0 구현상태·head 정합, §5.2 AI/RAG 임베딩, §5.3 Sync·Pulse 산출 Silver 재설계)
-실제 마이그레이션 head: `e2c5a7b9d3f4`
-이전: v2.7 (2026-06-12, 결함 A·B·C·D — `d7f3a9c1e5b2`)
+문서 버전: v2.9  
+최종 업데이트: 2026-06-26 (v2.9 — §0 마이그레이션 정합 갱신: 파일 head `b8e4c2a6f1d9`, 인사이트 6수직 Silver/Gold 정의 반영, 미문서 테이블 2종·런타임 산출 2종 명시)
+마이그레이션 파일 head: `b8e4c2a6f1d9` (Neon 적용은 `alembic current` 확인 필요)
+이전: v2.8 (2026-06-24, P0 개정 — `e2c5a7b9d3f4`) · v2.7 (2026-06-12, 결함 A·B·C·D — `d7f3a9c1e5b2`)

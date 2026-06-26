@@ -6,8 +6,8 @@
 
 `market_insight`는 Bronze(`master` 도메인 수집분)를 **Silver 정제 → Gold 서빙**하는 인사이트 엔진이다. 이번 세션에 ERD가 설계만 해둔 나머지 Silver 계층을 전부 구현해, **6개 정제 수직 + pgvector 임베딩 인프라**가 가동되고 프론트 대시보드 4탭이 실데이터로 연결됐다.
 
-- 마이그레이션 head: **`f8c2e6a0d3b7`**
-- 일일 잡 체인(`core/scheduler.py` `_DAILY_JOBS`): `… → text_classify → entity_extract → gap_refine → chance_refine → chance_match → document_embed → user_embed → pulse_refine → sync_refine`
+- 마이그레이션 파일 head: **`b8e4c2a6f1d9`**(Causal). Neon 적용은 `alembic current` 확인 필요.
+- 일일 정제 체인 — **단일 `insight_refine` 파이프라인 잡으로 직렬화**(2026-06-26, Silver→Gold 순서 보장·레이스 방지): `text_classify → entity_extract → gap_refine → causal_refine → chance_refine → chance_match → document_embed → user_embed → pulse_refine → briefing_refine → sync_refine`. 개별 스텝은 `run_job_now("<step>")` 로 수동 백필 가능(`_REFINE_PIPELINE` 폴백).
 - 공용 LLM 클라이언트: `core/llm/client.py` (classify_sector·extract_signal·extract_gap·extract_chance·embed, openai lazy import, 각 파서 순수함수)
 - 무네트워크 테스트: `backend/scripts/*_test.py` (총 128 PASS)
 
@@ -22,6 +22,8 @@
 | **Chance** | `chance_refine_service`·`chance_match_service` | `refined_chance_insights` | `chance_opportunities`·`user_chance_matches` | `/api/chance/{opportunities,opportunities/{id},matches,refine,match}` | `chance_refine`·`chance_match` | ✅ 추출+키워드매칭 |
 | **임베딩** | `embed_service`(Document/User) | `document_embeddings`·`user_embeddings`(halfvec 3072) | — | — | `document_embed`·`user_embed` | ✅ pgvector 0.8 + HNSW |
 | **Sync** | `sync_refine_service` | `refined_sync_inputs` | `sync_scores_daily` | `GET /api/sync/scores`·`POST /sync/refine` | `sync_refine` | ✅ 코사인 적합도×트렌드 |
+| **Causal** | `causal_chain_service` | `refined_causal_chain_insights` | `causal_chains` | `GET /api/insight/causal-chains`·`POST /causal-chains/refine` | `causal_refine` | ✅ 거시→산업→청년기회 LLM (커밋 `146b75e`) |
+| **Briefing** | `briefing_service` | — | `economic_briefings` | `GET /api/insight/briefing`·`POST /briefing/refine` | `briefing_refine` | ✅ 3줄 브리핑 LLM+템플릿 폴백 (커밋 `91c9cb4`) |
 
 ## 2. 데이터 흐름 (Medallion + 잡 체인)
 
@@ -42,7 +44,7 @@ Bronze(master 수집) raw_*
 
 ## 3. 마이그레이션 체인 (이번 세션 추가분)
 
-`a1b2c3d4e5f6`(직전 Pulse) → `b2d4f6a8c0e1`(refined_text_sector_class) → `c3e7f1a9b5d2`(refined_innovation_signal 보강) → `d4f8a2c6e0b3`(Gap) → `e5a9c3f7b1d4`(Chance) → `f6b1d4e8a2c5`(pgvector+임베딩) → **`f8c2e6a0d3b7`(Sync, head)**
+`a1b2c3d4e5f6`(직전 Pulse) → `b2d4f6a8c0e1`(refined_text_sector_class) → `c3e7f1a9b5d2`(refined_innovation_signal 보강) → `d4f8a2c6e0b3`(Gap) → `e5a9c3f7b1d4`(Chance) → `f6b1d4e8a2c5`(pgvector+임베딩) → `f8c2e6a0d3b7`(Sync) → `a7d3f1b9c2e4`(Briefing Gold) → **`b8e4c2a6f1d9`(Causal, head)**
 
 ## 4. 프론트 연동 현황 (`www.yeotaeho.kr`)
 
@@ -55,7 +57,7 @@ Bronze(master 수집) raw_*
 
 ### A. Pulse 부가 서빙 (싼 것부터)
 - **모멘텀 시계열·결정론 부가 서빙** ✅ — 구현·머지됨(커밋 `bbfb651`~`6d88ba3`, main). `GET /api/insight/pulse/overview`(속도계/주간지수·연간 모멘텀 시계열·섹터×시간 히트맵·관심 점유율)와 `GET /api/insight/pulse/{sector}/history` 추가, 프론트 `PulseTab`에 4개 섹션 라이브 복원. 순수함수 `domain/market_insight/hub/services/pulse_overview.py` + `PulseRepository.fetch_overview`/`fetch_history` + `scripts/pulse_overview_test.py`(20 checks). 히트맵 2번째 축은 **섹터×시간**으로 구현(섹터×축 히트맵은 별도 미구현으로 남김). 설계/계획: [pulse-deterministic-serving-design](../../../../docs/superpowers/specs/2026-06-25-pulse-deterministic-serving-design.md), [pulse-deterministic-serving plan](../../../../docs/superpowers/plans/2026-06-25-pulse-deterministic-serving.md).
-- **부가 Gold 수직** 🟡 — 여전히 미구현, 다음 우선순위. `trending_keywords`(키워드 티커/클라우드 — `refined_innovation_signal.extracted_keywords` 활용), `economic_briefings`(3줄 브리핑, LLM), `causal_chains`(인과사슬, LLM), `crossover_metrics`(크로스오버 — "기존 vs 신흥" 데이터 정의 선결 필요). 프론트에서 제거된 mock 섹션들이 여기 대응.
+- **부가 Gold 수직** ✅ — 대부분 구현 완료(2026-06-26 기준). `economic_briefings`(3줄 브리핑 LLM, 커밋 `91c9cb4`)·`causal_chains`(인과사슬 LLM, 커밋 `146b75e`) Gold 라이브. `trending_keywords`·`crossover_metrics`는 **물리 테이블 대신 런타임 즉석 산출**로 구현(`GET /api/insight/keywords`·`/pulse/crossover` — `keyword_trends.py`·`crossover_metrics.py`). 별도 ORM/마이그레이션 없음.
 
 ### B. 엔티티 신호 활용
 - `refined_innovation_signal`은 적재되나 **아무도 소비하지 않음**. Pulse 축 보강(토픽 가중) 또는 별도 "급상승 토픽" 서빙으로 연결 가능. `refined_signal_sources` N:M 리니지 활용처도 미정.
