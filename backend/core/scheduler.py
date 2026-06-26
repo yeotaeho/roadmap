@@ -48,6 +48,7 @@ from domain.market_insight.hub.services.text_entity_extract_service import (
     TextEntityExtractService,
 )
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
+from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
 from domain.market_insight.hub.services.chance_refine_service import ChanceRefineService
 from domain.market_insight.hub.services.chance_match_service import ChanceMatchService
 from domain.market_insight.hub.services.embed_service import (
@@ -535,6 +536,16 @@ async def _job_gap_refine() -> dict[str, Any] | None:
         return await svc.refine_and_serve()
 
 
+async def _job_causal_refine() -> dict[str, Any] | None:
+    """분류 economic → 거시→산업→청년기회 인과사슬 추출 → causal_chains 재생성(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 인과사슬 정제 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await CausalChainRefineService(session).refine_and_serve()
+
+
 async def _job_chance_refine() -> dict[str, Any] | None:
     """opportunity → 유형·대상·혜택 추출 → Chance 공고 카드 재생성(멱등). 키 없으면 스킵."""
     settings = get_settings()
@@ -615,6 +626,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("text_classify",     _job_text_classify),
     ("entity_extract",    _job_entity_extract),
     ("gap_refine",        _job_gap_refine),
+    ("causal_refine",     _job_causal_refine),
     ("chance_refine",     _job_chance_refine),
     ("chance_match",      _job_chance_match),
     ("document_embed",    _job_document_embed),

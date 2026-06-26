@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from domain.market_insight.hub.repositories.briefing_repository import BriefingRepository
+from domain.market_insight.hub.repositories.causal_chain_repository import CausalChainRepository
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 from domain.market_insight.hub.repositories.pulse_repository import PulseRepository
 from domain.market_insight.hub.repositories.signal_repository import SignalRepository
 from domain.market_insight.hub.services.briefing_service import BriefingRefineService
+from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
@@ -146,6 +148,28 @@ async def refine_briefing(
     except Exception as e:
         logger.error(f"브리핑 정제 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"브리핑 정제 실패: {str(e)}")
+
+
+@router.get("/causal-chains")
+async def get_causal_chains(db: AsyncSession = Depends(get_db)):
+    """인과사슬 서빙 — 섹터별 최신 거시→산업→청년기회 카드."""
+    try:
+        chains = await CausalChainRepository(db).fetch_chains()
+        return {"success": True, "chains": chains, "count": len(chains)}
+    except Exception as e:
+        logger.error(f"인과사슬 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"인과사슬 조회 실패: {str(e)}")
+
+
+@router.post("/causal-chains/refine")
+async def refine_causal_chains(db: AsyncSession = Depends(get_db)):
+    """인과사슬 정제·서빙 수동 트리거 — 분류 economic → LLM → Silver → Gold."""
+    try:
+        result = await CausalChainRefineService(db).refine_and_serve()
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"인과사슬 정제 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"인과사슬 정제 실패: {str(e)}")
 
 
 @router.get("/gap")

@@ -9,6 +9,7 @@ import {
   fetchOpportunities,
   fetchOpportunityDetail,
   fetchBriefing,
+  fetchCausalChains,
   fetchCrossover,
   fetchPulse,
   fetchPulseHistory,
@@ -107,6 +108,15 @@ export function useCrossover() {
   return useQuery({
     queryKey: ['crossover'],
     queryFn: fetchCrossover,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useCausalChains() {
+  return useQuery({
+    queryKey: ['causal-chains'],
+    queryFn: fetchCausalChains,
     staleTime: STALE,
     retry: 1,
   });

@@ -218,6 +218,21 @@ export async function fetchCrossover(): Promise<Crossover> {
   };
 }
 
+export interface CausalChainItem {
+  sector_slug: string;
+  sector_name: string;
+  accent_color: string;
+  macro_event: string;
+  industry_impact: string;
+  youth_chance: string;
+  published_date: string | null;
+}
+
+export async function fetchCausalChains(): Promise<CausalChainItem[]> {
+  const { data } = await apiClient.get('/api/insight/causal-chains');
+  return data?.chains ?? [];
+}
+
 /** 마감일(ISO date)을 'D-n' / 'D-DAY' / '마감' 라벨로 변환한다. */
 export function ddayLabel(dDayDate: string | null): string {
   if (!dDayDate) return '상시';

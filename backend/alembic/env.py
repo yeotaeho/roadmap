@@ -63,6 +63,10 @@ from domain.market_insight.models.bases.refined_sync_inputs import (  # Silver
 )
 from domain.market_insight.models.bases.sync_scores_daily import SyncScoresDaily  # Gold
 from domain.market_insight.models.bases.economic_briefings import EconomicBriefing  # Gold
+from domain.market_insight.models.bases.refined_causal_chain_insights import (  # Silver
+    RefinedCausalChainInsights,
+)
+from domain.market_insight.models.bases.causal_chains import CausalChains  # Gold
 
 target_metadata = Base.metadata
 

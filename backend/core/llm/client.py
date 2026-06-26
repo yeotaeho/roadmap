@@ -49,6 +49,14 @@ _BRIEFING_SYSTEM_PROMPT = (
     'JSON 객체만 출력하라. 형식: {"lines": [{"content": <문장>, "trend_icon": <아이콘>}, ...] — 정확히 3개}.'
 )
 
+_CAUSAL_SYSTEM_PROMPT = (
+    "너는 한국어 경제·산업 뉴스에서 '거시 이벤트 → 산업 영향 → 청년 기회'의 인과 사슬을 찾는 분석기다. "
+    "기사에서 (1) 거시·정책 이벤트, (2) 그것이 특정 산업에 주는 영향, (3) 거기서 청년이 잡을 수 있는 기회를 "
+    "각각 한 문장으로 추출하라. 셋 중 하나라도 명확하지 않으면 macro_event 를 null 로 두라(억지 생성 금지). "
+    'JSON 객체만 출력하라. 형식: {"macro_event": <문장 또는 null>, "industry_impact": <문장 또는 null>, '
+    '"youth_chance": <문장 또는 null>}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -215,6 +223,35 @@ def _parse_briefing(raw: str | None) -> list[dict]:
     return out if len(out) == 3 else []
 
 
+def _parse_causal(raw: str | None) -> dict:
+    """인과사슬 추출 LLM 응답을 검증한다. 무네트워크 순수 함수.
+
+    macro_event·industry_impact·youth_chance 셋 다 있어야 유효. 하나라도 없으면 전부 None.
+    """
+    empty = {"macro_event": None, "industry_impact": None, "youth_chance": None}
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+
+    def _field(key: str) -> str | None:
+        v = obj.get(key)
+        return v.strip() if isinstance(v, str) and v.strip() else None
+
+    macro = _field("macro_event")
+    industry = _field("industry_impact")
+    youth = _field("youth_chance")
+    if macro is None or industry is None or youth is None:
+        return empty
+    return {
+        "macro_event": macro[:255],
+        "industry_impact": industry[:255],
+        "youth_chance": youth[:255],
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -297,6 +334,19 @@ class LlmClient:
             ],
         )
         return _parse_briefing(resp.choices[0].message.content)
+
+    async def extract_causal_chain(self, text: str) -> dict:
+        """텍스트에서 거시→산업→청년기회 인과사슬을 추출한다. macro None 이면 무효."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _CAUSAL_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        return _parse_causal(resp.choices[0].message.content)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""
