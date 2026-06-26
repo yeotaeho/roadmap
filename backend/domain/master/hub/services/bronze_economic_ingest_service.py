@@ -100,14 +100,19 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_board(base: BoardConfig, target_year: int | None) -> BoardConfig:
-    """target_year 가 명시되면 BoardConfig 의 연도만 override 한 인스턴스 반환."""
-    if target_year is None or target_year == base.target_year:
+    """연도를 맞춘 BoardConfig 반환 — 미명시면 *실행 시점의 현재 연도*로 해석.
+
+    과거에는 미명시 시 base.target_year(하드코딩 2026)를 그대로 써서, 해가 바뀌면
+    전건이 연도 필터에 걸려 조용히 0건이 되는 함정이 있었다(스케줄러는 연도를 주입하지 않음).
+    """
+    resolved = target_year if target_year is not None else datetime.now().year
+    if resolved == base.target_year:
         return base
     return BoardConfig(
         board_key=base.board_key,
         list_url=base.list_url,
         source_type=base.source_type,
-        target_year=target_year,
+        target_year=resolved,
         title_keyword=base.title_keyword,
         use_server_search=base.use_server_search,
         use_inline_search_json=base.use_inline_search_json,
@@ -626,9 +631,9 @@ class BronzeEconomicIngestService:
 
         바이오/헬스 선행 신호(GOVT_MFDS_APPROVAL). investment_amount=None (정성 신호).
         """
-        board: MfdsBoardConfig = (
-            MFDS_PRESS_BOARD if target_year is None else _mfds_with_year(MFDS_PRESS_BOARD, target_year)
-        )
+        # 미명시면 실행 시점의 현재 연도로 해석(연말 경과 시 0건 사망 방지).
+        year = target_year if target_year is not None else datetime.now().year
+        board: MfdsBoardConfig = _mfds_with_year(MFDS_PRESS_BOARD, year)
         wm = await self._latest_mfds_watermark(board.source_type)
         collector = MfdsBbsCollector(board)
 
