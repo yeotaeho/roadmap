@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-27 — 뉴스 RSS 본문 보강으로 content_body 결측 해소 (④ fetch 손실)
+- **무엇** — 한국경제 등 RSS summary 가 없거나 짧은 매체에서 원문 페이지를 fetch 해 본문을 추출·보강. `extract_article_body`(schema.org `itemprop=articleBody` 우선 + 매체 공통 셀렉터 폴백) + `parse_feed_entries(fetch_article DI)`. 280자 미만 항목만 보강하고, fetch 실패·결과가 더 짧으면 기존 summary 유지.
+- **왜** — Bronze 결측 측정 결과 discourse `content_body` 35.7% 결측(한국경제 100%). RSS 가 본문을 주지 않는데 수집기가 원문 보강을 안 해 "원문엔 있는데 못 가져오는" 손실 발생. 같은 코드베이스 Platum 의 `fetch_article_if_short` 패턴이 news_rss 엔 부재했다.
+- **어디** — [news_rss_collector.py](./../hub/services/collectors/discourse/news_rss/news_rss_collector.py) `extract_article_body`·`parse_feed_entries`·`_fetch_article_body`·`collect_sync`.
+- **검증** — `scripts/bronze_expansion_parse_test.py` 46 PASS(본문 보강 7건 추가, 기존 39건 회귀 없음). 라이브 end-to-end: 한국경제 `content_body` 0→1661/1325/1695자. 측정 스크립트 `scripts/bronze_null_audit.py`. 커밋 `d6948d4`(측정)·`e433fb1`(보강).
+- **후속** — 전자신문 티저(227자)도 보강 대상이나 전체 collect_sync 라이브는 미검증. fetch 실패·보강 건수 stats 가시화 미적용. 다음: KIAT `published_at` 96.4% NULL(Pulse 시계열 근간) 착수 예정.
+
 ## 2026-06-26 — 사람인 채용 수집 직무·스킬 키워드 보강 (⑤b)
 - **무엇** — 사람인 수집기 키워드를 섹터급 10개 + 직무·스킬급 14개(데이터엔지니어·백엔드·데브옵스·PM·UXUI 등)로 확장. 기본 수집을 섹터+직무 결합 세트(`_DEFAULT_KEYWORDS`)로.
 - **왜** — 평가 ⑤ "직무 해상도 부재"(산업 신호는 두꺼우나 '어떤 직무·스킬이 뜨는가'에 답할 Bronze 약함) 보강. 점핏은 사람인 계열로 별도 불필요, 원티드 OpenAPI는 키 신청 후 추가 가능.
