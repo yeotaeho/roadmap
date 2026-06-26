@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-26 — 데이터 퀄리티 수정(Sync 신뢰도·Pulse 정규화·Chance 매칭)
+- **무엇** — Bronze·Silver 퀄리티 평가 후 3개 Silver 결함 수정. ② Sync 적합도: 사용자별 min-max→전역 절대 스케일(`scale_affinity`)+스프레드 충분성 게이트(`has_sufficient_signal`)+"데이터 부족" 중립 배지, 원시 코사인 보존. ④ Pulse 축 정규화: min/max→5/95 퍼센타일 윈저화+클립(`_percentile`)로 단발 스파이크의 섹터 간 전이 차단. ⑤a Chance 매칭: 부분문자열→pgvector 코사인 의미 매칭(`fetch_match_affinities`·`semantic_match_score`)+키워드 폴백.
+- **왜** — 평가 결과 "그럴듯하지만 신뢰 못 할 숫자"(thin-data 노이즈를 확신 배지로, 스파이크 전이, 임의적 매칭) 리스크 식별.
+- **어디** — [sync_refine_service.py](../../hub/services/sync_refine_service.py), [pulse_repository.py](../../hub/repositories/pulse_repository.py) `_normalize_axes`, [chance_match_service.py](../../hub/services/chance_match_service.py), [chance_repository.py](../../hub/repositories/chance_repository.py) `_FETCH_MATCH_AFFINITIES`
+- **검증** — `sync_score_test`(17)·`pulse_axis_normalize_test`(18)·`pulse_scoring_test`(31)·`chance_extract_match_test`(21) 전부 PASS. 커밋 `f3881c8`·`308d6b5`·`2b2f2e9`.
+- **후속** — 절대 스케일 앵커(AFFINITY_LO/HI·CHANCE_COS_LO/HI)는 휴리스틱 → 실데이터로 튜닝. ③ 투자 금액 해상도·⑤b 직무 수요 소스는 설계/키 필요(미착수). 원시 코사인 정밀 보존은 affinity_raw 컬럼 마이그레이션 검토.
+
 ## 2026-06-26 — Sync 추이 엔드포인트 + 대시보드 재설계 연동
 - **무엇** — `GET /api/sync/scores/history`(일자별 섹터 평균 = 전체 싱크 추이) 신설. 프론트 대시보드 재설계(Pulse 히어로+점진공개, 섹터 스파크라인, 인과 가로 플로우, Sync 원형 게이지+추이)와 연동.
 - **왜** — 대시보드 정보위계·시각화 약점(빈약한 viz·평평한 위계) 개선 + 타 서비스(Exploding Topics·Lightcast·Koyfin) 패턴 차용. Sync 추이 표시에 이력 서빙 필요.
