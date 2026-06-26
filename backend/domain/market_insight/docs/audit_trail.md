@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-26 — 투자 금액 추출 Silver 수직 신설 (③a)
+- **무엇** — `refined_investment_flows` Silver 수직 신설. 투자/펀딩/M&A/IPO 성격 economic 헤드라인을 LLM(`extract_investment`)으로 금액(KRW)·통화·단계·기업 추출해 멱등 적재. 평가 ③ "투자흐름 금액 None(반쪽 신호)" 보강.
+- **왜** — 1순위 지표 "투자흐름"의 *강도(금액)*가 거의 비어("어느 섹터에 자본이 얼마나" 정량화 불가) 있던 갭.
+- **어디** — [client.py](../../../core/llm/client.py) `extract_investment`·`_parse_investment`·`_INVESTMENT_SYSTEM_PROMPT`, [refined_investment_flows.py](../../models/bases/refined_investment_flows.py), [investment_flow_service.py](../../hub/services/investment_flow_service.py), [investment_repository.py](../../hub/repositories/investment_repository.py), 마이그레이션 `c5f9a3b7d1e2`, 스케줄러 `_job_investment_refine`(파이프라인 entity_extract 뒤).
+- **검증** — `llm_investment_extract_test`(13)·`scheduler_refine_pipeline_test`(5) PASS, ORM import OK. 커밋 `5ec06cc`·`fd8cd70`·`0dbc5b9`. ⚠️ **마이그레이션 미적용**(DB 없음) — 배포 시 `alembic upgrade head`(`c5f9a3b7d1e2`) 필수, 미적용 시 잡 실패.
+- **후속** — 환율 추정 금지로 외화 전용 기사는 amount null(abstain). 섹터는 `refined_text_sector_class` 조인으로 도출(현재 sector_slug null). Pulse market 축/서빙 연결은 별도. ALIO 사업비·NPS 보유금액(③b)은 live 검증 필요.
+
 ## 2026-06-26 — 데이터 퀄리티 수정(Sync 신뢰도·Pulse 정규화·Chance 매칭)
 - **무엇** — Bronze·Silver 퀄리티 평가 후 3개 Silver 결함 수정. ② Sync 적합도: 사용자별 min-max→전역 절대 스케일(`scale_affinity`)+스프레드 충분성 게이트(`has_sufficient_signal`)+"데이터 부족" 중립 배지, 원시 코사인 보존. ④ Pulse 축 정규화: min/max→5/95 퍼센타일 윈저화+클립(`_percentile`)로 단발 스파이크의 섹터 간 전이 차단. ⑤a Chance 매칭: 부분문자열→pgvector 코사인 의미 매칭(`fetch_match_affinities`·`semantic_match_score`)+키워드 폴백.
 - **왜** — 평가 결과 "그럴듯하지만 신뢰 못 할 숫자"(thin-data 노이즈를 확신 배지로, 스파이크 전이, 임의적 매칭) 리스크 식별.
