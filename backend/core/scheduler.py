@@ -601,6 +601,34 @@ async def _job_briefing_refine() -> dict[str, Any]:
         return await BriefingRefineService(session).refine_and_serve()
 
 
+# 인사이트 Silver→Gold 정제 체인 — 앞 단계 산출을 뒤 단계가 소비하는 순서 의존이라
+# 개별 잡으로 흩어 등록하지 않고 단일 파이프라인 잡으로 순차 실행한다(레이스 방지).
+_REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
+    ("text_classify",     _job_text_classify),
+    ("entity_extract",    _job_entity_extract),
+    ("gap_refine",        _job_gap_refine),
+    ("causal_refine",     _job_causal_refine),
+    ("chance_refine",     _job_chance_refine),
+    ("chance_match",      _job_chance_match),
+    ("document_embed",    _job_document_embed),
+    ("user_embed",        _job_user_embed),
+    ("pulse_refine",      _job_pulse_refine),
+    ("briefing_refine",   _job_briefing_refine),
+    ("sync_refine",       _job_sync_refine),
+)
+
+
+async def _job_insight_refine_pipeline() -> dict[str, int]:
+    """정제 체인을 정의된 순서대로 순차 실행 — Silver→Gold 의존 순서를 보장한다.
+
+    각 스텝은 ``_run_job`` 으로 감싸 독립 세션 + 예외 격리되며,
+    한 스텝 실패가 뒤 스텝을 막지 않는다(멱등 재생성으로 다음 날 보정).
+    """
+    for name, factory in _REFINE_PIPELINE:
+        await _run_job(name, factory)
+    return {"steps": len(_REFINE_PIPELINE)}
+
+
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("techblog_kr",       _job_techblog_kr),
@@ -623,17 +651,8 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("goyong24_recruit",  _job_goyong24_recruit),
     ("saramin_recruit",   _job_saramin_recruit),
     ("news_rss",          _job_news_rss),
-    ("text_classify",     _job_text_classify),
-    ("entity_extract",    _job_entity_extract),
-    ("gap_refine",        _job_gap_refine),
-    ("causal_refine",     _job_causal_refine),
-    ("chance_refine",     _job_chance_refine),
-    ("chance_match",      _job_chance_match),
-    ("document_embed",    _job_document_embed),
-    ("user_embed",        _job_user_embed),
-    ("pulse_refine",      _job_pulse_refine),
-    ("briefing_refine",   _job_briefing_refine),
-    ("sync_refine",       _job_sync_refine),
+    # 정제 체인은 순서 보장을 위해 단일 파이프라인 잡으로 등록(_REFINE_PIPELINE).
+    ("insight_refine",    _job_insight_refine_pipeline),
 )
 
 _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
@@ -819,6 +838,11 @@ async def run_job_now(job_id: str) -> dict[str, Any]:
         if job:
             break
     if job is None:
+        # 정제 파이프라인 개별 스텝은 스케줄러에 개별 등록되지 않으므로 직접 실행(수동 백필 보존).
+        for name, factory in _REFINE_PIPELINE:
+            if name == job_id:
+                await _run_job(name, factory)
+                return {"job_id": name, "status": "ran_now"}
         raise KeyError(f"unknown job_id: {job_id}")
 
     # APScheduler 가 trigger 없이 한 번만 즉시 실행하도록 modify
