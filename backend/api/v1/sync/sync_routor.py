@@ -2,10 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.api_guards import require_internal_token
+from core.api_guards import get_authenticated_user_id, require_internal_token
 from core.database import get_db
 from domain.market_insight.hub.repositories.sync_repository import SyncRepository
 from domain.market_insight.hub.services.sync_refine_service import SyncRefineService
@@ -17,10 +17,10 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 
 @router.get("/scores")
 async def get_sync_scores(
-    user_id: str = Query(..., description="사용자 UUID"),
+    user_id: str = Depends(get_authenticated_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Sync 탭 서빙 — 사용자별 섹터 적합도 점수(내림차순)."""
+    """Sync 탭 서빙 — 인증 사용자의 섹터 적합도 점수(내림차순)."""
     try:
         scores = await SyncRepository(db).fetch_scores(user_id)
         return {"success": True, "scores": scores, "count": len(scores)}

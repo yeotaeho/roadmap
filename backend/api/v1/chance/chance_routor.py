@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.api_guards import require_internal_token
+from core.api_guards import get_authenticated_user_id, require_internal_token
 from core.database import get_db
 from domain.market_insight.hub.repositories.chance_repository import ChanceRepository
 from domain.market_insight.hub.services.chance_match_service import ChanceMatchService
@@ -47,10 +47,10 @@ async def opportunity_detail(opp_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/matches")
 async def user_matches(
-    user_id: str = Query(..., description="사용자 UUID"),
+    user_id: str = Depends(get_authenticated_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """사용자별 공고 적합도 매칭(점수 내림차순)."""
+    """인증 사용자의 공고 적합도 매칭(점수 내림차순)."""
     try:
         items = await ChanceRepository(db).fetch_matches(user_id)
         return {"success": True, "matches": items, "count": len(items)}
