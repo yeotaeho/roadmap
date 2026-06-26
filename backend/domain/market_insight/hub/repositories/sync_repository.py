@@ -68,6 +68,17 @@ _FETCH_SCORES = text(
     """
 )
 
+# 사용자 전체 싱크 추이 — 일자별 섹터 평균(스파크라인 입력). 최근 N일.
+_FETCH_SCORE_HISTORY = text(
+    """
+    SELECT recorded_date, ROUND(AVG(score))::int AS score
+    FROM sync_scores_daily
+    WHERE user_id = CAST(:user_id AS UUID)
+    GROUP BY recorded_date
+    ORDER BY recorded_date ASC
+    """
+)
+
 
 class SyncRepository(BaseRepository):
     async def fetch_affinity(self) -> list:
@@ -110,3 +121,10 @@ class SyncRepository(BaseRepository):
         ]
         result.sort(key=lambda x: x["score"], reverse=True)
         return result
+
+    async def fetch_score_history(self, user_id: str) -> list[dict]:
+        rows = (await self.session.execute(_FETCH_SCORE_HISTORY, {"user_id": user_id})).all()
+        return [
+            {"date": r.recorded_date.isoformat() if r.recorded_date else None, "score": int(r.score)}
+            for r in rows
+        ]

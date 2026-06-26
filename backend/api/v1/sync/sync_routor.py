@@ -29,6 +29,20 @@ async def get_sync_scores(
         raise HTTPException(status_code=500, detail=f"Sync 조회 실패: {str(e)}")
 
 
+@router.get("/scores/history")
+async def get_sync_score_history(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sync 추이 — 인증 사용자의 일자별 전체 싱크(섹터 평균) 시계열."""
+    try:
+        history = await SyncRepository(db).fetch_score_history(user_id)
+        return {"success": True, "history": history, "count": len(history)}
+    except Exception as e:
+        logger.error(f"Sync 추이 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Sync 추이 조회 실패: {str(e)}")
+
+
 @router.post("/refine", dependencies=[Depends(require_internal_token)])
 async def refine_sync(db: AsyncSession = Depends(get_db)):
     """Sync 정제·서빙 수동 트리거 — 사용자 임베딩×섹터 트렌드 적합도 재계산."""
