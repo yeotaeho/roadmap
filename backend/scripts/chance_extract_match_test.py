@@ -17,7 +17,13 @@ for _k, _v in dict(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.llm.client import _parse_chance  # noqa: E402
-from domain.market_insight.hub.services.chance_match_service import score_match  # noqa: E402
+from domain.market_insight.hub.services.chance_match_service import (  # noqa: E402
+    CHANCE_COS_HI,
+    CHANCE_COS_LO,
+    scale_cosine,
+    score_match,
+    semantic_match_score,
+)
 
 SECTORS = ["ai-data", "fintech", "bio-health"]
 
@@ -76,8 +82,33 @@ def test_score_match() -> None:
     check("점수 상한 100", s5 == 100)
 
 
+def test_scale_cosine() -> None:
+    check("LO 이하 → 0", scale_cosine(CHANCE_COS_LO - 0.05) == 0.0)
+    check("HI 이상 → 100", scale_cosine(CHANCE_COS_HI + 0.1) == 100.0)
+    check("중점 → 50", abs(scale_cosine((CHANCE_COS_LO + CHANCE_COS_HI) / 2) - 50.0) < 1e-9)
+
+
+def test_semantic_match() -> None:
+    # 코사인이 1차 신호 — 키워드 무관하게 높은 코사인이 높은 점수.
+    s_hi, _ = semantic_match_score(0.55, [], "전혀 다른 텍스트", None, [])
+    s_lo, _ = semantic_match_score(0.12, [], "전혀 다른 텍스트", None, [])
+    check("높은 코사인 > 낮은 코사인", s_hi > s_lo)
+    check("낮은 코사인은 약한 점수(<30)", s_lo < 30)
+    # 키워드 일치는 보조 가산.
+    s_kw, r_kw = semantic_match_score(0.3, ["인공지능"], "인공지능 공모전", None, ["인공지능"])
+    s_nokw, _ = semantic_match_score(0.3, ["로봇"], "인공지능 공모전", None, [])
+    check("키워드 일치가 가산", s_kw > s_nokw)
+    check("사유에 의미 유사도 표기", "의미 유사도" in r_kw)
+
+
 def main() -> int:
-    for fn in (test_parse_valid, test_parse_abstain_and_sector, test_score_match):
+    for fn in (
+        test_parse_valid,
+        test_parse_abstain_and_sector,
+        test_score_match,
+        test_scale_cosine,
+        test_semantic_match,
+    ):
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

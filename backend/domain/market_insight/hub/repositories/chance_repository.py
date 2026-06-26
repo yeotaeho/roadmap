@@ -113,6 +113,20 @@ _FETCH_USERS = text(
     "SELECT user_id, target_job, interest_keywords FROM user_sync_profiles"
 )
 
+# 의미 매칭 — (사용자 임베딩 × 활성 공고 임베딩) 코사인 적합도. 동일 모델끼리만 비교.
+_FETCH_MATCH_AFFINITIES = text(
+    """
+    SELECT u.user_id, de.source_id AS opportunity_id,
+           (1 - (de.embedding <=> u.embedding)) AS cosine
+    FROM user_embeddings u
+    JOIN document_embeddings de
+      ON de.source_table = 'chance_opportunities'
+     AND de.embedding_model = u.embedding_model
+    JOIN chance_opportunities o ON o.id = de.source_id
+    WHERE o.is_active = true AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+    """
+)
+
 _UPSERT_MATCH = text(
     """
     INSERT INTO user_chance_matches (user_id, opportunity_id, match_score, match_reason, updated_at)
@@ -219,6 +233,10 @@ class ChanceRepository(BaseRepository):
 
     async def fetch_active_opps(self) -> list:
         return list((await self.session.execute(_FETCH_ACTIVE_OPPS)).all())
+
+    async def fetch_match_affinities(self) -> list:
+        """(user_id, opportunity_id, cosine) — 임베딩 보유 사용자×활성 공고만."""
+        return list((await self.session.execute(_FETCH_MATCH_AFFINITIES)).all())
 
     async def fetch_users(self) -> list:
         return list((await self.session.execute(_FETCH_USERS)).all())
