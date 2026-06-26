@@ -49,6 +49,9 @@ from domain.market_insight.hub.services.text_entity_extract_service import (
 )
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
+from domain.market_insight.hub.services.investment_flow_service import (
+    InvestmentFlowRefineService,
+)
 from domain.market_insight.hub.services.chance_refine_service import ChanceRefineService
 from domain.market_insight.hub.services.chance_match_service import ChanceMatchService
 from domain.market_insight.hub.services.embed_service import (
@@ -601,11 +604,22 @@ async def _job_briefing_refine() -> dict[str, Any]:
         return await BriefingRefineService(session).refine_and_serve()
 
 
+async def _job_investment_refine() -> dict[str, Any] | None:
+    """투자/펀딩/M&A 뉴스 → 금액 추출(refined_investment_flows) 적재(멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 투자 금액 추출 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await InvestmentFlowRefineService(session).refine_and_serve()
+
+
 # 인사이트 Silver→Gold 정제 체인 — 앞 단계 산출을 뒤 단계가 소비하는 순서 의존이라
 # 개별 잡으로 흩어 등록하지 않고 단일 파이프라인 잡으로 순차 실행한다(레이스 방지).
 _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("text_classify",     _job_text_classify),
     ("entity_extract",    _job_entity_extract),
+    ("investment_refine", _job_investment_refine),
     ("gap_refine",        _job_gap_refine),
     ("causal_refine",     _job_causal_refine),
     ("chance_refine",     _job_chance_refine),

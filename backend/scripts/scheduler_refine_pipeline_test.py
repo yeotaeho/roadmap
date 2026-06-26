@@ -25,7 +25,7 @@ def check(name: str, cond: bool) -> None:
 
 
 _EXPECTED_ORDER = [
-    "text_classify", "entity_extract", "gap_refine", "causal_refine",
+    "text_classify", "entity_extract", "investment_refine", "gap_refine", "causal_refine",
     "chance_refine", "chance_match", "document_embed", "user_embed",
     "pulse_refine", "briefing_refine", "sync_refine",
 ]
@@ -33,7 +33,7 @@ _EXPECTED_ORDER = [
 
 def test_pipeline_definition() -> None:
     names = [n for n, _ in sched._REFINE_PIPELINE]
-    check("_REFINE_PIPELINE 11스텝 순서 일치", names == _EXPECTED_ORDER)
+    check("_REFINE_PIPELINE 스텝 순서 일치", names == _EXPECTED_ORDER)
 
 
 def test_daily_jobs_composition() -> None:
@@ -59,7 +59,7 @@ def test_pipeline_runs_in_order() -> None:
         sched._run_job = original
 
     check("실행 순서 = 정의 순서", recorded == _EXPECTED_ORDER)
-    check("steps 카운트 반환", result == {"steps": 11})
+    check("steps 카운트 반환", result == {"steps": 12})
 
 
 def main() -> int:
