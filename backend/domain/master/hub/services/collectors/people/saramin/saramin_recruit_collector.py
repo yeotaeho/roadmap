@@ -19,7 +19,7 @@ _API_URL = "https://oapi.saramin.co.kr/job-search"
 _SOURCE_TYPE = "PEOPLE_SARAMIN_RECRUIT"
 _DATA_ROLE = "DEMAND_HIRING_SIGNAL"
 
-# 12 섹터 축에 대응하는 채용 수요 키워드 (선행 신호 — 어떤 직무가 뜨는가).
+# 섹터 축에 대응하는 채용 수요 키워드 (어떤 산업이 뜨는가).
 _KEYWORDS: tuple[str, ...] = (
     "인공지능",
     "데이터분석",
@@ -32,6 +32,28 @@ _KEYWORDS: tuple[str, ...] = (
     "물류",
     "뷰티",
 )
+
+# 직무·역량 단위 수요 키워드 (어떤 '직무·스킬'이 뜨는가 — 청년 진로의 결정적 선행 신호).
+#   섹터 축이 잡지 못하는 직무 해상도를 보강한다(평가 ⑤b).
+_JOB_KEYWORDS: tuple[str, ...] = (
+    "데이터엔지니어",
+    "머신러닝엔지니어",
+    "백엔드개발자",
+    "프론트엔드개발자",
+    "데브옵스",
+    "클라우드엔지니어",
+    "프로덕트매니저",
+    "UXUI디자이너",
+    "정보보안",
+    "QA엔지니어",
+    "안드로이드개발자",
+    "iOS개발자",
+    "풀스택개발자",
+    "그로스마케터",
+)
+
+# 기본 수집 대상 = 섹터 + 직무 키워드 (일 500콜 한도 내, 약 24키워드).
+_DEFAULT_KEYWORDS: tuple[str, ...] = _KEYWORDS + _JOB_KEYWORDS
 
 
 def parse_total(payload: dict[str, Any]) -> int | None:
@@ -63,7 +85,7 @@ class SaraminRecruitCollector:
         keywords: tuple[str, ...] | None = None,
     ) -> tuple[list[PeopleCollectDto], dict[str, int]]:
         target_date = reference_date or date.today()
-        kws = keywords or _KEYWORDS
+        kws = keywords or _DEFAULT_KEYWORDS
         stats = {"requests_total": 0, "requests_ok": 0, "errors": 0, "fetched": 0}
         rows: list[PeopleCollectDto] = []
         timeout = aiohttp.ClientTimeout(total=20)

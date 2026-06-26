@@ -62,11 +62,19 @@ def test_goyong24_recruit() -> None:
 
 def test_saramin() -> None:
     from domain.master.hub.services.collectors.people.saramin.saramin_recruit_collector import (
+        _DEFAULT_KEYWORDS,
+        _JOB_KEYWORDS,
+        _KEYWORDS,
         parse_total,
     )
 
     check("saramin total 정수 추출", parse_total({"jobs": {"total": "1,234"}}) == 1234)
     check("saramin total 없음 None", parse_total({"jobs": {}}) is None)
+    # ⑤b — 직무·스킬 키워드 보강(섹터 키워드 보존 + 직무 키워드 추가).
+    check("기본 수집 = 섹터 + 직무", set(_DEFAULT_KEYWORDS) == set(_KEYWORDS) | set(_JOB_KEYWORDS))
+    check("직무 키워드 포함(데이터엔지니어)", "데이터엔지니어" in _DEFAULT_KEYWORDS)
+    check("섹터 키워드 보존(인공지능)", "인공지능" in _DEFAULT_KEYWORDS)
+    check("직무 키워드 다수(>=10)", len(_JOB_KEYWORDS) >= 10)
 
 
 # ---------------------------------------------------------------------------
