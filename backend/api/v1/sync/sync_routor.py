@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.api_guards import require_internal_token
 from core.database import get_db
 from domain.market_insight.hub.repositories.sync_repository import SyncRepository
 from domain.market_insight.hub.services.sync_refine_service import SyncRefineService
@@ -28,7 +29,7 @@ async def get_sync_scores(
         raise HTTPException(status_code=500, detail=f"Sync 조회 실패: {str(e)}")
 
 
-@router.post("/refine")
+@router.post("/refine", dependencies=[Depends(require_internal_token)])
 async def refine_sync(db: AsyncSession = Depends(get_db)):
     """Sync 정제·서빙 수동 트리거 — 사용자 임베딩×섹터 트렌드 적합도 재계산."""
     try:

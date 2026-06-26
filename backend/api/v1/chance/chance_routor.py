@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.api_guards import require_internal_token
 from core.database import get_db
 from domain.market_insight.hub.repositories.chance_repository import ChanceRepository
 from domain.market_insight.hub.services.chance_match_service import ChanceMatchService
@@ -58,7 +59,7 @@ async def user_matches(
         raise HTTPException(status_code=500, detail=f"Chance 매칭 조회 실패: {str(e)}")
 
 
-@router.post("/refine")
+@router.post("/refine", dependencies=[Depends(require_internal_token)])
 async def refine_chance(db: AsyncSession = Depends(get_db)):
     """Chance 정제·서빙 수동 트리거 — opportunity → Silver → Gold."""
     try:
@@ -69,7 +70,7 @@ async def refine_chance(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Chance 정제 실패: {str(e)}")
 
 
-@router.post("/match")
+@router.post("/match", dependencies=[Depends(require_internal_token)])
 async def match_chance(db: AsyncSession = Depends(get_db)):
     """Chance 매칭 수동 트리거 — 프로필 사용자 × 활성 공고 재계산."""
     try:

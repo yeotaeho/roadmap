@@ -129,6 +129,13 @@ class Settings(BaseSettings):
     jwt_expiration: int = 1_800_000  # 30분 (밀리초)
     jwt_refresh_expiration: int = 1_814_400_000  # 21일 (밀리초)
 
+    # 내부 운영 토큰 — refine/match 배치 트리거 엔드포인트 가드용.
+    #   미설정 시 해당 엔드포인트는 fail-closed(503)로 전면 차단된다.
+    #   로컬 개발에서 수동 트리거하려면 .env 에 INTERNAL_API_KEY 설정.
+    internal_api_key: Optional[str] = Field(
+        default=None, validation_alias="INTERNAL_API_KEY"
+    )
+
     # Google OAuth
     google_client_id: str
     google_client_secret: str

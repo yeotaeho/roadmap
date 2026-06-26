@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.api_guards import require_internal_token
 from core.database import get_db
 from domain.market_insight.hub.repositories.briefing_repository import BriefingRepository
 from domain.market_insight.hub.repositories.causal_chain_repository import CausalChainRepository
@@ -36,7 +37,7 @@ async def get_pulse(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Pulse 조회 실패: {str(e)}")
 
 
-@router.post("/pulse/refine")
+@router.post("/pulse/refine", dependencies=[Depends(require_internal_token)])
 async def refine_pulse(
     window_days: int = Query(default=20, ge=2, le=365, description="모멘텀 윈도우(일)"),
     baseline_method: str = Query(default="zscore", description="zscore|pct_change|ma_ratio"),
@@ -136,7 +137,7 @@ async def get_briefing(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"브리핑 조회 실패: {str(e)}")
 
 
-@router.post("/briefing/refine")
+@router.post("/briefing/refine", dependencies=[Depends(require_internal_token)])
 async def refine_briefing(
     force: bool = Query(default=False, description="당일 존재해도 재생성"),
     db: AsyncSession = Depends(get_db),
@@ -161,7 +162,7 @@ async def get_causal_chains(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"인과사슬 조회 실패: {str(e)}")
 
 
-@router.post("/causal-chains/refine")
+@router.post("/causal-chains/refine", dependencies=[Depends(require_internal_token)])
 async def refine_causal_chains(db: AsyncSession = Depends(get_db)):
     """인과사슬 정제·서빙 수동 트리거 — 분류 economic → LLM → Silver → Gold."""
     try:
@@ -201,7 +202,7 @@ async def get_gap_detail(issue_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Gap 상세 조회 실패: {str(e)}")
 
 
-@router.post("/gap/refine")
+@router.post("/gap/refine", dependencies=[Depends(require_internal_token)])
 async def refine_gap(db: AsyncSession = Depends(get_db)):
     """Gap 정제·서빙 수동 트리거 — discourse → Silver → Gold 재생성."""
     try:
