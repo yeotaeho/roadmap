@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-26 — Sync 추이 엔드포인트 + 대시보드 재설계 연동
+- **무엇** — `GET /api/sync/scores/history`(일자별 섹터 평균 = 전체 싱크 추이) 신설. 프론트 대시보드 재설계(Pulse 히어로+점진공개, 섹터 스파크라인, 인과 가로 플로우, Sync 원형 게이지+추이)와 연동.
+- **왜** — 대시보드 정보위계·시각화 약점(빈약한 viz·평평한 위계) 개선 + 타 서비스(Exploding Topics·Lightcast·Koyfin) 패턴 차용. Sync 추이 표시에 이력 서빙 필요.
+- **어디** — [sync_routor.py](../../../api/v1/sync/sync_routor.py) `get_sync_score_history`, [sync_repository.py](../../../hub/repositories/sync_repository.py) `fetch_score_history`(`_FETCH_SCORE_HISTORY`). 프론트: `www.yeotaeho.kr` PulseTab·PulseViz·DashboardView·dashboard.ts·useDashboard.ts.
+- **검증** — 백엔드 `py_compile` 통과, 프론트 `tsc --noEmit` 통과. 커밋 `d6ce714`·`da436e9`·`f1c5f20`·`953f699`. ⚠️ DB·인증 필요한 런타임 테스트는 미실행(쿼리·라우팅만 구조 검증).
+- **후속** — 진짜 개인화 한 줄(Pulse↔Sync 교차), 섹터 드릴다운 페이지(`/pulse/{sector}/history` 미연결), Chance 저장 영속화(wallet 도메인 스텁) 미구현.
+
 ## 2026-06-26 — 문서 동기화(erd.md·STATUS.md SSOT 갱신)
 - **무엇** — `erd.md` §0 에 2026-06-26 갱신 블록 추가(파일 head `b8e4c2a6f1d9`, 인사이트 6수직 Silver/Gold 정의 반영, 미문서 테이블 2종·런타임 산출 2종 명시) + v2.9 footer. `MARKET_INSIGHT_IMPLEMENTATION_STATUS.md` head·잡 체인 직렬화·Causal/Briefing 라이브 반영.
 - **왜** — 문서가 코드보다 1~2단계 뒤처져 SSOT 신뢰도 하락(head `f8c2e6a0d3b7`/`e2c5a7b9d3f4` stale, Causal·Briefing 라이브 미반영).
