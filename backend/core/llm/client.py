@@ -57,6 +57,16 @@ _CAUSAL_SYSTEM_PROMPT = (
     '"youth_chance": <문장 또는 null>}.'
 )
 
+_INVESTMENT_SYSTEM_PROMPT = (
+    "너는 한국어 스타트업·투자 뉴스에서 투자 라운드의 '금액'을 추출하는 분석기다. "
+    "기사가 억원/조원/원 단위로 금액을 밝히면 그 값을 원(KRW) 단위 정수로 환산하라(예: 100억원→10000000000). "
+    "외화(USD 등)만 있고 기사에 원화 환산이 없으면 amount_krw 를 null 로 두고 currency 에 통화를 적어라(환율 추정 금지). "
+    "투자 단계(Seed/Pre-A/Series A 등)와 피투자 기업명도 추출하라(없으면 null). "
+    "금액이 명확하지 않으면 amount_krw 를 null 로 두라(억지 추정 금지). "
+    'JSON 객체만 출력하라. 형식: {"amount_krw": <정수 또는 null>, "currency": <문자열 또는 null>, '
+    '"series": <문자열 또는 null>, "company": <문자열 또는 null>}.'
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -252,6 +262,37 @@ def _parse_causal(raw: str | None) -> dict:
     }
 
 
+def _parse_investment(raw: str | None) -> dict:
+    """투자 금액 추출 LLM 응답을 검증한다. 무네트워크 순수 함수.
+
+    amount_krw 가 양수가 아니면(누락·외화전용·0) 금액 신호 없음 → 전부 None(abstain).
+    """
+    empty = {"amount_krw": None, "currency": None, "series": None, "company": None}
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+    try:
+        amount = float(obj.get("amount_krw"))
+    except (TypeError, ValueError):
+        return empty
+    if not (amount > 0):
+        return empty
+
+    def _field(key: str, limit: int) -> str | None:
+        v = obj.get(key)
+        return v.strip()[:limit] if isinstance(v, str) and v.strip() else None
+
+    return {
+        "amount_krw": amount,
+        "currency": _field("currency", 16) or "KRW",
+        "series": _field("series", 40),
+        "company": _field("company", 150),
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -347,6 +388,19 @@ class LlmClient:
             ],
         )
         return _parse_causal(resp.choices[0].message.content)
+
+    async def extract_investment(self, text: str) -> dict:
+        """투자 뉴스에서 금액(KRW)·통화·단계·기업을 추출한다. amount_krw None 이면 금액 신호 없음."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _INVESTMENT_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        return _parse_investment(resp.choices[0].message.content)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""
