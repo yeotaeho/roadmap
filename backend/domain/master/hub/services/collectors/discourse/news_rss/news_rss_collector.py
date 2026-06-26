@@ -6,6 +6,7 @@ import asyncio
 import calendar
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -71,10 +72,49 @@ def _html_to_text(html: str, *, max_len: int = 4000) -> str:
     return re.sub(r"\s+", " ", text).strip()[:max_len]
 
 
+# RSS 본문이 이 길이 미만이면 원문 페이지에서 본문을 보강한다.
+_ENRICH_THRESHOLD = 280
+
+# 기사 본문 컨테이너 셀렉터 — schema.org 표준(itemprop) 우선, 매체 공통 클래스 폴백.
+_BODY_SELECTORS: tuple[str, ...] = (
+    "[itemprop=articleBody]",
+    "div.article-body",
+    ".article-body",
+    "#articletxt",
+    "#article-view-content-div",
+    "article",
+)
+
+
+def extract_article_body(html: str, *, max_len: int = 4000) -> str:
+    """뉴스 원문 HTML에서 본문 텍스트만 추출(네비·푸터 노이즈 제외). 실패 시 빈 문자열."""
+    if not html:
+        return ""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return ""
+    for sel in _BODY_SELECTORS:
+        node = soup.select_one(sel)
+        if node is None:
+            continue
+        text = re.sub(r"\s+", " ", node.get_text(separator=" ", strip=True)).strip()
+        if text:
+            return text[:max_len]
+    return ""
+
+
 def parse_feed_entries(
-    raw_feed: str | bytes, feed: NewsFeed, *, max_items: int = 50
+    raw_feed: str | bytes,
+    feed: NewsFeed,
+    *,
+    max_items: int = 50,
+    fetch_article: Callable[[str], str] | None = None,
 ) -> list[DiscourseCollectDto]:
-    """feedparser 입력(문자열/바이트/URL)을 DiscourseCollectDto 리스트로 변환."""
+    """feedparser 입력(문자열/바이트/URL)을 DiscourseCollectDto 리스트로 변환.
+
+    fetch_article 주입 시 RSS 본문이 짧으면(``_ENRICH_THRESHOLD`` 미만) 원문에서 보강한다.
+    """
     parsed = feedparser.parse(raw_feed)
     if getattr(parsed, "bozo", 0) and not parsed.entries:
         logger.warning(
@@ -90,6 +130,14 @@ def parse_feed_entries(
             continue
         summary = entry.get("summary", "") or ""
         content_body = _html_to_text(summary)
+        if fetch_article is not None and len(content_body) < _ENRICH_THRESHOLD:
+            try:
+                fetched = fetch_article(link)
+            except Exception:
+                logger.warning("[news-rss] 본문 보강 실패 url=%s", link, exc_info=False)
+                fetched = ""
+            if fetched and len(fetched) > len(content_body):
+                content_body = fetched[:4000]
         tags = [t.get("term") for t in entry.get("tags", []) if t.get("term")]
         raw_metadata: dict[str, object] = {
             "category": feed.category,
@@ -113,6 +161,11 @@ def parse_feed_entries(
     return out
 
 
+def _fetch_article_body(url: str) -> str:
+    """원문 페이지를 받아 본문 텍스트만 추출(news_rss 본문 보강용)."""
+    return extract_article_body(fetch_html_sync(url, tag="news-rss-body"))
+
+
 class NewsRssCollector:
     """국내 뉴스 RSS 멀티 피드 — 카테고리(경제·산업·IT) 헤드라인 수집."""
 
@@ -130,7 +183,12 @@ class NewsRssCollector:
                     stats["errors"] += 1
                     logger.warning("[news-rss] 피드 fetch 실패 publisher=%s", feed.publisher)
                     continue
-                rows = parse_feed_entries(raw, feed, max_items=max_items_per_feed)
+                rows = parse_feed_entries(
+                    raw,
+                    feed,
+                    max_items=max_items_per_feed,
+                    fetch_article=_fetch_article_body,
+                )
                 out.extend(rows)
                 stats["feeds_ok"] += 1
             except Exception:
@@ -148,4 +206,4 @@ class NewsRssCollector:
         )
 
 
-__all__ = ["NewsRssCollector", "NewsFeed", "parse_feed_entries"]
+__all__ = ["NewsRssCollector", "NewsFeed", "parse_feed_entries", "extract_article_body"]

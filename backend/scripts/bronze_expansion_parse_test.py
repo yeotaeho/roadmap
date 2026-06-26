@@ -103,6 +103,57 @@ def test_news_rss() -> None:
     check("news_rss published_at KST→UTC 정확", pub.day == 23 and pub.hour == 0)
 
 
+def test_news_rss_body_enrichment() -> None:
+    # 한국경제처럼 RSS 본문이 없거나 짧을 때 원문 페이지를 fetch 해 보강한다.
+    from domain.master.hub.services.collectors.discourse.news_rss.news_rss_collector import (
+        parse_feed_entries,
+        extract_article_body,
+        NewsFeed,
+    )
+
+    # extract_article_body — schema.org/일반 본문 셀렉터 우선, 네비 노이즈 제외
+    html = (
+        "<html><body><nav>전체메뉴 로그인</nav>"
+        "<div class='article-body'>" + ("기사 본문 내용입니다. " * 20) + "</div>"
+        "</body></html>"
+    )
+    body = extract_article_body(html)
+    check("extract_article_body 본문만 추출", "기사 본문 내용" in body and "전체메뉴" not in body)
+    check("extract_article_body itemprop 지원",
+          "본문" in extract_article_body("<div itemprop='articleBody'>핵심 본문 텍스트</div>"))
+    check("extract_article_body 빈 입력 빈 문자열", extract_article_body("") == "")
+
+    feed = NewsFeed("한국경제", "economy", "u")
+
+    # 본문 없는 항목(summary 0자) → fetch_article 로 보강
+    rss_empty = ("<?xml version='1.0'?><rss version='2.0'><channel>"
+                 "<item><title>제목만 있는 기사</title><link>https://ex.com/a1</link></item>"
+                 "</channel></rss>")
+    enriched = "원문 페이지에서 가져온 충분히 긴 본문 텍스트입니다. " * 10
+    rows = parse_feed_entries(rss_empty, feed, fetch_article=lambda url: enriched)
+    check("본문 없음 → fetch_article 보강", rows[0].content_body and "원문 페이지에서" in rows[0].content_body)
+
+    # summary 충분 → fetch_article 미호출(회귀 방지)
+    rss_full = ("<?xml version='1.0'?><rss version='2.0'><channel>"
+                "<item><title>긴 요약</title><link>https://ex.com/a2</link>"
+                "<description>" + ("충분히 긴 요약 본문 문장. " * 30) + "</description></item>"
+                "</channel></rss>")
+    called: list[str] = []
+    parse_feed_entries(rss_full, feed, fetch_article=lambda url: called.append(url) or "x")
+    check("요약 충분 → fetch 미호출", not called)
+
+    # fetch 결과가 비거나 더 짧으면 기존 summary 유지
+    rss_teaser = ("<?xml version='1.0'?><rss version='2.0'><channel>"
+                  "<item><title>티저</title><link>https://ex.com/a3</link>"
+                  "<description>짧은 티저</description></item></channel></rss>")
+    rows3 = parse_feed_entries(rss_teaser, feed, fetch_article=lambda url: "")
+    check("fetch 실패 → 기존 summary 유지", rows3[0].content_body == "짧은 티저")
+
+    # 하위호환 — fetch_article 미주입 시 기존 동작(보강 없음)
+    rows4 = parse_feed_entries(rss_empty, feed)
+    check("fetch_article 미주입 → 기존 동작(본문 None)", rows4[0].content_body is None)
+
+
 # ---------------------------------------------------------------------------
 # Opportunity — K-Startup / 나라장터
 # ---------------------------------------------------------------------------
@@ -241,6 +292,7 @@ def main() -> int:
         test_goyong24_recruit,
         test_saramin,
         test_news_rss,
+        test_news_rss_body_enrichment,
         test_kstartup,
         test_narajangteo,
         test_venture_list,
