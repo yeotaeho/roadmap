@@ -17,9 +17,12 @@ for _k, _v in dict(
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from domain.market_insight.hub.services.sync_refine_service import (  # noqa: E402
+    AFFINITY_HI,
+    AFFINITY_LO,
     badge,
     combine_score,
-    minmax_normalize,
+    has_sufficient_signal,
+    scale_affinity,
 )
 
 PASS = 0
@@ -36,13 +39,23 @@ def check(name: str, cond: bool) -> None:
         print(f"[FAIL] {name}")
 
 
-def test_minmax() -> None:
-    out = minmax_normalize([0.1, 0.2, 0.3])
-    check("min→0", out[0] == 0.0)
-    check("max→100", out[2] == 100.0)
-    check("중간값 비례(50)", abs(out[1] - 50.0) < 1e-9)
-    check("동일값 → 50 중립", minmax_normalize([0.2, 0.2]) == [50.0, 50.0])
-    check("빈 입력 → []", minmax_normalize([]) == [])
+def test_scale_affinity() -> None:
+    # 전역 절대 스케일 — 사용자별 스트레치 없음.
+    check("LO 이하 → 0", scale_affinity(AFFINITY_LO - 0.1) == 0.0)
+    check("HI 이상 → 100", scale_affinity(AFFINITY_HI + 0.1) == 100.0)
+    check("중점 → 50", abs(scale_affinity((AFFINITY_LO + AFFINITY_HI) / 2) - 50.0) < 1e-9)
+    # 빈약한 밴드(0.18~0.21)가 더 이상 0~100으로 늘어나지 않음 — 핵심 회귀.
+    lo_pct = scale_affinity(0.18)
+    hi_pct = scale_affinity(0.21)
+    check("빈약 밴드는 좁게 유지(스트레치 방지)", (hi_pct - lo_pct) < 15)
+    check("빈약 밴드 상단도 강한적합 아님(<70)", hi_pct < 70)
+
+
+def test_sufficiency() -> None:
+    check("스프레드 충분 → True", has_sufficient_signal([0.1, 0.2, 0.35]) is True)
+    check("razor-thin 밴드 → False", has_sufficient_signal([0.18, 0.19, 0.20]) is False)
+    check("단일 섹터 → False", has_sufficient_signal([0.3]) is False)
+    check("빈 입력 → False", has_sufficient_signal([]) is False)
 
 
 def test_combine() -> None:
@@ -61,7 +74,7 @@ def test_badge() -> None:
 
 
 def main() -> int:
-    for fn in (test_minmax, test_combine, test_badge):
+    for fn in (test_scale_affinity, test_sufficiency, test_combine, test_badge):
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

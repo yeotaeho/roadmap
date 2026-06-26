@@ -6,21 +6,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.market_insight.hub.repositories.sync_repository import SyncRepository
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 # 적합도(affinity)·트렌드(trend) 융합 가중치.
 AFFINITY_WEIGHT = 0.6
 TREND_WEIGHT = 0.4
 
+# 코사인 적합도 → 0~100 매핑 전역 고정 앵커(휴리스틱, 실데이터로 튜닝 대상).
+#   사용자별 min-max 스트레치를 쓰지 않으므로 빈약한 밴드가 "강한 적합"으로 위장되지 않는다.
+AFFINITY_LO = 0.05
+AFFINITY_HI = 0.45
+# 섹터 간 코사인 스프레드가 이 값 미만이면 섹터가 사실상 구분되지 않음 → 데이터 부족 처리.
+MIN_AFFINITY_SPREAD = 0.03
+INSUFFICIENT_BADGE = "데이터 부족"
+NEUTRAL_SCORE = 50
 
-def minmax_normalize(values: list[float]) -> list[float]:
-    """값들을 0~100으로 min-max 정규화한다. 전부 동일하면 50(중립). 순수 함수."""
-    if not values:
-        return []
-    lo, hi = min(values), max(values)
-    span = hi - lo
-    if span == 0:
-        return [50.0 for _ in values]
-    return [(v - lo) / span * 100.0 for v in values]
+
+def scale_affinity(cosine: float) -> float:
+    """원시 코사인을 전역 고정 기준으로 0~100 절대 스케일(사용자별 스트레치 없음). 순수 함수."""
+    span = AFFINITY_HI - AFFINITY_LO
+    if span <= 0:
+        return float(NEUTRAL_SCORE)
+    pct = (cosine - AFFINITY_LO) / span * 100.0
+    return max(0.0, min(100.0, pct))
+
+
+def has_sufficient_signal(cosines: list[float]) -> bool:
+    """섹터 간 코사인 스프레드가 임계 이상일 때만 유의미한 적합 신호로 본다."""
+    if len(cosines) < 2:
+        return False
+    return (max(cosines) - min(cosines)) >= MIN_AFFINITY_SPREAD
 
 
 def combine_score(affinity_norm: float, trend: float) -> int:
@@ -61,24 +75,31 @@ class SyncRefineService:
 
         scores = 0
         for user_id, pairs in by_user.items():
-            sectors = [p[0] for p in pairs]
-            norm = minmax_normalize([p[1] for p in pairs])
+            cosines = [p[1] for p in pairs]
+            sufficient = has_sufficient_signal(cosines)
             keywords = user_keywords.get(user_id, [])
-            for sector_slug, aff_norm in zip(sectors, norm):
+            for sector_slug, cosine in pairs:
                 trend_s = float(trend.get(sector_slug, 50))
-                score = combine_score(aff_norm, trend_s)
+                if sufficient:
+                    score = combine_score(scale_affinity(cosine), trend_s)
+                    badge_label = badge(score)
+                else:
+                    # 섹터가 구분되지 않으면 노이즈를 확신 배지로 포장하지 않고 중립 처리.
+                    score = NEUTRAL_SCORE
+                    badge_label = INSUFFICIENT_BADGE
                 await self.repo.upsert_sync_input(
                     {
                         "user_id": user_id,
                         "sector_slug": sector_slug,
-                        "affinity_score": round(aff_norm, 2),
+                        # 감사 가능하도록 원시 코사인을 보존(서빙엔 Gold score 사용).
+                        "affinity_score": round(cosine, 2),
                         "trend_score": round(trend_s, 2),
                         "keywords": keywords,
                         "model_name": "text-embedding-3-large",
                         "prompt_version": PROMPT_VERSION,
                     }
                 )
-                await self.repo.upsert_sync_gold(user_id, sector_slug, score, badge(score))
+                await self.repo.upsert_sync_gold(user_id, sector_slug, score, badge_label)
                 scores += 1
         await self.session.commit()
         return {"users": len(by_user), "scores": scores}
