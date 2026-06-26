@@ -67,6 +67,9 @@ from domain.market_insight.models.bases.refined_causal_chain_insights import (  
     RefinedCausalChainInsights,
 )
 from domain.market_insight.models.bases.causal_chains import CausalChains  # Gold
+from domain.market_insight.models.bases.refined_investment_flows import (  # Silver
+    RefinedInvestmentFlows,
+)
 
 target_metadata = Base.metadata
 
