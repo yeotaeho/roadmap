@@ -13,6 +13,9 @@ from core.database import AsyncSessionLocal  # noqa: E402
 from domain.market_insight.hub.services.tech_demand_gap_service import (  # noqa: E402
     TechDemandGapService,
 )
+from domain.market_insight.hub.services.gap_projection_service import (  # noqa: E402
+    GapProjectionService,
+)
 
 
 async def main() -> None:
@@ -25,7 +28,8 @@ async def main() -> None:
         result = await TechDemandGapService(session).refine_and_serve(
             window_days=window, limit=limit
         )
-    print(f"백필 결과(limit={limit}, window={window}d): {result}")
+        projected = await GapProjectionService(session).project_and_serve()
+    print(f"백필 결과(limit={limit}, window={window}d): {result} | 사영: {projected}")
 
 
 if __name__ == "__main__":

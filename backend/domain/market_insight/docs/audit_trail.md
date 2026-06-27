@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-27 — KIAT Gap youth_fit 변별 개선 + Gold 사영 단일화 (Phase 2 refine)
+- **무엇** — youth_fit 앵커 루브릭+저적합 강제규칙 프롬프트(pv v3)로 변별 확보, Gold 사영을 `GapProjectionService` 단일 잡으로 분리(소스별 pv), 게이트 임계 0.5→0.4 캘리브레이션.
+- **왜** — v1 youth_fit 0.6~0.7 뭉침으로 게이트 무력(45중 0건 배제). 의미 변경에 필요한 pv bump 가 공유 단일-pv 사영을 깨뜨려(타 소스 Gold 삭제) 사영 분리가 선행돼야 했음.
+- **어디** — [client.py](../../../../core/llm/client.py) `_TECH_DEMAND_GAP_SYSTEM_PROMPT`, [gap_projection_service.py](../../hub/services/gap_projection_service.py)(신규), [gap_repository.py](../../hub/repositories/gap_repository.py) `project_to_gold(disc_pv, td_pv, fit_min)`·`_FETCH_SILVER_FOR_GOLD`, [tech_demand_gap_service.py](../../hub/services/tech_demand_gap_service.py)·[gap_refine_service.py](../../hub/services/gap_refine_service.py)(사영 제거), [scheduler.py](../../../../core/scheduler.py) `_job_gap_project`, [insight_routor.py](../../../../api/v1/insight/insight_routor.py) `/gap/project`, [settings.py](../../../../core/config/settings.py) `tech_demand_youth_fit_min`(0.4). 설계/계획: `backend/docs/specs/2026-06-27-kiat-gap-tech-demand-phase2-refine-design.md`·`-plan.md`.
+- **검증** — `gap_chunk_test` 7·`gap_projection_test` 5·`tech_demand_gap_parse_test` 9 PASS. v3 재추출 45건 분포 0.2~0.6(avg 0.343), 게이트 20/45(44%) 하드웨어·설비 배제 → TECH_DEMAND 25 카드. discourse NEWS 213 불변(무회귀). 임계 재튜닝은 Gold 재사영만으로 적용(LLM 무). 최종 전체-브랜치 리뷰(opus) Ready to merge(Critical/Important 0). 커밋 `dd82564`~`423a741`.
+- **후속** — 0.4 band 잔여 노이즈(GaN 반도체 등) 모니터링. 구 v1/v2 tech_demand Silver 정리(선택). 전체 백필(window 확대).
+
 ## 2026-06-27 — KIAT 수요기술 → Gap 청년 기회 신호 (Phase 2)
 - **무엇** — 분류된 KIAT/KISTEP를 LLM 추출해 "기업 미확보 수요기술 → 청년 기회" Gap 신호로 변환. ① `extract_tech_demand_gap` + youth_fit(0~1) 파서·프롬프트. ② `refined_gap_insights.youth_fit_score` 컬럼 + `tech_demand_youth_fit_min`(0.5) 설정. ③ `GapRepository` 소스-인지 일반화(`fetch_unprocessed_tech_demand`·`upsert_silver` 파라미터화·Gold evidence COALESCE/youth_fit 게이트·evidence_type 'TECH_DEMAND'). ④ `TechDemandGapService`(PROMPT_VERSION 'v1' 공유). ⑤ 스케줄러 `_job_tech_demand_gap`을 gap_refine 다음 등록.
 - **왜** — Phase 1은 KIAT를 Pulse tech_demand 축으로만 소비. KIAT 수요기술=시장 미해결 갭이라 Gap 탭 신규 신호원으로 전환. youth_fit 게이트로 청년 무관 B2B 설비·자본집약 기술 배제 의도.

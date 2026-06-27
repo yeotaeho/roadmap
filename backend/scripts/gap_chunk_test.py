@@ -74,10 +74,6 @@ class _FakeRepo:
     async def upsert_silver(self, payload: dict) -> None:
         self.upsert_calls += 1
 
-    async def project_to_gold(self, pv) -> int:
-        self.gold_calls += 1
-        return 5
-
 
 class _FakeSession:
     def __init__(self) -> None:
@@ -102,9 +98,9 @@ def test_chunked_commit() -> None:
     check("gaps=60", res["gaps"] == 60)
     check("skipped=0", res["skipped"] == 0)
     check("upsert_silver 60회", svc.repo.upsert_calls == 60)
-    check("project_to_gold 1회", svc.repo.gold_calls == 1)
-    # 60건 / 25 = 2청크 중간 + 1회(gold 이후) = 3회
-    check(f"commit >= 3(청크 {REFINE_CHUNK}×2 + gold 후)", svc.session.commits >= 3)
+    check("project_to_gold 0회(refine 는 사영 안 함)", svc.repo.gold_calls == 0)
+    # 60건 / 25 = 2청크 중간 + 1회(잔여 flush) = 3회
+    check(f"commit >= 3(청크 {REFINE_CHUNK}×2 + 잔여 flush)", svc.session.commits >= 3)
 
 
 def test_small_batch_still_commits() -> None:

@@ -32,9 +32,9 @@ class GapRefineService:
     async def refine_and_serve(
         self, window_days: int = ACTIVE_WINDOW_DAYS, limit: int = DEFAULT_LIMIT
     ) -> dict:
-        """미처리 discourse를 추출·적재 후 Gold 재생성. 멱등.
+        """미처리 discourse를 추출·적재. 멱등. 사영은 GapProjectionService 에서 수행.
 
-        반환: {"scanned", "gaps", "skipped", "issues"}.
+        반환: {"scanned", "gaps", "skipped"}.
         """
         rows = await self.repo.fetch_unprocessed(
             PROMPT_VERSION, self._conf_min, window_days, limit
@@ -65,6 +65,5 @@ class GapRefineService:
                 skipped += 1
             if i % REFINE_CHUNK == 0:
                 await self.session.commit()
-        issues = await self.repo.project_to_gold(PROMPT_VERSION)
         await self.session.commit()
-        return {"scanned": len(rows), "gaps": gaps, "skipped": skipped, "issues": issues}
+        return {"scanned": len(rows), "gaps": gaps, "skipped": skipped}
