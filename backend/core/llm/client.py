@@ -29,6 +29,19 @@ _GAP_SYSTEM_PROMPT = (
     '"detail": <문자열>, "stakeholders": [<주체>...], "next_actions": [<액션>...]}.'
 )
 
+_TECH_DEMAND_GAP_SYSTEM_PROMPT = (
+    "너는 한국 정부·공공기관이 공개한 '기업 수요기술'(기업이 필요로 하나 아직 확보 못한 기술) 설명에서 "
+    "'시장의 미해결 갭'과 그로부터 파생되는 '청년의 기회'를 찾는 분석기다. "
+    "수요기술이 가리키는 부족한 역량을 미해결 문제(problem)로, 청년이 그 역량을 키워 잡을 수 있는 기회를 opportunity 로 추출하라. "
+    "youth_fit 은 청년 개인이 학습·진입 가능한 정도를 0~1 로 매겨라 — 대규모 설비·자본집약·라이선스 장벽이 큰 B2B 기술이면 낮게, "
+    "개인이 역량·포트폴리오로 진입 가능한 소프트웨어·디자인·서비스 기술이면 높게. "
+    "수요기술로 보기 어렵거나 의미가 불명하면 problem 을 null 로 두라(억지 생성 금지). "
+    "problem·opportunity 는 각각 한 문장, detail 은 2~3문장, stakeholders 는 관련 주체 2~4개, "
+    "next_actions 는 청년의 실행 액션 2~4개로 적어라. "
+    'JSON 객체만 출력하라. 형식: {"problem": <문장 또는 null>, "opportunity": <문장 또는 null>, '
+    '"detail": <문자열>, "stakeholders": [<주체>...], "next_actions": [<액션>...], "youth_fit": <0~1 실수>}.'
+)
+
 _CHANCE_SYSTEM_PROMPT = (
     "너는 한국어 채용·지원사업·공모전·교육 공고를 분석하는 추출기다. "
     "공고 유형(채용/인턴/부트캠프/공모전/지원사업/교육/해커톤/기타 중 하나), 지원 대상 2~4개, "
@@ -169,6 +182,47 @@ def _parse_gap(raw: str | None) -> dict:
         "detail": detail,
         "stakeholders": _str_list(obj.get("stakeholders"), 6),
         "next_actions": _str_list(obj.get("next_actions"), 6),
+    }
+
+
+def _parse_tech_demand_gap(raw: str | None) -> dict:
+    """수요기술 Gap 추출 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
+
+    problem·opportunity 둘 다 있어야 유효. 하나라도 없으면 전부 None + youth_fit 0.0(무귀속).
+    youth_fit 은 0~1 로 클램프, 파싱 실패 시 0.0.
+    """
+    empty = {
+        "problem": None, "opportunity": None, "detail": None,
+        "stakeholders": [], "next_actions": [], "youth_fit": 0.0,
+    }
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+
+    problem = obj.get("problem")
+    problem = problem.strip() if isinstance(problem, str) and problem.strip() else None
+    opp = obj.get("opportunity")
+    opp = opp.strip() if isinstance(opp, str) and opp.strip() else None
+    if problem is None or opp is None:
+        return empty
+
+    detail = obj.get("detail")
+    detail = detail.strip() if isinstance(detail, str) and detail.strip() else None
+    try:
+        fit = float(obj.get("youth_fit"))
+    except (TypeError, ValueError):
+        fit = 0.0
+    fit = max(0.0, min(1.0, fit))
+    return {
+        "problem": problem,
+        "opportunity": opp,
+        "detail": detail,
+        "stakeholders": _str_list(obj.get("stakeholders"), 6),
+        "next_actions": _str_list(obj.get("next_actions"), 6),
+        "youth_fit": fit,
     }
 
 
@@ -348,6 +402,19 @@ class LlmClient:
             ],
         )
         return _parse_gap(resp.choices[0].message.content)
+
+    async def extract_tech_demand_gap(self, text: str) -> dict:
+        """KIAT 수요기술에서 미해결 갭·청년 기회·youth_fit 을 추출한다. problem None 이면 무귀속."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _TECH_DEMAND_GAP_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        return _parse_tech_demand_gap(resp.choices[0].message.content)
 
     async def extract_chance(self, text: str, sector_list: list[str]) -> dict:
         """공고에서 유형·대상·혜택·자격·섹터를 추출한다. type None 이면 공고 아님."""
