@@ -46,6 +46,7 @@ DEFAULT_AXIS_WEIGHTS: dict[str, float] = {
     "market": 1.0,
     "economic_text": 1.0,
     "discourse": 0.5,
+    "tech_demand": 0.5,  # KIAT 수요기술 — 생산 신호의 보조(추후 튜닝).
 }
 
 

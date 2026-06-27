@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-27 — KIAT 수요기술 → Pulse tech_demand 축 연결 + 분류 청크 커밋 (Phase 1)
+- **무엇** — innovation 96%(KIAT 11,226건) 미소비 dead data 를 Pulse `tech_demand` 축으로 연결. ① pulse_pipeline `DEFAULT_AXIS_WEIGHTS` 에 `tech_demand` 0.5. ② text_classify `_TARGET_TABLES` 에 raw_innovation_data + `_FETCH_UNCLASSIFIED_INNOVATION`(KIAT·KISTEP만, title+abstract+keyword, collected_at 기준). ③ `_TEXT_SECTOR_AXIS_SQL` 에 tech_demand UNION. ④ `classify_unclassified` 청크 커밋(`CLASSIFY_CHUNK=25`)으로 연결 idle timeout 버그 수정.
+- **왜** — KIAT 는 자유 keyword 라 `sector_source_map` 고정 매핑 불가 → innovation 축 제외 → 96% 미활용. LLM 섹터분류 재사용으로 트렌드 신호화. 백필 중 큰 배치 LLM idle 이 DB 연결 `pool_recycle`(5분)을 초과해 `connection closed` 발견 → 청크 커밋 근본 수정(daily 잡도 보호).
+- **어디** — [pulse_pipeline.py](../../hub/services/pulse_pipeline.py) `DEFAULT_AXIS_WEIGHTS`, [text_sector_classify_service.py](../../hub/services/text_sector_classify_service.py) `_TARGET_TABLES`·`CLASSIFY_CHUNK`·`classify_unclassified`, [pulse_repository.py](../../hub/repositories/pulse_repository.py) `_FETCH_UNCLASSIFIED_INNOVATION`·`_TEXT_SECTOR_AXIS_SQL`. 설계/계획: `backend/docs/specs/2026-06-27-kiat-pulse-tech-demand-design.md`·`backend/docs/plans/2026-06-27-kiat-pulse-tech-demand.md`.
+- **검증** — `pulse_scoring_test` 33·`text_classify_chunk_test` 5·`llm_sector_classify_test` 14 PASS, `kiat_pulse_integration_test`(실 DB) 3 PASS. 소량 백필 후 tech_demand 0→8건, 100건 무에러(연결 안전). 커밋 `9b50796`·`558229e`·`6c0e76d`·`decf080`(설계 `a2b6447` 외).
+- **후속** — 전체 11,226건 백필은 고쳐진 daily 가 점진 처리. 가중치 0.5 는 휴리스틱(실데이터 튜닝). ⚠️ 동일 idle 버그가 gap·chance·causal·investment refine 서비스에도 존재(`task_6b17a37b` 플래그). Phase 2: 분류된 KIAT 를 Gap 기회 신호로(별도 spec).
+
 ## 2026-06-26 — 투자 금액 추출 Silver 수직 신설 (③a)
 - **무엇** — `refined_investment_flows` Silver 수직 신설. 투자/펀딩/M&A/IPO 성격 economic 헤드라인을 LLM(`extract_investment`)으로 금액(KRW)·통화·단계·기업 추출해 멱등 적재. 평가 ③ "투자흐름 금액 None(반쪽 신호)" 보강.
 - **왜** — 1순위 지표 "투자흐름"의 *강도(금액)*가 거의 비어("어느 섹터에 자본이 얼마나" 정량화 불가) 있던 갭.
