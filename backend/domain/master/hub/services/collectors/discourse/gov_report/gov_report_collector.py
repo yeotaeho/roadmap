@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import re
 from typing import Any
@@ -34,7 +35,7 @@ def parse_gov_rss(raw_feed: str | bytes, *, max_items: int = 50) -> list[Discour
         logger.warning("[gov-report] RSS 파싱 경고: %s", getattr(parsed, "bozo_exception", ""))
     out: list[DiscourseCollectDto] = []
     for entry in parsed.entries[:max_items]:
-        raw_title = (entry.get("title") or "").strip()
+        raw_title = html.unescape((entry.get("title") or "").strip())
         link = (entry.get("link") or "").strip()
         if not raw_title or not link:
             continue
