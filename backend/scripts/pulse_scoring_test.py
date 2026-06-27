@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from domain.market_insight.hub.services.pulse_pipeline import (  # noqa: E402
     AxisSignal,
+    DEFAULT_AXIS_WEIGHTS,
     SignalInput,
     compute_silver,
     fuse_signals,
@@ -169,6 +170,16 @@ def test_fuse() -> None:
     check("융합 빈 입력 = []", fuse_signals([]) == [])
 
 
+def test_tech_demand_axis_weight() -> None:
+    # KIAT 수요기술 tech_demand 축이 가중치 0.5로 융합되는지(미등록 시 기본 1.0).
+    check("tech_demand 가중치 0.5 등록", DEFAULT_AXIS_WEIGHTS.get("tech_demand") == 0.5)
+    fused = fuse_signals([AxisSignal("ai-data", date(2026, 6, 1), "tech_demand", 10.0)])
+    check(
+        "tech_demand 융합값=10×0.5=5.0",
+        bool(fused) and abs(fused[0].raw_signal_value - 5.0) < 1e-9,
+    )
+
+
 def main() -> int:
     test_zscore_jump()
     test_other_methods()
@@ -180,6 +191,7 @@ def main() -> int:
     test_badge_tiers()
     test_project_gold()
     test_fuse()
+    test_tech_demand_axis_weight()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 
