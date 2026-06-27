@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -36,6 +36,7 @@ class RefinedGapInsights(Base):
     model_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     prompt_version: Mapped[str] = mapped_column(String(40), nullable=False)
     input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    youth_fit_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )
