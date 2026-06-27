@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-06-27 — K-Startup 공고 본문 보강 (상세 페이지 fetch)
+
+- **무엇** — `raw_opportunity_data` OPP_KSTARTUP_GRANT 278건 중 88%(245건)이 `raw_content` 200자 미만(API `pbanc_ctnt` 130자 요약만 제공). 상세 페이지 HTML을 fetch해 `.information_list` 컨테이너에서 본문을 추출·교체하는 보강 로직 추가.
+- **왜** — Silver `refined_chance_insights`가 `raw_content`를 LLM 입력으로 쓰는데, 130자 요약만으로는 지원 자격·신청방법 등 핵심 정보가 누락돼 청년 기회 매칭 품질이 떨어짐.
+- **어디** — [`kstartup_collector.py`](../hub/services/collectors/opportunity/kstartup/kstartup_collector.py): `extract_kstartup_body()`(신규), `_ENRICH_THRESHOLD=200`, `_KSTARTUP_BODY_SELECTORS`(.information_list 우선 + 3개 폴백), `collect()` 끝단 `asyncio.Semaphore(5)` 보강 루프. [`scripts/bronze_expansion_parse_test.py`](../../../scripts/bronze_expansion_parse_test.py): `test_kstartup_body_enrichment()` 6건 추가.
+- **검증** — `bronze_expansion_parse_test.py` 58/58 PASS(신규 6건 포함). 커밋 `d4daee7`.
+- **후속** — `.information_list` 셀렉터는 샘플 1건 기준. 실 수집 로그 `본문 보강 완료: N/M건` 비율 모니터링 권장. push 미완료(Task F, 핸드오프 문서 참고).
+
 ## 2026-06-27 — 뉴스 RSS 본문 보강으로 content_body 결측 해소 (④ fetch 손실)
 - **무엇** — 한국경제 등 RSS summary 가 없거나 짧은 매체에서 원문 페이지를 fetch 해 본문을 추출·보강. `extract_article_body`(schema.org `itemprop=articleBody` 우선 + 매체 공통 셀렉터 폴백) + `parse_feed_entries(fetch_article DI)`. 280자 미만 항목만 보강하고, fetch 실패·결과가 더 짧으면 기존 summary 유지.
 - **왜** — Bronze 결측 측정 결과 discourse `content_body` 35.7% 결측(한국경제 100%). RSS 가 본문을 주지 않는데 수집기가 원문 보강을 안 해 "원문엔 있는데 못 가져오는" 손실 발생. 같은 코드베이스 Platum 의 `fetch_article_if_short` 패턴이 news_rss 엔 부재했다.
