@@ -201,6 +201,34 @@ _FETCH_UNCLASSIFIED_DISCOURSE = text(
     """
 )
 
+# 미분류 innovation 행(KIAT·KISTEP만). 나머지 innovation 소스는 sector_source_map 으로
+# 이미 innovation 축에 있으므로 제외(이중집계 방지). KIAT 는 published_at 없어 collected_at 기준.
+_FETCH_UNCLASSIFIED_INNOVATION = text(
+    """
+    SELECT r.id AS raw_id,
+           r.title || E'\n' ||
+           COALESCE(r.abstract_text, '') || E'\n' ||
+           COALESCE(r.raw_metadata->>'keyword', '') AS body
+    FROM raw_innovation_data r
+    LEFT JOIN refined_text_sector_class c
+           ON c.raw_table_ref = 'raw_innovation_data'
+          AND c.raw_id = r.id
+          AND c.prompt_version = :pv
+    WHERE c.id IS NULL
+      AND r.source_type IN ('INNOVATION_KIAT_TECH_DEMAND', 'INNOVATION_KISTEP_REPORT')
+      AND COALESCE(r.published_at::date, r.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY r.id
+    LIMIT :lim
+    """
+)
+
+# table_ref → 미분류 조회 SQL 매핑.
+_FETCH_UNCLASSIFIED_BY_TABLE = {
+    "raw_economic_data": _FETCH_UNCLASSIFIED_ECONOMIC,
+    "raw_discourse_data": _FETCH_UNCLASSIFIED_DISCOURSE,
+    "raw_innovation_data": _FETCH_UNCLASSIFIED_INNOVATION,
+}
+
 _UPSERT_TEXT_SECTOR = text(
     """
     INSERT INTO refined_text_sector_class
@@ -406,11 +434,7 @@ class PulseRepository(BaseRepository):
         self, table_ref: str, prompt_version: str, window_days: int, limit: int
     ) -> list[tuple[int, str]]:
         """최근 window_days 내 미분류 raw 행을 (raw_id, 입력 텍스트) 목록으로 반환한다."""
-        sql = (
-            _FETCH_UNCLASSIFIED_ECONOMIC
-            if table_ref == "raw_economic_data"
-            else _FETCH_UNCLASSIFIED_DISCOURSE
-        )
+        sql = _FETCH_UNCLASSIFIED_BY_TABLE.get(table_ref, _FETCH_UNCLASSIFIED_DISCOURSE)
         rows = (
             await self.session.execute(
                 sql, {"pv": prompt_version, "win": window_days, "lim": limit}

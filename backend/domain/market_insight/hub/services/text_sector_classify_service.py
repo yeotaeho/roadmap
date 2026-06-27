@@ -17,8 +17,8 @@ DEFAULT_LIMIT = 500
 # 분류 입력 텍스트 상한(섹터 판별엔 제목+리드로 충분, 토큰 비용 제어).
 MAX_INPUT_CHARS = 2000
 
-# 분류 대상 raw 테이블(자유 텍스트 원천).
-_TARGET_TABLES = ("raw_economic_data", "raw_discourse_data")
+# 분류 대상 raw 테이블(자유 텍스트 원천). innovation 은 KIAT·KISTEP만(fetch SQL에서 필터).
+_TARGET_TABLES = ("raw_economic_data", "raw_discourse_data", "raw_innovation_data")
 
 # sectors 시드와 동기화된 12개 섹터 슬러그(d7f3a9c1e5b2 마이그레이션 기준).
 SECTOR_SLUGS = [
