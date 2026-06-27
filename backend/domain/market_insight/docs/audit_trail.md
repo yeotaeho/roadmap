@@ -11,6 +11,13 @@
 - **검증** — `gap_chunk_test` 7·`gap_projection_test` 5·`tech_demand_gap_parse_test` 9 PASS. v3 재추출 45건 분포 0.2~0.6(avg 0.343), 게이트 20/45(44%) 하드웨어·설비 배제 → TECH_DEMAND 25 카드. discourse NEWS 213 불변(무회귀). 임계 재튜닝은 Gold 재사영만으로 적용(LLM 무). 최종 전체-브랜치 리뷰(opus) Ready to merge(Critical/Important 0). 커밋 `dd82564`~`423a741`.
 - **후속** — 0.4 band 잔여 노이즈(GaN 반도체 등) 모니터링. 구 v1/v2 tech_demand Silver 정리(선택). 전체 백필(window 확대).
 
+## 2026-06-27 — Bronze 입력 품질 권고 적용 여부 실측 + ArXiv 재수집 실현
+- **무엇** — Silver(text_classify·gap·chance·causal) 입력을 좌우하는 Bronze 결손 개선 권고 4건의 코드/데이터 적용 여부를 `bronze_null_audit` 로 실측 대조. ① content_body ② gov_report 등록 ③ opportunity(K-Startup) 본문 ④ innovation 비-KIAT 수집량. ④의 ArXiv는 페이지네이션 수정(`1b53350`)이 코드에만 있고 데이터 미반영(06-08 기준 29건)임을 확인 → `_job_arxiv_papers()` 수동 트리거로 재수집 실현.
+- **왜** — 붙여둔 이전 분석이 content_body 재수집·gov_report 등록 이전 시점이라 stale. 코드 머지 ≠ 데이터 반영이라 실데이터로 권고 적용 여부를 검증하고, 미반영분(ArXiv)을 실현해 신호를 가동.
+- **어디** — 측정 [bronze_null_audit.py](../../../../scripts/bronze_null_audit.py), 트리거 [scheduler.py](../../../../core/scheduler.py) `_job_arxiv_papers`(→ `BronzeInnovationIngestService.ingest_arxiv`), 수집기 [arxiv_papers_collector.py](../../../master/hub/services/collectors/innovation/arxiv/arxiv_papers_collector.py).
+- **검증** — 실측: content_body NULL 36.2%→**0.2%**(평균 887자), `DISCOURSE_GOV_REPORT` **50건**(스케줄러 412·685행 등록 확인), KSTARTUP raw_content 평균 **130자**(오늘 수집). ArXiv 재수집: before 29 → fetched 735·inserted 643 → **after 672건**(11개 중 10개 성공, `econ.EM` 1개 429 레이트리밋). 권고 1·2·3은 이미 적용 완료, 4는 본 작업으로 실현.
+- **후속** — ⚠️ ArXiv 11개 카테고리 빠른 페이지네이션 시 arxiv.org 429 발생(econ.EM 누락) — 카테고리 간 딜레이 추가 검토(현재 카테고리별 예외 격리로 부분 성공). 적재된 643건은 다음 `insight_refine` 파이프라인에서 Silver(text_classify→tech_demand 축·Gap)로 흐름. Customs 26·KISTEP 4는 월간 HS·소량 소스라 구조적 소량(결함 아님). opportunity raw_content 61.6%<200자는 K-Startup 130자 요약·입찰 메타 특성(구조적).
+
 ## 2026-06-27 — KIAT 수요기술 → Gap 청년 기회 신호 (Phase 2)
 - **무엇** — 분류된 KIAT/KISTEP를 LLM 추출해 "기업 미확보 수요기술 → 청년 기회" Gap 신호로 변환. ① `extract_tech_demand_gap` + youth_fit(0~1) 파서·프롬프트. ② `refined_gap_insights.youth_fit_score` 컬럼 + `tech_demand_youth_fit_min`(0.5) 설정. ③ `GapRepository` 소스-인지 일반화(`fetch_unprocessed_tech_demand`·`upsert_silver` 파라미터화·Gold evidence COALESCE/youth_fit 게이트·evidence_type 'TECH_DEMAND'). ④ `TechDemandGapService`(PROMPT_VERSION 'v1' 공유). ⑤ 스케줄러 `_job_tech_demand_gap`을 gap_refine 다음 등록.
 - **왜** — Phase 1은 KIAT를 Pulse tech_demand 축으로만 소비. KIAT 수요기술=시장 미해결 갭이라 Gap 탭 신규 신호원으로 전환. youth_fit 게이트로 청년 무관 B2B 설비·자본집약 기술 배제 의도.
