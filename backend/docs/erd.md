@@ -30,6 +30,12 @@
 > - 여전히 🔴 미실현: Roadmap/Coach §6·Consult/Profile §7 (해당 도메인 스캐폴딩 단계).
 > - 아키텍처 메모: 인사이트 수직의 실제 구현은 LangGraph/MCP 가 아니라 "얇은 라우터 → RefineService → raw SQL repository → DB" 의 직선 파이프라인이다.
 
+> **⚠️ 2026-06-27 갱신 — 마이그레이션 head·인사이트 물리화·Phase 2 반영**
+> - **마이그레이션 파일 head = `d7a1f3c9e2b5`** (체인: … `b8e4c2a6f1d9`(Causal) → `c5f9a3b7d1e2`(투자금액 `refined_investment_flows`) → `d7a1f3c9e2b5`(`refined_gap_insights.youth_fit_score`)). 본 세션 `alembic current` = head 확인.
+> - **인사이트 6수직 Silver/Gold 는 실제 라이브 확인** — 본 세션 백필로 `gap_issues`·`issue_evidences`(discourse 280 + KIAT tech_demand)가 실제 적재됨. §5~§6 의 해당 테이블은 더 이상 🔴(목표 모델)이 아니라 **✅ 물리 구현**.
+> - **Phase 2(KIAT 수요기술 → Gap)**: `refined_gap_insights` 에 `youth_fit_score FLOAT`(`d7a1f3c9e2b5`), `data_role` 에 `TECH_DEMAND_SIGNAL`, `issue_evidences.evidence_type` 에 `TECH_DEMAND` 값 추가(소스-인지 Gold 사영, youth_fit 게이트). 설계: `backend/docs/specs/2026-06-27-kiat-gap-tech-demand-phase2-design.md`.
+> - **추가 미문서 실재 테이블**: `refined_investment_flows`(`c5f9a3b7d1e2` — 투자 뉴스 금액 추출 Silver). §0 카탈로그 정식 편입 필요.
+
 **현재 물리 존재 테이블 (✅, 총 14)**
 `users` · `user_sync_profiles` · `sectors` · `sub_sectors` · `sector_source_map` · `raw_economic_data` · `raw_market_timeseries` · `raw_innovation_data` · `raw_people_data` · `raw_opportunity_data` · `raw_discourse_data`\* · `verified_company_master`\* · `refined_innovation_signal`🟡 · `refined_signal_sources`🟡
 (\* = `e2c5a7b9d3f4` 적용 시 존재. refined_* 2종은 DDL만 있고 정제 로직이 없어 🟡)
@@ -104,6 +110,54 @@ raw_market_timeseries — 티커×거래일 OHLCV 연속 시계열 (Yahoo 16종 
 
 document_embeddings   — RAG/유사도 검색 벡터 저장소 (§5.2, halfvec 3072)
 user_embeddings / refined_pulse_metric_silver / refined_sync_inputs — Sync·Pulse 산출 입력 (§5.3)
+```
+
+### 2-A) 현재 라이브 Medallion 파이프라인 (2026-06-27)
+
+> 실제 가동 중인 Bronze→Silver→Gold 데이터 흐름. 굵은 경로는 Phase 2(KIAT 수요기술 → Gap) 신규 연결.
+
+```mermaid
+flowchart TD
+    subgraph Bronze["Bronze · 원천 수집"]
+        IN["raw_innovation_data<br/>KIAT·ArXiv·GitHub·Techblog·Customs"]
+        DI["raw_discourse_data<br/>news_rss·gov_report"]
+        EC["raw_economic_data<br/>DART·Yahoo·DataLab"]
+        OP["raw_opportunity_data<br/>K-Startup·SMES·나라장터"]
+        PE["raw_people_data"]
+    end
+    subgraph Silver["Silver · LLM 정제"]
+        TC["refined_text_sector_class<br/>섹터 분류"]
+        GAP["refined_gap_insights<br/>DISCOURSE_SIGNAL + TECH_DEMAND_SIGNAL·youth_fit"]
+        CH["refined_chance_insights"]
+        INV["refined_investment_flows"]
+        CA["refined_causal_chain_insights"]
+        PS["refined_pulse_metric_silver"]
+        EMB["document/user_embeddings (pgvector)"]
+    end
+    subgraph Gold["Gold · UI 서빙"]
+        PM["pulse_metrics_log"]
+        GI["gap_issues + issue_evidences<br/>evidence_type: NEWS / TECH_DEMAND"]
+        CO["chance_opportunities"]
+        SY["sync_scores_daily"]
+        BR["economic_briefings"]
+        CC["causal_chains"]
+    end
+
+    EC --> TC
+    DI --> TC
+    IN -->|KIAT/KISTEP| TC
+    TC -->|tech_demand 축| PS
+    DI --> GAP
+    TC == KIAT 분류 재사용 ==> GAP
+    GAP == youth_fit 게이트 ==> GI
+    OP --> CH --> CO
+    EC --> INV
+    EC --> CA --> CC
+    PS --> PM
+    GAP --> EMB
+    CH --> EMB
+    PE --> SY
+    EMB --> SY
 ```
 
 ---
@@ -420,18 +474,27 @@ CREATE TABLE refined_trend_insights (
 );
 CREATE INDEX idx_refined_trend_sector ON refined_trend_insights(sector_slug);
 
--- Gap 분석용 Silver
+-- Gap 분석용 Silver (실제 마이그 d4f8a2c6e0b3 + youth_fit d7a1f3c9e2b5 기준)
 CREATE TABLE refined_gap_insights (
     id BIGSERIAL PRIMARY KEY,                 -- Silver 레코드 PK
-    sector_slug VARCHAR(50) REFERENCES sectors(slug), -- 관련 섹터
-    data_role VARCHAR(50) NOT NULL,           -- (D) 신호 종류 1급 컬럼
-    extracted_problem TEXT NOT NULL,
-    extracted_opportunity TEXT NOT NULL,
+    sector_slug VARCHAR(50) NOT NULL REFERENCES sectors(slug), -- 관련 섹터
+    data_role VARCHAR(50) NOT NULL,           -- 신호 종류: 'DISCOURSE_SIGNAL'(뉴스) / 'TECH_DEMAND_SIGNAL'(KIAT 수요기술, Phase 2)
+    extracted_problem TEXT,                   -- 미해결 문제 (NULL = 무귀속 처리됨)
+    extracted_opportunity TEXT,               -- 청년 기회
+    detail_summary TEXT,                      -- 2~3문장 상세
+    stakeholders JSONB,                       -- 관련 주체 배열
+    next_actions JSONB,                       -- 청년 실행 액션 배열
+    youth_fit_score FLOAT,                    -- Phase 2: 청년 진입 적합도 0~1 (innovation 행만, Gold 게이트 입력). discourse는 NULL(무조건 통과)
     reference_date DATE,                      -- (C) 데이터 기준 일자
+    raw_table_ref VARCHAR(50) NOT NULL,       -- 원천 테이블 (raw_discourse_data / raw_innovation_data)
+    raw_id BIGINT NOT NULL,                   -- 원천 행 id (리니지)
+    model_name VARCHAR(120),                  -- 추출 LLM
+    prompt_version VARCHAR(40) NOT NULL,      -- 프롬프트 버전 (자연키 구성)
+    input_hash VARCHAR(64),                   -- 입력 해시
     processed_at TIMESTAMPTZ DEFAULT now()    -- 분석 완료 시각
-    -- (B) 원천 리니지는 refined_signal_sources 패턴 사용
 );
-CREATE INDEX idx_refined_gap_sector ON refined_gap_insights(sector_slug);
+CREATE UNIQUE INDEX uq_refined_gap_natural ON refined_gap_insights(raw_table_ref, raw_id, prompt_version); -- 멱등 자연키
+CREATE INDEX ix_refined_gap_sector ON refined_gap_insights(sector_slug);
 
 -- Chance 분석용 Silver
 CREATE TABLE refined_chance_insights (

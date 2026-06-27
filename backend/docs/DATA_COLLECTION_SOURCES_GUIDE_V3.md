@@ -1,4 +1,4 @@
-# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.3 · 2026-06-09 갱신)
+# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.4 · 2026-06-27 갱신)
 
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
@@ -82,17 +82,20 @@
 |------|------------|-----------|--------|------|------|
 | **KIPRIS PLUS — 특허 출원 트렌드** | `PATENT_KIPRIS_TREND` | Open API (`ServiceKey`) | 주별 | ✅ | 논리 분류 Innovation, 현재는 `raw_economic_data` 적재 |
 | **NTIS (국가 R&D 통합)** | `INNOVATION_NTIS_*` | Open API / RSS | — | ❌ P1 | 국가 R&D 과제·논문·특허 통합 |
-| **arXiv 분야별 논문** | `INNOVATION_ARXIV_KR` | Atom REST API | 주별 | ✅ | 11개 분야 수집 완료. 한국 저자 필터는 미구현 |
-| **GitHub 신규 인기 저장소** | `INNOVATION_GITHUB_TRENDING` | Search REST API | 주별 | ✅ | 10개 토픽 그룹, 주 단위 멱등성. 한국 저장소 필터는 미구현 |
-| **기업 기술 블로그 RSS** | `INNOVATION_TECHBLOG_*` | RSS | — | ❌ | 네이버D2·카카오Tech·쏘카 등 |
+| **arXiv 분야별 논문** | `INNOVATION_ARXIV_KR` | Atom REST API | 주별 | ✅ | 11개 분야. **카테고리별 페이지네이션**(`1b53350`)으로 수집량 확대 — 2026-06-27 재수집 후 672건. 한국 저자 필터 미구현 |
+| **GitHub 신규 인기 저장소** | `INNOVATION_GITHUB_TRENDING` | Search REST API | 주별 | ✅ | 10개 토픽 그룹, 주 단위 멱등성(282건). 한국 저장소 필터 미구현 |
+| **기업 기술 블로그 RSS** | `INNOVATION_TECHBLOG_KR` | RSS | 월별 | ✅ | 네이버D2·카카오Tech 등 108건 |
+| **관세청 수출 통계** | `INNOVATION_CUSTOMS_EXPORT` | Open API | 월별 | ✅ | HS 그룹 월간 집계라 구조적 소량(26건) |
+| **KISTEP 기술 보고서** | `INNOVATION_KISTEP_REPORT` | 수집 | 주별 | ✅ | 소량(4건). Phase 1·2에서 KIAT와 함께 섹터분류·tech_demand 입력 |
 
 > **KIPRIS API 핵심 파라미터**: 인증 파라미터명은 `ServiceKey`이며 날짜는
 > `applicationDate=YYYYMMDD~YYYYMMDD` 형식이다. IPC 필터 대신 검증된
 > `inventionTitle` 키워드 방식을 사용한다. 현재 9개 그룹에 AI·바이오·에너지·
 > 반도체·모빌리티·핀테크·콘텐츠·푸드테크·에듀테크를 포함한다.
 >
-> **2026-06-09 검증**: arXiv 11개 분야 33건 수집·29건 적재,
-> GitHub 단일 토픽 3건 수집·적재 및 재실행 0건을 확인했다.
+> **2026-06-27 검증**: arXiv 페이지네이션 수정 후 재수집 — fetched 735·inserted 643 →
+> 누적 **672건**(11개 중 10개 성공, `econ.EM` 1개 arxiv.org 429 레이트리밋 누락).
+> 이전 2026-06-09 측정치(33건 수집·29건 적재)는 페이지네이션 전 수치다.
 
 ---
 
@@ -116,6 +119,8 @@
 
 | 출처 | 수집 방법 | 매핑 테이블 | 구현 | 비고 |
 |------|-----------|-------------|------|------|
+| **언론사 뉴스 RSS** (`DISCOURSE_NEWS_RSS`) | feedparser + `extract_article_body` | `raw_discourse_data` | ✅ | 일별 450건. 본문 보강(`extract_article_body`)으로 content_body NULL 36.2%→0.2% |
+| **정부 정책브리핑** (`DISCOURSE_GOV_REPORT`) | korea.kr RSS | `raw_discourse_data` | ✅ | 일별 50건. 스케줄러 `_job_gov_report` 등록(`1ea91c3`) |
 | Yonhap / JoongAng Daily RSS | feedparser | `raw_discourse_data` | ❌ | 공식 뉴스 |
 | 나무위키 최근 변경 | GitHub Extractor / Playwright | `raw_discourse_data` | ❌ | 신조어·급부상 트렌드 빠름 (강력 추천) |
 | Theqoo / 에펨코리아 | Playwright | `raw_discourse_data` | ❌ | 20~30대 실시간 반응 |
@@ -130,7 +135,7 @@
 | 구분 | 출처 | 수집 방법 | 구현 | 비고 |
 |------|------|-----------|------|------|
 | **GRANT** | 중소벤처기업부 사업공고 | Open API | ✅ | `smes_collector.py` |
-| **GRANT** | K-Startup 통합공고 | Open API | ❌ P0 | SMES 보완 |
+| **GRANT** | K-Startup 통합공고 | Open API | ✅ | `kstartup_collector.py` 278건. 상세 페이지 fetch로 본문 보강(`d4daee7`, avg 130자) |
 | **GRANT** | 중기부 선정 결과 API | Open API | ❌ P1 | 선정 기업·금액 → Economic 교차 |
 | **BOOTCAMP** | HRD-Net (K-Digital) | Open API | ❌ P1 | 국가 지원 부트캠프 |
 | **JOB** | ALIO 공공기관 채용정보 | Open API | ❌ P1 | 공공기관 채용 공고 |
