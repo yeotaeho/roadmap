@@ -28,15 +28,14 @@ class TechDemandGapService:
         settings = get_settings()
         self._model = settings.llm_classify_model
         self._conf_min = settings.llm_classify_confidence_min
-        self._fit_min = settings.tech_demand_youth_fit_min
         self._llm = LlmClient(api_key=settings.openai_api_key, model=self._model)
 
     async def refine_and_serve(
         self, window_days: int = ACTIVE_WINDOW_DAYS, limit: int = DEFAULT_LIMIT
     ) -> dict:
-        """미처리 KIAT 을 추출·적재(전량) 후 Gold 재생성(youth_fit 게이트). 멱등.
+        """미처리 KIAT 을 추출·적재(전량). 멱등. 사영은 GapProjectionService 에서 수행.
 
-        반환: {"scanned", "gaps", "skipped", "issues"}.
+        반환: {"scanned", "gaps", "skipped"}.
         """
         rows = await self.repo.fetch_unprocessed_tech_demand(
             PROMPT_VERSION, self._conf_min, window_days, limit
@@ -70,6 +69,5 @@ class TechDemandGapService:
                 skipped += 1
             if i % REFINE_CHUNK == 0:
                 await self.session.commit()
-        issues = await self.repo.project_to_gold(PROMPT_VERSION, self._fit_min)
         await self.session.commit()
-        return {"scanned": len(rows), "gaps": gaps, "skipped": skipped, "issues": issues}
+        return {"scanned": len(rows), "gaps": gaps, "skipped": skipped}

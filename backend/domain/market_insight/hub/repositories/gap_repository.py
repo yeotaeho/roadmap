@@ -71,7 +71,8 @@ _FETCH_UNPROCESSED_TECH_DEMAND = text(
 _CLEAR_GOLD = text("DELETE FROM gap_issues")
 
 # 유효 gap(문제 있음) Silver + 원천 메타(근거용). 소스(discourse/innovation)별 evidence COALESCE.
-# innovation(tech_demand) 행은 youth_fit_score >= :fit_min 만 통과(discourse 는 NULL 이라 무조건 통과).
+# discourse 는 disc_pv, innovation(tech_demand)은 td_pv 로 현재 세대만 선택.
+# innovation 행은 youth_fit_score >= :fit_min 만 통과(discourse 는 NULL 이라 무조건 통과).
 _FETCH_SILVER_FOR_GOLD = text(
     """
     SELECT g.sector_slug, g.extracted_problem, g.extracted_opportunity, g.detail_summary,
@@ -83,8 +84,9 @@ _FETCH_SILVER_FOR_GOLD = text(
            ON d.id = g.raw_id AND g.raw_table_ref = 'raw_discourse_data'
     LEFT JOIN raw_innovation_data i
            ON i.id = g.raw_id AND g.raw_table_ref = 'raw_innovation_data'
-    WHERE g.prompt_version = :pv
-      AND g.extracted_problem IS NOT NULL
+    WHERE g.extracted_problem IS NOT NULL
+      AND ( (g.raw_table_ref = 'raw_discourse_data'  AND g.prompt_version = :disc_pv)
+         OR (g.raw_table_ref = 'raw_innovation_data' AND g.prompt_version = :td_pv) )
       AND (g.raw_table_ref <> 'raw_innovation_data' OR g.youth_fit_score >= :fit_min)
     ORDER BY g.reference_date DESC NULLS LAST, g.id DESC
     """
@@ -166,16 +168,19 @@ class GapRepository(BaseRepository):
         ).all()
         return list(rows)
 
-    async def project_to_gold(self, prompt_version: str, fit_min: float = 0.0) -> int:
+    async def project_to_gold(
+        self, disc_pv: str, td_pv: str, fit_min: float = 0.0
+    ) -> int:
         """유효 gap Silver → gap_issues + issue_evidences 멱등 재생성. 적재 이슈 수 반환.
 
-        discourse·innovation(tech_demand) 두 소스를 함께 재조립한다.
+        discourse(disc_pv)·innovation tech_demand(td_pv) 두 소스를 함께 재조립한다.
         innovation 행은 youth_fit_score >= fit_min 만 Gold 통과.
         """
         await self.session.execute(_CLEAR_GOLD)
         rows = (
             await self.session.execute(
-                _FETCH_SILVER_FOR_GOLD, {"pv": prompt_version, "fit_min": fit_min}
+                _FETCH_SILVER_FOR_GOLD,
+                {"disc_pv": disc_pv, "td_pv": td_pv, "fit_min": fit_min},
             )
         ).all()
         n = 0
