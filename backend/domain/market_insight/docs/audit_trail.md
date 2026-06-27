@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-27 — LLM refine 4서비스 + embed 청크 커밋으로 idle timeout 방지 (Phase 2)
+- **무엇** — `gap·chance·causal·investment` refine 서비스 루프에 `REFINE_CHUNK=25` 중간 commit 추가. `embed_service` 는 기존 `_BATCH=64` 루프 끝마다 commit 이동(doc·user 양쪽). Gold 사영(`project_to_gold`)은 루프 종료 후 그대로 유지.
+- **왜** — Phase 1 에서 text_sector_classify 에 적용한 청크 커밋 수정의 연속. 동일 패턴([fetch → 다회 `await llm.*` → 마지막 1회 commit])을 가진 4 서비스가 큰 배치(limit=200)에서 LLM idle 이 `pool_recycle`(5분)을 초과해 `asyncpg ... connection is closed` 로 실패하는 구조적 결함.
+- **어디** — [gap_refine_service.py](../../hub/services/gap_refine_service.py) `REFINE_CHUNK`, [chance_refine_service.py](../../hub/services/chance_refine_service.py) `REFINE_CHUNK`, [causal_chain_service.py](../../hub/services/causal_chain_service.py) `REFINE_CHUNK`, [investment_flow_service.py](../../hub/services/investment_flow_service.py) `REFINE_CHUNK`, [embed_service.py](../../hub/services/embed_service.py) `embed_documents`·`embed_users`. 테스트: `scripts/gap_chunk_test.py`·`chance_chunk_test.py`·`causal_chunk_test.py`·`invest_chunk_test.py`·`embed_chunk_test.py`(신규).
+- **검증** — 신규 청크 테스트 5종 34항목 PASS, 기존 회귀(`llm_gap_extract_test` 12·`llm_investment_extract_test` 13·`causal_test` 10·`text_classify_chunk_test` 5) 40항목 PASS. 커밋 `f98b967`.
+- **후속** — `pool_recycle` 초과 위험 있는 서비스 전수 패치 완료. 가중치·배치 크기 튜닝은 실데이터 관찰 후.
+
 ## 2026-06-27 — KIAT 수요기술 → Pulse tech_demand 축 연결 + 분류 청크 커밋 (Phase 1)
 - **무엇** — innovation 96%(KIAT 11,226건) 미소비 dead data 를 Pulse `tech_demand` 축으로 연결. ① pulse_pipeline `DEFAULT_AXIS_WEIGHTS` 에 `tech_demand` 0.5. ② text_classify `_TARGET_TABLES` 에 raw_innovation_data + `_FETCH_UNCLASSIFIED_INNOVATION`(KIAT·KISTEP만, title+abstract+keyword, collected_at 기준). ③ `_TEXT_SECTOR_AXIS_SQL` 에 tech_demand UNION. ④ `classify_unclassified` 청크 커밋(`CLASSIFY_CHUNK=25`)으로 연결 idle timeout 버그 수정.
 - **왜** — KIAT 는 자유 keyword 라 `sector_source_map` 고정 매핑 불가 → innovation 축 제외 → 96% 미활용. LLM 섹터분류 재사용으로 트렌드 신호화. 백필 중 큰 배치 LLM idle 이 DB 연결 `pool_recycle`(5분)을 초과해 `connection closed` 발견 → 청크 커밋 근본 수정(daily 잡도 보호).
