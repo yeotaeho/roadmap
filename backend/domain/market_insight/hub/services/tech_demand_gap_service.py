@@ -10,8 +10,8 @@ from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 
-# tech_demand 전용 pv — GapProjectionService 가 소스별 pv(discourse=v1, innovation=v2)로 재조립한다. 의미 변경 시 bump.
-PROMPT_VERSION = "v2"
+# tech_demand 전용 pv — GapProjectionService 가 소스별 pv(discourse=v1, innovation=v3)로 재조립한다. 의미 변경 시 bump.
+PROMPT_VERSION = "v3"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 3000
