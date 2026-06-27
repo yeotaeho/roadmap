@@ -16,6 +16,9 @@ ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 500
 # 분류 입력 텍스트 상한(섹터 판별엔 제목+리드로 충분, 토큰 비용 제어).
 MAX_INPUT_CHARS = 2000
+# LLM 분류 중간 적재·커밋 주기. 큰 limit 에서 LLM idle 이 DB 연결 수명(pool_recycle)을
+# 초과해 connection closed 되는 것을 방지한다(청크마다 연결 반환).
+CLASSIFY_CHUNK = 25
 
 # 분류 대상 raw 테이블(자유 텍스트 원천). innovation 은 KIAT·KISTEP만(fetch SQL에서 필터).
 _TARGET_TABLES = ("raw_economic_data", "raw_discourse_data", "raw_innovation_data")
@@ -72,6 +75,12 @@ class TextSectorClassifyService:
                         "input_hash": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),
                     }
                 )
-            await self.repo.upsert_text_sector_class(payload)
-        await self.session.commit()
+                # 청크마다 적재·커밋해 LLM idle 구간을 제한(연결 수명 초과 방지).
+                if len(payload) >= CLASSIFY_CHUNK:
+                    await self.repo.upsert_text_sector_class(payload)
+                    await self.session.commit()
+                    payload = []
+            if payload:
+                await self.repo.upsert_text_sector_class(payload)
+                await self.session.commit()
         return {"scanned": scanned, "classified": classified, "unknown": unknown}
