@@ -373,7 +373,7 @@ async def _job_yahoo_macro() -> dict[str, Any]:
 async def _job_arxiv_papers() -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         return await BronzeInnovationIngestService(session).ingest_arxiv(
-            days_back=7, max_results=50
+            days_back=7, max_results=100, per_category_cap=150
         )
 
 

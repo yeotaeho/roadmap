@@ -38,7 +38,7 @@ class BronzeInnovationIngestService:
         self._github_token = github_token
 
     async def ingest_arxiv(
-        self, *, days_back: int = 7, max_results: int = 50
+        self, *, days_back: int = 7, max_results: int = 100, per_category_cap: int = 150
     ) -> dict[str, Any]:
         latest = await self._repo.latest_by_source_type("INNOVATION_ARXIV_KR")
         week_start = (latest.raw_metadata or {}).get("week_start") if latest else None
@@ -46,6 +46,7 @@ class BronzeInnovationIngestService:
         rows, stats = await collector.collect(
             days_back=days_back,
             max_results=max_results,
+            per_category_cap=per_category_cap,
             watermark=ArxivWatermark(last_week_start=week_start),
         )
         current_week = str(stats.get("week_start") or "")

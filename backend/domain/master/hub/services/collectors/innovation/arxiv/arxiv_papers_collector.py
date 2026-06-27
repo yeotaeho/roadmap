@@ -83,7 +83,7 @@ class ArxivPapersCollector:
         *,
         days_back: int = 7,
         max_results: int = 100,
-        per_category_cap: int = 300,
+        per_category_cap: int = 150,
         watermark: ArxivWatermark | None = None,
         categories: list[tuple[str, str, str]] | None = None,
         sleep_seconds: float = 1.0,
