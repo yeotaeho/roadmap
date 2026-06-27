@@ -74,10 +74,6 @@ class _FakeRepo:
     async def upsert_silver(self, payload: dict) -> None:
         self.upsert_calls += 1
 
-    async def project_to_gold(self, pv) -> int:
-        self.gold_calls += 1
-        return 5
-
 
 class _FakeSession:
     def __init__(self) -> None:
