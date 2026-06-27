@@ -10,8 +10,8 @@ from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 
-# discourse gap 과 같은 pv — 공유 project_to_gold(pv 필터)가 두 소스를 함께 재조립하기 위함. 변경 금지.
-PROMPT_VERSION = "v1"
+# tech_demand 전용 pv — GapProjectionService 가 소스별 pv(discourse=v1, innovation=v2)로 재조립한다. 의미 변경 시 bump.
+PROMPT_VERSION = "v2"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 3000
