@@ -48,6 +48,7 @@ from domain.market_insight.hub.services.text_entity_extract_service import (
     TextEntityExtractService,
 )
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
+from domain.market_insight.hub.services.tech_demand_gap_service import TechDemandGapService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
 from domain.market_insight.hub.services.investment_flow_service import (
     InvestmentFlowRefineService,
@@ -544,6 +545,16 @@ async def _job_gap_refine() -> dict[str, Any] | None:
         return await svc.refine_and_serve()
 
 
+async def _job_tech_demand_gap() -> dict[str, Any] | None:
+    """분류 KIAT → 기업 미확보 갭·청년 기회 추출 → Gap 카드 재생성(youth_fit 게이트, 멱등). 키 없으면 스킵."""
+    settings = get_settings()
+    if not settings.openai_api_key:
+        logger.warning("[scheduler] openai_api_key 없음 — 수요기술 Gap 정제 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await TechDemandGapService(session).refine_and_serve()
+
+
 async def _job_causal_refine() -> dict[str, Any] | None:
     """분류 economic → 거시→산업→청년기회 인과사슬 추출 → causal_chains 재생성(멱등). 키 없으면 스킵."""
     settings = get_settings()
@@ -626,6 +637,7 @@ _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("entity_extract",    _job_entity_extract),
     ("investment_refine", _job_investment_refine),
     ("gap_refine",        _job_gap_refine),
+    ("tech_demand_gap",   _job_tech_demand_gap),
     ("causal_refine",     _job_causal_refine),
     ("chance_refine",     _job_chance_refine),
     ("chance_match",      _job_chance_match),
