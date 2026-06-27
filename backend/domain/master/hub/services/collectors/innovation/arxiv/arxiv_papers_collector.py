@@ -82,7 +82,8 @@ class ArxivPapersCollector:
         self,
         *,
         days_back: int = 7,
-        max_results: int = 50,
+        max_results: int = 100,
+        per_category_cap: int = 300,
         watermark: ArxivWatermark | None = None,
         categories: list[tuple[str, str, str]] | None = None,
         sleep_seconds: float = 1.0,
@@ -106,24 +107,35 @@ class ArxivPapersCollector:
         timeout = aiohttp.ClientTimeout(total=20)
         headers = {"User-Agent": "RoadmapResearchBot/1.0"}
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            for index, (group_name, category, _) in enumerate(targets):
-                params = {
-                    "search_query": f"cat:{category} AND submittedDate:{date_range}",
-                    "start": 0,
-                    "max_results": max(1, min(max_results, 100)),
-                    "sortBy": "submittedDate",
-                    "sortOrder": "descending",
-                }
+            page_size = max(1, min(max_results, 100))
+            for group_name, category, _ in targets:
+                # 카테고리당 페이지네이션 — arXiv 는 max_results 만큼 다 안 주므로
+                # 실제 반환 수만큼 start 를 전진시키고, 빈 페이지나 상한 도달 시 중단.
+                start = 0
+                cat_count = 0
                 try:
-                    async with session.get(_API_URL, params=params) as response:
-                        response.raise_for_status()
-                        rows.extend(parse_arxiv_feed(await response.text(), group_name, category))
+                    while cat_count < per_category_cap:
+                        params = {
+                            "search_query": f"cat:{category} AND submittedDate:{date_range}",
+                            "start": start,
+                            "max_results": page_size,
+                            "sortBy": "submittedDate",
+                            "sortOrder": "descending",
+                        }
+                        async with session.get(_API_URL, params=params) as response:
+                            response.raise_for_status()
+                            page = parse_arxiv_feed(await response.text(), group_name, category)
+                        if not page:
+                            break
+                        rows.extend(page)
+                        cat_count += len(page)
+                        start += len(page)
+                        if sleep_seconds > 0:
+                            await asyncio.sleep(sleep_seconds)
                     stats["categories_ok"] = int(stats["categories_ok"]) + 1
                 except Exception:
                     stats["errors"] = int(stats["errors"]) + 1
                     logger.exception("[arxiv] category=%s 수집 실패", category)
-                if index < len(targets) - 1 and sleep_seconds > 0:
-                    await asyncio.sleep(sleep_seconds)
         stats["fetched"] = len(rows)
         return rows, stats
 
