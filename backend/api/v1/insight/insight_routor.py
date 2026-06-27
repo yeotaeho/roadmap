@@ -15,6 +15,7 @@ from domain.market_insight.hub.repositories.signal_repository import SignalRepos
 from domain.market_insight.hub.services.briefing_service import BriefingRefineService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
+from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
 
@@ -207,7 +208,19 @@ async def refine_gap(db: AsyncSession = Depends(get_db)):
     """Gap 정제·서빙 수동 트리거 — discourse → Silver → Gold 재생성."""
     try:
         result = await GapRefineService(db).refine_and_serve()
-        return {"success": True, **result}
+        projected = await GapProjectionService(db).project_and_serve()
+        return {"success": True, **result, **projected}
     except Exception as e:
         logger.error(f"Gap 정제 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Gap 정제 실패: {str(e)}")
+
+
+@router.post("/gap/project", dependencies=[Depends(require_internal_token)])
+async def project_gap(db: AsyncSession = Depends(get_db)):
+    """Gap Gold 재사영만 — youth_fit 임계 재튜닝 후 LLM 재실행 없이 Gold 재생성."""
+    try:
+        result = await GapProjectionService(db).project_and_serve()
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"Gap 사영 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Gap 사영 실패: {str(e)}")

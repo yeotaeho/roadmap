@@ -49,6 +49,7 @@ from domain.market_insight.hub.services.text_entity_extract_service import (
 )
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.tech_demand_gap_service import TechDemandGapService
+from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
 from domain.market_insight.hub.services.investment_flow_service import (
     InvestmentFlowRefineService,
@@ -555,6 +556,12 @@ async def _job_tech_demand_gap() -> dict[str, Any] | None:
         return await TechDemandGapService(session).refine_and_serve()
 
 
+async def _job_gap_project() -> dict[str, Any] | None:
+    """discourse+tech_demand Silver → Gap 카드 단일 재조립(youth_fit 게이트, 멱등). LLM 무관이라 키 가드 불필요."""
+    async with AsyncSessionLocal() as session:
+        return await GapProjectionService(session).project_and_serve()
+
+
 async def _job_causal_refine() -> dict[str, Any] | None:
     """분류 economic → 거시→산업→청년기회 인과사슬 추출 → causal_chains 재생성(멱등). 키 없으면 스킵."""
     settings = get_settings()
@@ -638,6 +645,7 @@ _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("investment_refine", _job_investment_refine),
     ("gap_refine",        _job_gap_refine),
     ("tech_demand_gap",   _job_tech_demand_gap),
+    ("gap_project",       _job_gap_project),
     ("causal_refine",     _job_causal_refine),
     ("chance_refine",     _job_chance_refine),
     ("chance_match",      _job_chance_match),
