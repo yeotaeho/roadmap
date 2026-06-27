@@ -160,6 +160,17 @@ _TEXT_SECTOR_AXIS_SQL = text(
       AND c.sector_slug IS NOT NULL
       AND c.confidence >= :conf_min
     GROUP BY c.sector_slug, ref_date
+    UNION ALL
+    SELECT 'tech_demand' AS axis, c.sector_slug,
+           COALESCE(r.published_at::date, r.collected_at::date) AS ref_date,
+           COUNT(DISTINCT c.raw_id) AS c
+    FROM refined_text_sector_class c
+    JOIN raw_innovation_data r ON r.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_innovation_data'
+      AND c.prompt_version = :pv
+      AND c.sector_slug IS NOT NULL
+      AND c.confidence >= :conf_min
+    GROUP BY c.sector_slug, ref_date
     """
 )
 

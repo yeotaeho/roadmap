@@ -15,6 +15,7 @@ except Exception:
 
 from core.database import AsyncSessionLocal  # noqa: E402
 from domain.market_insight.hub.repositories.pulse_repository import (  # noqa: E402
+    _TEXT_SECTOR_AXIS_SQL,
     PulseRepository,
 )
 
@@ -44,6 +45,15 @@ async def main() -> int:
             rid, body = rows[0]
             check("fetch 본문 비어있지 않음", bool(body and body.strip()))
             print(f"  sample raw_id={rid} body_head={body[:80]!r}")
+
+        # Task 3 — tech_demand 축이 axis SQL 에 포함·집계되는지(백필 전 0건 가능, 문법 검증).
+        axis_rows = (
+            await s.execute(_TEXT_SECTOR_AXIS_SQL, {"pv": "v1", "conf_min": 0.6})
+        ).all()
+        check("text axis SQL 실행 성공(tech_demand 절 포함)", isinstance(axis_rows, list))
+        axes = {r.axis for r in axis_rows}
+        td = [r for r in axis_rows if r.axis == "tech_demand"]
+        print(f"  축 종류={axes or '(데이터 없음)'} tech_demand={len(td)}건 (백필 전 0 가능)")
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
