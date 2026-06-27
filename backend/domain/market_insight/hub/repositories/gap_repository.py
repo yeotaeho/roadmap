@@ -35,27 +35,57 @@ _UPSERT_SILVER = text(
     INSERT INTO refined_gap_insights
         (sector_slug, data_role, extracted_problem, extracted_opportunity, detail_summary,
          stakeholders, next_actions, reference_date, raw_table_ref, raw_id,
-         model_name, prompt_version, input_hash)
+         model_name, prompt_version, input_hash, youth_fit_score)
     VALUES
-        (:sector_slug, 'DISCOURSE_SIGNAL', :problem, :opportunity, :detail,
-         CAST(:stakeholders AS JSONB), CAST(:next_actions AS JSONB), :ref_date, 'raw_discourse_data', :raw_id,
-         :model_name, :prompt_version, :input_hash)
+        (:sector_slug, :data_role, :problem, :opportunity, :detail,
+         CAST(:stakeholders AS JSONB), CAST(:next_actions AS JSONB), :ref_date, :raw_table_ref, :raw_id,
+         :model_name, :prompt_version, :input_hash, :youth_fit_score)
     ON CONFLICT (raw_table_ref, raw_id, prompt_version) DO NOTHING
+    """
+)
+
+# 이미 분류된 KIAT/KISTEP 행 중 아직 tech_demand gap 처리 안 된 행(refined_gap_insights 없음).
+_FETCH_UNPROCESSED_TECH_DEMAND = text(
+    """
+    SELECT c.raw_id AS raw_id, c.sector_slug AS sector_slug,
+           i.title AS title, i.source_url AS url,
+           i.title || E'\n' || COALESCE(i.abstract_text, '') || E'\n'
+                  || COALESCE(i.raw_metadata->>'keyword', '') AS body,
+           COALESCE(i.published_at::date, i.collected_at::date) AS ref_date
+    FROM refined_text_sector_class c
+    JOIN raw_innovation_data i ON i.id = c.raw_id
+    LEFT JOIN refined_gap_insights g
+           ON g.raw_table_ref = 'raw_innovation_data' AND g.raw_id = c.raw_id AND g.prompt_version = :pv
+    WHERE c.raw_table_ref = 'raw_innovation_data'
+      AND c.sector_slug IS NOT NULL
+      AND c.confidence >= :conf_min
+      AND i.source_type IN ('INNOVATION_KIAT_TECH_DEMAND', 'INNOVATION_KISTEP_REPORT')
+      AND g.id IS NULL
+      AND COALESCE(i.published_at::date, i.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY c.confidence DESC
+    LIMIT :lim
     """
 )
 
 # Gold 사영 — gap_issues 전체 삭제(issue_evidences CASCADE) 후 재생성.
 _CLEAR_GOLD = text("DELETE FROM gap_issues")
 
-# 유효 gap(문제 있음) Silver + 원천 discourse 메타(근거용).
+# 유효 gap(문제 있음) Silver + 원천 메타(근거용). 소스(discourse/innovation)별 evidence COALESCE.
+# innovation(tech_demand) 행은 youth_fit_score >= :fit_min 만 통과(discourse 는 NULL 이라 무조건 통과).
 _FETCH_SILVER_FOR_GOLD = text(
     """
     SELECT g.sector_slug, g.extracted_problem, g.extracted_opportunity, g.detail_summary,
            g.stakeholders, g.next_actions, g.reference_date, g.raw_table_ref, g.raw_id,
-           d.headline AS ev_title, d.source_url AS ev_url
+           COALESCE(d.headline, i.title) AS ev_title,
+           COALESCE(d.source_url, i.source_url) AS ev_url
     FROM refined_gap_insights g
-    LEFT JOIN raw_discourse_data d ON d.id = g.raw_id
-    WHERE g.prompt_version = :pv AND g.extracted_problem IS NOT NULL
+    LEFT JOIN raw_discourse_data d
+           ON d.id = g.raw_id AND g.raw_table_ref = 'raw_discourse_data'
+    LEFT JOIN raw_innovation_data i
+           ON i.id = g.raw_id AND g.raw_table_ref = 'raw_innovation_data'
+    WHERE g.prompt_version = :pv
+      AND g.extracted_problem IS NOT NULL
+      AND (g.raw_table_ref <> 'raw_innovation_data' OR g.youth_fit_score >= :fit_min)
     ORDER BY g.reference_date DESC NULLS LAST, g.id DESC
     """
 )
@@ -74,7 +104,7 @@ _INSERT_ISSUE = text(
 _INSERT_EVIDENCE = text(
     """
     INSERT INTO issue_evidences (issue_id, evidence_type, title, url, raw_table_ref, raw_id)
-    VALUES (:issue_id, 'NEWS', :title, :url, :raw_table_ref, :raw_id)
+    VALUES (:issue_id, :evidence_type, :title, :url, :raw_table_ref, :raw_id)
     """
 )
 
@@ -118,14 +148,36 @@ class GapRepository(BaseRepository):
 
     async def upsert_silver(self, payload: dict) -> None:
         params = dict(payload)
+        params.setdefault("data_role", "DISCOURSE_SIGNAL")
+        params.setdefault("raw_table_ref", "raw_discourse_data")
+        params.setdefault("youth_fit_score", None)
         params["stakeholders"] = json.dumps(payload.get("stakeholders") or [])
         params["next_actions"] = json.dumps(payload.get("next_actions") or [])
         await self.session.execute(_UPSERT_SILVER, params)
 
-    async def project_to_gold(self, prompt_version: str) -> int:
-        """유효 gap Silver → gap_issues + issue_evidences 멱등 재생성. 적재 이슈 수 반환."""
+    async def fetch_unprocessed_tech_demand(
+        self, prompt_version: str, conf_min: float, window_days: int, limit: int
+    ) -> list:
+        rows = (
+            await self.session.execute(
+                _FETCH_UNPROCESSED_TECH_DEMAND,
+                {"pv": prompt_version, "conf_min": conf_min, "win": window_days, "lim": limit},
+            )
+        ).all()
+        return list(rows)
+
+    async def project_to_gold(self, prompt_version: str, fit_min: float = 0.0) -> int:
+        """유효 gap Silver → gap_issues + issue_evidences 멱등 재생성. 적재 이슈 수 반환.
+
+        discourse·innovation(tech_demand) 두 소스를 함께 재조립한다.
+        innovation 행은 youth_fit_score >= fit_min 만 Gold 통과.
+        """
         await self.session.execute(_CLEAR_GOLD)
-        rows = (await self.session.execute(_FETCH_SILVER_FOR_GOLD, {"pv": prompt_version})).all()
+        rows = (
+            await self.session.execute(
+                _FETCH_SILVER_FOR_GOLD, {"pv": prompt_version, "fit_min": fit_min}
+            )
+        ).all()
         n = 0
         for r in rows:
             issue_id = (
@@ -142,11 +194,13 @@ class GapRepository(BaseRepository):
                     },
                 )
             ).scalar_one()
+            ev_type = "TECH_DEMAND" if r.raw_table_ref == "raw_innovation_data" else "NEWS"
             await self.session.execute(
                 _INSERT_EVIDENCE,
                 {
                     "issue_id": issue_id,
-                    "title": (r.ev_title or "근거 기사")[:255],
+                    "evidence_type": ev_type,
+                    "title": (r.ev_title or "근거 자료")[:255],
                     "url": r.ev_url,
                     "raw_table_ref": r.raw_table_ref,
                     "raw_id": r.raw_id,
