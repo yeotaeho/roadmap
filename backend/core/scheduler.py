@@ -408,6 +408,11 @@ async def _job_news_rss() -> dict[str, Any]:
         )
 
 
+async def _job_gov_report() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeDiscourseIngestService(session).ingest_gov_report(max_items=50)
+
+
 async def _job_techblog_kr() -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         return await BronzeInnovationIngestService(session).ingest_techblog_kr(
@@ -665,6 +670,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("goyong24_recruit",  _job_goyong24_recruit),
     ("saramin_recruit",   _job_saramin_recruit),
     ("news_rss",          _job_news_rss),
+    ("gov_report",        _job_gov_report),
     # 정제 체인은 순서 보장을 위해 단일 파이프라인 잡으로 등록(_REFINE_PIPELINE).
     ("insight_refine",    _job_insight_refine_pipeline),
 )

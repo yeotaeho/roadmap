@@ -154,6 +154,34 @@ def test_news_rss_body_enrichment() -> None:
     check("fetch_article 미주입 → 기존 동작(본문 None)", rows4[0].content_body is None)
 
 
+def test_gov_report() -> None:
+    # 정부 보도자료 RSS(korea.kr) — 부처명은 제목 [부처] 접두에서 추출, description=전체 본문.
+    from domain.master.hub.services.collectors.discourse.gov_report.gov_report_collector import (
+        parse_gov_rss,
+    )
+
+    rss = (
+        "<?xml version='1.0'?><rss version='2.0'><channel>"
+        "<item><title>[외교부]제2차 서밋 참석</title>"
+        "<link>https://www.korea.kr/x/1</link>"
+        "<description>보도자료 &lt;b&gt;본문&lt;/b&gt; 전체 내용</description>"
+        "<pubDate>Sat, 27 Jun 2026 02:02:37 GMT</pubDate></item>"
+        "<item><title>부처없는 제목</title><link>https://www.korea.kr/x/2</link>"
+        "<description>요약</description></item>"
+        "</channel></rss>"
+    )
+    rows = parse_gov_rss(rss, max_items=10)
+    check("gov_report 2건 파싱", len(rows) == 2)
+    check("gov_report source_type", rows[0].source_type == "DISCOURSE_GOV_REPORT")
+    check("gov_report 부처명 추출(외교부)", rows[0].author_or_publisher == "외교부")
+    check("gov_report headline 대괄호 제거", rows[0].headline == "제2차 서밋 참석")
+    check(
+        "gov_report content HTML 제거",
+        rows[0].content_body and "본문" in rows[0].content_body and "<b>" not in rows[0].content_body,
+    )
+    check("gov_report 부처 없으면 None", rows[1].author_or_publisher is None)
+
+
 # ---------------------------------------------------------------------------
 # Opportunity — K-Startup / 나라장터
 # ---------------------------------------------------------------------------
@@ -293,6 +321,7 @@ def main() -> int:
         test_saramin,
         test_news_rss,
         test_news_rss_body_enrichment,
+        test_gov_report,
         test_kstartup,
         test_narajangteo,
         test_venture_list,
