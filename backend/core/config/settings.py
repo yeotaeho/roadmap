@@ -162,7 +162,7 @@ class Settings(BaseSettings):
         default=0.6, validation_alias="LLM_CLASSIFY_CONFIDENCE_MIN"
     )
     tech_demand_youth_fit_min: float = Field(
-        default=0.5, validation_alias="TECH_DEMAND_YOUTH_FIT_MIN"
+        default=0.4, validation_alias="TECH_DEMAND_YOUTH_FIT_MIN"
     )
     llm_embed_model: str = Field(
         default="text-embedding-3-large", validation_alias="LLM_EMBED_MODEL"
