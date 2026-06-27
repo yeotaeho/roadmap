@@ -16,6 +16,8 @@ PROMPT_VERSION = "v1"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 3000
+# LLM 추출 중간 적재·커밋 주기 — pool_recycle(5분) 초과 방지.
+REFINE_CHUNK = 25
 
 
 class CausalChainRefineService:
@@ -40,7 +42,7 @@ class CausalChainRefineService:
             PROMPT_VERSION, self._conf_min, window_days, limit
         )
         chains = 0
-        for r in rows:
+        for i, r in enumerate(rows, start=1):
             input_text = (r.body or "").strip()[:MAX_INPUT_CHARS]
             result = await self._llm.extract_causal_chain(input_text)
             await self.repo.upsert_silver(
@@ -58,6 +60,8 @@ class CausalChainRefineService:
             )
             if result["macro_event"] is not None:
                 chains += 1
+            if i % REFINE_CHUNK == 0:
+                await self.session.commit()
         gold = await self.repo.project_to_gold(PROMPT_VERSION)
         await self.session.commit()
         return {"scanned": len(rows), "chains": chains, "gold": gold}

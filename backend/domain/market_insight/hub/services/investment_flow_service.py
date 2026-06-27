@@ -14,6 +14,8 @@ PROMPT_VERSION = "v1"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 1000
+# LLM 추출 중간 적재·커밋 주기 — pool_recycle(5분) 초과 방지.
+REFINE_CHUNK = 25
 
 
 class InvestmentFlowRefineService:
@@ -35,7 +37,7 @@ class InvestmentFlowRefineService:
         """
         rows = await self.repo.fetch_unprocessed(PROMPT_VERSION, window_days, limit)
         extracted = 0
-        for r in rows:
+        for i, r in enumerate(rows, start=1):
             base = (r.title or "").strip()
             if r.company_hint:
                 base = f"{base} ({r.company_hint})"
@@ -56,5 +58,7 @@ class InvestmentFlowRefineService:
             )
             if result["amount_krw"] is not None:
                 extracted += 1
+            if i % REFINE_CHUNK == 0:
+                await self.session.commit()
         await self.session.commit()
         return {"scanned": len(rows), "extracted": extracted}

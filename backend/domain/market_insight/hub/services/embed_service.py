@@ -42,7 +42,7 @@ class DocumentEmbedService:
                     vec, self._model, r.sector_slug,
                 )
                 embedded += 1
-        await self.session.commit()
+            await self.session.commit()
         return {"scanned": len(rows), "embedded": embedded}
 
 
@@ -77,5 +77,5 @@ class UserEmbedService:
                 version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
                 await self.repo.upsert_user_embedding(r.user_id, vec, version, self._model)
                 embedded += 1
-        await self.session.commit()
+            await self.session.commit()
         return {"scanned": len(rows), "embedded": embedded}

@@ -15,6 +15,8 @@ PROMPT_VERSION = "v1"
 ACTIVE_WINDOW_DAYS = 120
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 3000
+# LLM 추출 중간 적재·커밋 주기 — pool_recycle(5분) 초과 방지.
+REFINE_CHUNK = 25
 
 
 class ChanceRefineService:
@@ -37,7 +39,7 @@ class ChanceRefineService:
         rows = await self.repo.fetch_unprocessed(PROMPT_VERSION, window_days, limit)
         extracted = 0
         skipped = 0
-        for r in rows:
+        for i, r in enumerate(rows, start=1):
             input_text = (r.body or "").strip()[:MAX_INPUT_CHARS]
             result = await self._llm.extract_chance(input_text, SECTOR_SLUGS)
             await self.repo.upsert_silver(
@@ -59,6 +61,8 @@ class ChanceRefineService:
                 extracted += 1
             else:
                 skipped += 1
+            if i % REFINE_CHUNK == 0:
+                await self.session.commit()
         opportunities = await self.repo.project_to_gold(PROMPT_VERSION)
         await self.session.commit()
         return {
