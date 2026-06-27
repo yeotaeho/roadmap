@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-27 — KIAT 수요기술 → Gap 청년 기회 신호 (Phase 2)
+- **무엇** — 분류된 KIAT/KISTEP를 LLM 추출해 "기업 미확보 수요기술 → 청년 기회" Gap 신호로 변환. ① `extract_tech_demand_gap` + youth_fit(0~1) 파서·프롬프트. ② `refined_gap_insights.youth_fit_score` 컬럼 + `tech_demand_youth_fit_min`(0.5) 설정. ③ `GapRepository` 소스-인지 일반화(`fetch_unprocessed_tech_demand`·`upsert_silver` 파라미터화·Gold evidence COALESCE/youth_fit 게이트·evidence_type 'TECH_DEMAND'). ④ `TechDemandGapService`(PROMPT_VERSION 'v1' 공유). ⑤ 스케줄러 `_job_tech_demand_gap`을 gap_refine 다음 등록.
+- **왜** — Phase 1은 KIAT를 Pulse tech_demand 축으로만 소비. KIAT 수요기술=시장 미해결 갭이라 Gap 탭 신규 신호원으로 전환. youth_fit 게이트로 청년 무관 B2B 설비·자본집약 기술 배제 의도.
+- **어디** — [client.py](../../../../core/llm/client.py) `extract_tech_demand_gap`·`_TECH_DEMAND_GAP_SYSTEM_PROMPT`·`_parse_tech_demand_gap`, [refined_gap_insights.py](../../models/bases/refined_gap_insights.py) `youth_fit_score` + 마이그레이션 `d7a1f3c9e2b5`, [settings.py](../../../../core/config/settings.py) `tech_demand_youth_fit_min`, [gap_repository.py](../../hub/repositories/gap_repository.py) `fetch_unprocessed_tech_demand`·`_FETCH_SILVER_FOR_GOLD`·`project_to_gold`, [tech_demand_gap_service.py](../../hub/services/tech_demand_gap_service.py)(신규), [scheduler.py](../../../../core/scheduler.py) `_job_tech_demand_gap`. 설계/계획: `backend/docs/specs/2026-06-27-kiat-gap-tech-demand-phase2-design.md`·`-plan.md`.
+- **검증** — 파서 `tech_demand_gap_parse_test.py` 9 PASS. 소규모 백필(limit 100): scanned 45·gaps 45·skipped 0·issues 258. 무회귀: gap_refine 서비스 무수정 + `upsert_silver` setdefault + `project_to_gold` fit_min=0.0 기본 → DISCOURSE_SIGNAL 280→280. 최종 전체-브랜치 리뷰(opus) Ready to merge(Critical/Important 0). 커밋 `b452739`~`f9f2e86`, 병합 `139e422`.
+- **후속** — ⚠️ youth_fit 분포 퇴화 관측(45건 min 0.6·max 0.7·avg 0.696, 0.6 미만 0건 → 임계 0.5/0.7 어디서도 의미 있는 분리 없음). KIAT 산업기술 수요에 청년 무관 B2B가 상당수일 텐데 저점수가 전무 → **프롬프트가 변별 못 함**. 임계 튜닝만으로 불가, 프롬프트 개선(저/고적합 few-shot·루브릭) + `PROMPT_VERSION` bump 재추출 필요(별도 spec). 현재 임계 0.5 유지(무해 통과). 전체 window 백필은 프롬프트 개선 후. Gold 이중사영 단일화(현재 멱등 무해).
+
 ## 2026-06-27 — LLM refine 4서비스 + embed 청크 커밋으로 idle timeout 방지 (Phase 2)
 - **무엇** — `gap·chance·causal·investment` refine 서비스 루프에 `REFINE_CHUNK=25` 중간 commit 추가. `embed_service` 는 기존 `_BATCH=64` 루프 끝마다 commit 이동(doc·user 양쪽). Gold 사영(`project_to_gold`)은 루프 종료 후 그대로 유지.
 - **왜** — Phase 1 에서 text_sector_classify 에 적용한 청크 커밋 수정의 연속. 동일 패턴([fetch → 다회 `await llm.*` → 마지막 1회 commit])을 가진 4 서비스가 큰 배치(limit=200)에서 LLM idle 이 `pool_recycle`(5분)을 초과해 `asyncpg ... connection is closed` 로 실패하는 구조적 결함.
