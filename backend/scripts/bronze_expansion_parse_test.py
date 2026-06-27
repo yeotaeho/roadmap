@@ -216,6 +216,51 @@ def test_kstartup() -> None:
     check("kstartup URL fallback(pbanc_sn)", parse_item(items[1]).source_url.endswith("124"))
 
 
+def test_kstartup_body_enrichment() -> None:
+    from domain.master.hub.services.collectors.opportunity.kstartup.kstartup_collector import (
+        extract_kstartup_body,
+    )
+
+    # .information_list 셀렉터 — 신청방법·기간 등 핵심 본문, 네비 제외
+    html_info = (
+        "<html><body>"
+        "<nav>홈 로그인 메뉴</nav>"
+        "<ul class='information_list'>"
+        + ("<li>신청방법: 온라인 접수, 자격요건: 예비창업자, 지원내용: 최대 1억원. </li>" * 15)
+        + "</ul>"
+        "</body></html>"
+    )
+    body = extract_kstartup_body(html_info)
+    check("kstartup_body .information_list 본문 추출", "신청방법" in body)
+    check("kstartup_body 네비 노이즈 제외", "홈 로그인" not in body)
+
+    # 빈 입력 → 빈 문자열
+    check("kstartup_body 빈 입력", extract_kstartup_body("") == "")
+
+    # 셀렉터 미매칭 → 빈 문자열
+    html_no_match = "<html><body><div class='other'>내용</div></body></html>"
+    check("kstartup_body 셀렉터 없음 빈 문자열", extract_kstartup_body(html_no_match) == "")
+
+    # 50자 미만 노드는 스킵 (짧은 더미 노드 방어)
+    html_short_node = (
+        "<html><body>"
+        "<ul class='information_list'><li>짧다</li></ul>"
+        "<div class='view_cont'>" + ("긴 내용 텍스트입니다. " * 10) + "</div>"
+        "</body></html>"
+    )
+    body2 = extract_kstartup_body(html_short_node)
+    check("kstartup_body 50자 미만 노드 스킵 → 폴백 .view_cont", "긴 내용 텍스트" in body2)
+
+    # max_len 절단
+    html_long = (
+        "<html><body><ul class='information_list'>"
+        + ("<li>내용</li>" * 1000)
+        + "</ul></body></html>"
+    )
+    body3 = extract_kstartup_body(html_long, max_len=100)
+    check("kstartup_body max_len 절단", len(body3) <= 100)
+
+
 def test_narajangteo() -> None:
     from domain.master.hub.services.collectors.opportunity.narajangteo.narajangteo_collector import (
         extract_items,
@@ -323,6 +368,7 @@ def main() -> int:
         test_news_rss_body_enrichment,
         test_gov_report,
         test_kstartup,
+        test_kstartup_body_enrichment,
         test_narajangteo,
         test_venture_list,
         test_kiat_tech_demand,

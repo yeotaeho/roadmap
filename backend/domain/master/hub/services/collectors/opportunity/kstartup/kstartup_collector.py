@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Optional
 
 import aiohttp
 import xmltodict
+from bs4 import BeautifulSoup
 
+from domain.master.hub.services.collectors.economic.common.rss_wordpress_sync import fetch_html_sync
 from domain.master.hub.services.collectors.opportunity.smes_collector import (
     _ensure_list,
     _parse_date_to_kst,
@@ -39,6 +42,17 @@ _URL_FIELDS = ("detl_pg_url", "detlPgUrl", "pblancUrl", "url")
 _ID_FIELDS = ("pbanc_sn", "pbancSn", "id")
 _CLASSIFICATION_FIELDS = ("supt_biz_clsfc", "suptBizClsfc")
 _TARGET_FIELDS = ("aply_trgt_ctnt", "aplyTrgtCtnt", "aply_trgt")
+
+# API pbanc_ctnt 는 130자 요약만 제공 — 상세 페이지 fetch 로 보강
+_ENRICH_THRESHOLD = 200
+
+# K-Startup 상세 HTML 본문 컨테이너 셀렉터 (우선순위순)
+_KSTARTUP_BODY_SELECTORS: tuple[str, ...] = (
+    ".information_list",
+    ".view_cont",
+    ".pbanc_cont",
+    "#cont_body",
+)
 
 
 def _pick(item: dict, fields: tuple[str, ...]) -> Optional[str]:
@@ -141,6 +155,24 @@ def parse_item(item: dict) -> Optional[OpportunityCollectDto]:
     )
 
 
+def extract_kstartup_body(html: str, *, max_len: int = 4000) -> str:
+    """K-Startup 공고 상세 HTML에서 본문 텍스트 추출. 셀렉터 미매칭 시 빈 문자열."""
+    if not html:
+        return ""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return ""
+    for sel in _KSTARTUP_BODY_SELECTORS:
+        node = soup.select_one(sel)
+        if node is None:
+            continue
+        text = re.sub(r"\s+", " ", node.get_text(separator=" ", strip=True)).strip()
+        if len(text) > 50:
+            return text[:max_len]
+    return ""
+
+
 class KStartupCollector:
     """K-Startup 통합공고 OpenAPI Collector — 정부 창업지원 기회 수집."""
 
@@ -194,10 +226,36 @@ class KStartupCollector:
                 page_no += 1
 
         logger.info("K-Startup 수집 완료: %s건 (page=%s까지)", len(collected), page_no)
+
+        # 본문 보강 — API 요약(130자)이 짧은 항목만 상세 페이지 fetch
+        short = [dto for dto in collected if len(dto.raw_content or "") < _ENRICH_THRESHOLD]
+        if short:
+            sem = asyncio.Semaphore(5)
+
+            async def _enrich(dto: OpportunityCollectDto) -> None:
+                async with sem:
+                    try:
+                        html = await asyncio.to_thread(
+                            fetch_html_sync, dto.source_url, tag="kstartup-body"
+                        )
+                        body = extract_kstartup_body(html)
+                        if body and len(body) > len(dto.raw_content or ""):
+                            dto.raw_content = body
+                    except Exception:
+                        logger.warning(
+                            "K-Startup 본문 보강 실패 url=%s", dto.source_url, exc_info=False
+                        )
+
+            await asyncio.gather(*[_enrich(dto) for dto in short])
+            enriched_count = sum(
+                1 for dto in short if len(dto.raw_content or "") >= _ENRICH_THRESHOLD
+            )
+            logger.info("K-Startup 본문 보강 완료: %s/%s건", enriched_count, len(short))
+
         return collected
 
     def collect_sync(self, *, max_items: int = 100) -> list[OpportunityCollectDto]:
         return asyncio.run(self.collect(max_items=max_items))
 
 
-__all__ = ["KStartupCollector", "extract_items", "parse_item"]
+__all__ = ["KStartupCollector", "extract_items", "parse_item", "extract_kstartup_body"]
