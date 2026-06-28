@@ -113,6 +113,19 @@ def test_context_builder() -> None:
     )
     check("맥락에 목표 직무 포함", "데이터 분석가" in ctx)
     check("맥락에 스킬 포함", "SQL" in ctx)
+    check("movers/gaps 없으면 섹션 생략", "Pulse" not in ctx and "Gap" not in ctx)
+
+
+def test_context_with_market() -> None:
+    ctx = build_planner_context(
+        {"skills": [], "experiences": [], "education": [], "summary": ""},
+        "백엔드",
+        [],
+        movers=[{"sector_slug": "ai-data", "score": 88, "momentum_pct": 12.5}],
+        gaps=[{"problem": "탄소회계 자동화 부재", "chance": "ESG 데이터 엔지니어 수요"}],
+    )
+    check("맥락에 Pulse 트렌드 포함", "ai-data" in ctx and "Pulse" in ctx)
+    check("맥락에 Gap 신호 포함", "탄소회계 자동화 부재" in ctx and "Gap" in ctx)
 
 
 def main() -> int:
@@ -124,6 +137,7 @@ def main() -> int:
     test_root_key_normalized()
     test_template_valid()
     test_context_builder()
+    test_context_with_market()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

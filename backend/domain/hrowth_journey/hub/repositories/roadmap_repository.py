@@ -76,6 +76,26 @@ _UPSERT_ROADMAP = text(
     """
 )
 
+_FETCH_TOP_MOVERS = text(
+    """
+    SELECT sector_slug, score, momentum_pct
+    FROM pulse_metrics_log
+    WHERE recorded_date = (SELECT MAX(recorded_date) FROM pulse_metrics_log)
+    ORDER BY momentum_pct DESC NULLS LAST, score DESC
+    LIMIT :lim
+    """
+)
+
+_FETCH_RECENT_GAPS = text(
+    """
+    SELECT problem_summary, chance_summary
+    FROM gap_issues
+    WHERE is_active = true
+    ORDER BY published_date DESC, id DESC
+    LIMIT :lim
+    """
+)
+
 _DELETE_QUESTS = text("DELETE FROM roadmap_quests WHERE roadmap_id = :roadmap_id")
 
 _INSERT_QUEST = text(
@@ -163,6 +183,23 @@ class RoadmapRepository(BaseRepository):
         if r is None:
             return {"target_job": None, "interest_keywords": []}
         return {"target_job": r.target_job, "interest_keywords": r.interest_keywords or []}
+
+    async def fetch_top_movers(self, limit: int = 5) -> list[dict]:
+        """최신 일자 Pulse 상위 모멘텀 섹터(시장 트렌드 맥락)."""
+        rows = (await self.session.execute(_FETCH_TOP_MOVERS, {"lim": limit})).all()
+        return [
+            {
+                "sector_slug": r.sector_slug,
+                "score": r.score,
+                "momentum_pct": float(r.momentum_pct) if r.momentum_pct is not None else None,
+            }
+            for r in rows
+        ]
+
+    async def fetch_recent_gaps(self, limit: int = 5) -> list[dict]:
+        """최근 활성 Gap 미해결 기회 신호."""
+        rows = (await self.session.execute(_FETCH_RECENT_GAPS, {"lim": limit})).all()
+        return [{"problem": r.problem_summary, "chance": r.chance_summary} for r in rows]
 
     async def save_roadmap(self, user_id: str, roadmap: dict) -> int:
         """로드맵 헤더 upsert + 퀘스트 전체 교체. roadmap_id 반환."""

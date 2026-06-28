@@ -9,8 +9,17 @@ from core.llm.client import LlmClient
 from domain.hrowth_journey.hub.repositories.roadmap_repository import RoadmapRepository
 
 
-def build_planner_context(persona: dict, target_job: str | None, keywords: list[str]) -> str:
-    """LLM 입력 맥락 문자열 조립. 무네트워크 순수 함수."""
+def build_planner_context(
+    persona: dict,
+    target_job: str | None,
+    keywords: list[str],
+    movers: list[dict] | None = None,
+    gaps: list[dict] | None = None,
+) -> str:
+    """LLM 입력 맥락 문자열 조립. 무네트워크 순수 함수.
+
+    페르소나·목표·관심사에 더해 시장 트렌드(Pulse movers)·미해결 기회(Gap)를 주입한다.
+    """
     skills = persona.get("skills") or []
     exps = persona.get("experiences") or []
     edus = persona.get("education") or []
@@ -29,6 +38,16 @@ def build_planner_context(persona: dict, target_job: str | None, keywords: list[
     ] or ["- (없음)"]
     if persona.get("summary"):
         parts.append(f"[요약] {persona['summary']}")
+    if movers:
+        parts.append("[시장 트렌드 상위 — Pulse]")
+        parts += [
+            f"- {m.get('sector_slug')}: 점수 {m.get('score')}"
+            + (f", 모멘텀 {m.get('momentum_pct')}%" if m.get("momentum_pct") is not None else "")
+            for m in movers
+        ]
+    if gaps:
+        parts.append("[미해결 기회 신호 — Gap]")
+        parts += [f"- {g.get('problem')} → {g.get('chance')}" for g in gaps]
     return "\n".join(parts)
 
 
@@ -81,6 +100,8 @@ class RoadmapPlannerService:
         sync = await self.repo.fetch_sync_profile(user_id)
         target_job = sync["target_job"]
         keywords = sync["interest_keywords"]
+        movers = await self.repo.fetch_top_movers()
+        gaps = await self.repo.fetch_recent_gaps()
 
         roadmap: dict = {}
         source = "template"
@@ -88,7 +109,7 @@ class RoadmapPlannerService:
             try:
                 llm = LlmClient(api_key=self._api_key, model=self._model)
                 roadmap = await llm.generate_roadmap(
-                    build_planner_context(persona, target_job, keywords)
+                    build_planner_context(persona, target_job, keywords, movers, gaps)
                 )
                 if roadmap:
                     source = "llm"
