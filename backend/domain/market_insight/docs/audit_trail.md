@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-28 — 미달 섹터 활성화 Phase 0 진단 + Phase 1 시장축 티커 확충
+- **무엇** — ① 섹터×축 신호밀도 진단 스크립트 신설(`compute_density_report` 순수함수 + 라이브 `main`). ② 미달 6섹터(핀테크·모빌리티·콘텐츠·에듀테크·물류·뷰티패션) 시장축 티커 16종을 Yahoo 수집기·`_MARKET_SOURCE_MAP` 에 추가(16→32티커). ③ 1y 백필 + pulse refine 실행으로 회색 4→1 전환 실증.
+- **왜** — 미달 섹터가 "데이터 수집 중"인 근본 원인은 데이터 부재가 아니라 **시장축(일별 고밀도) 부재로 min_history 게이트(5/20일) 미달**. 라이브 진단 결과 실제 회색은 4섹터(뷰티·에듀·물류·사회서비스)였고 전부 market 신호 0일이 공통. 웹조사 적대 검증으로 확보한 일별 티커로 게이트를 메움. 정적 매핑 우회 해법은 [SECTOR_ACTIVATION_STRATEGY.md](SECTOR_ACTIVATION_STRATEGY.md) 참조.
+- **어디** — 진단 [sector_axis_density_audit.py](../../../../scripts/sector_axis_density_audit.py)·[sector_axis_density_test.py](../../../../scripts/sector_axis_density_test.py)(신규), 티커 [yahoo_finance_collector.py](../../../master/hub/services/collectors/economic/yahoo/yahoo_finance_collector.py) `_UNDERCOVERED_TARGETS`, 섹터 매핑 [pulse_repository.py](../../hub/repositories/pulse_repository.py) `_MARKET_SOURCE_MAP`. 전략 문서 [SECTOR_ACTIVATION_STRATEGY.md](SECTOR_ACTIVATION_STRATEGY.md)(신규).
+- **검증** — `sector_axis_density_test` 12·`pulse_scoring_test` 33·`pulse_axis_normalize_test` 18 PASS(무회귀). 신규 16티커 Yahoo 실측 응답(0 실패). **1y 백필 7,863행 upsert(0 실패) + refine 2,975행** → `beauty-fashion`·`edutech`·`logistics` 회색→활성 전환, 6섹터 모두 market 신호 14~15일 확보. `social-service` 만 잔존(깨끗한 티커 없음 — 구조적).
+- **후속** — `social-service` 는 Phase 2 discourse RSS·지원사업(opportunity) 트랙으로 분리(시장 티커 없음). 핀테크·모빌리티·콘텐츠는 기존 활성이나 시장축 추가로 discourse 의존 신호 보강. ETF 글로벌 대표성·개별주 threshold·축 가중치는 실데이터 튜닝. Phase 2(토픽 RSS·KOBIS 등 공개 API)는 별도.
+
 ## 2026-06-27 — KIAT Gap youth_fit 변별 개선 + Gold 사영 단일화 (Phase 2 refine)
 - **무엇** — youth_fit 앵커 루브릭+저적합 강제규칙 프롬프트(pv v3)로 변별 확보, Gold 사영을 `GapProjectionService` 단일 잡으로 분리(소스별 pv), 게이트 임계 0.5→0.4 캘리브레이션.
 - **왜** — v1 youth_fit 0.6~0.7 뭉침으로 게이트 무력(45중 0건 배제). 의미 변경에 필요한 pv bump 가 공유 단일-pv 사영을 깨뜨려(타 소스 Gold 삭제) 사영 분리가 선행돼야 했음.

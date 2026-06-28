@@ -31,8 +31,10 @@ _SECTOR_CODE_MAP: dict[str, str] = {
     "BEAUTY": "beauty-fashion",
 }
 
-# market 축: raw_market_timeseries.source_type → sectors.slug (실측 16티커 기준).
+# market 축: raw_market_timeseries.source_type → sectors.slug.
 # 광범위 지수(SPY·QQQ·ARKK)는 단일섹터 무귀속이라 제외(섹터 강제 매핑 = 날조).
+# 2026-06-28: 미달 6섹터(핀테크·모빌리티·콘텐츠·에듀테크·물류·뷰티패션) 시장축 티커 추가
+# (yahoo_finance_collector._UNDERCOVERED_TARGETS 의 source_type 과 1:1 대응).
 _MARKET_SOURCE_MAP: dict[str, str] = {
     "YAHOO_ETF_AI": "ai-data", "YAHOO_STOCK_KR_NAVER": "ai-data",
     "YAHOO_GLOBAL_SMH": "semiconductor", "YAHOO_STOCK_KR_HYNIX": "semiconductor",
@@ -42,6 +44,22 @@ _MARKET_SOURCE_MAP: dict[str, str] = {
     "YAHOO_GLOBAL_LIT": "energy-climate", "YAHOO_GLOBAL_XLE": "energy-climate",
     "YAHOO_STOCK_KR_LGES": "energy-climate",
     "YAHOO_ETF_KFOOD": "food-agri",
+    # 핀테크·금융
+    "YAHOO_STOCK_KR_KAKAOPAY": "fintech", "YAHOO_STOCK_KR_KAKAOBANK": "fintech",
+    "YAHOO_GLOBAL_FINX": "fintech",
+    # 모빌리티·자동차
+    "YAHOO_STOCK_KR_HYUNDAIMOTOR": "mobility", "YAHOO_STOCK_KR_KIA": "mobility",
+    "YAHOO_GLOBAL_KARS": "mobility",
+    # 콘텐츠·크리에이터
+    "YAHOO_ETF_WEBTOON": "content-creator", "YAHOO_ETF_KPOP": "content-creator",
+    "YAHOO_GLOBAL_XLC": "content-creator",
+    # 교육·에듀테크
+    "YAHOO_STOCK_KR_MEGASTUDY": "edutech", "YAHOO_STOCK_KR_DIGITALDAESUNG": "edutech",
+    # 물류·유통
+    "YAHOO_ETF_TRANSPORT": "logistics", "YAHOO_STOCK_KR_CJLOGISTICS": "logistics",
+    # 뷰티·패션
+    "YAHOO_ETF_COSMETIC": "beauty-fashion", "YAHOO_ETF_KBEAUTY": "beauty-fashion",
+    "YAHOO_STOCK_KR_FNF": "beauty-fashion",
 }
 
 # raw_innovation_data → sector_source_map 으로 섹터 매핑 후 (섹터×기준일) 신호 건수 집계.

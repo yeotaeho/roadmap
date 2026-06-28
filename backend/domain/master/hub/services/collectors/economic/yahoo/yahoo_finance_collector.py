@@ -209,9 +209,57 @@ _GLOBAL_ETF_TARGETS: tuple[VolumeSurgeTarget, ...] = (
     ),
 )
 
-# 최종 모니터링 대상 = 한국 ETF + 한국 대형주 + 글로벌 ETF
+# =============================================================================
+# 그룹 4: 미달 섹터 활성화 (2026-06-28 추가) — 핀테크·모빌리티·콘텐츠·에듀테크·물류·뷰티패션
+# 시장축이 비어 게이트에 걸리던 섹터에 일별 신호를 공급한다(소스: 웹조사 적대적 검증).
+# source_type 은 pulse_repository._MARKET_SOURCE_MAP 의 키와 1:1 대응해야 섹터로 매핑된다.
+# 사회서비스는 깨끗한 대표 티커가 없어 제외(discourse RSS·지원사업 트랙으로 별도).
+# =============================================================================
+_UNDERCOVERED_TARGETS: tuple[VolumeSurgeTarget, ...] = (
+    # 핀테크·금융
+    VolumeSurgeTarget("377300.KS", "카카오페이", "핀테크/간편결제",
+                      "YAHOO_STOCK_KR_KAKAOPAY", 2.0, "KRW"),
+    VolumeSurgeTarget("323410.KS", "카카오뱅크", "핀테크/인터넷은행",
+                      "YAHOO_STOCK_KR_KAKAOBANK", 2.0, "KRW"),
+    VolumeSurgeTarget("FINX", "Global X FinTech ETF", "핀테크 — 글로벌 선행",
+                      "YAHOO_GLOBAL_FINX", 2.0, "USD"),
+    # 모빌리티·자동차
+    VolumeSurgeTarget("005380.KS", "현대차", "모빌리티/완성차 대표",
+                      "YAHOO_STOCK_KR_HYUNDAIMOTOR", 1.5, "KRW"),
+    VolumeSurgeTarget("000270.KS", "기아", "모빌리티/완성차",
+                      "YAHOO_STOCK_KR_KIA", 1.5, "KRW"),
+    VolumeSurgeTarget("KARS", "KraneShares EV & Future Mobility ETF", "EV/미래모빌리티 — 글로벌 선행",
+                      "YAHOO_GLOBAL_KARS", 2.0, "USD"),
+    # 콘텐츠·크리에이터
+    VolumeSurgeTarget("395150.KS", "KODEX 웹툰&드라마", "콘텐츠/웹툰·드라마",
+                      "YAHOO_ETF_WEBTOON", 2.0, "KRW"),
+    VolumeSurgeTarget("475050.KS", "ACE KPOP포커스", "콘텐츠/K-POP·엔터",
+                      "YAHOO_ETF_KPOP", 2.0, "KRW"),
+    VolumeSurgeTarget("XLC", "Communication Services Select Sector SPDR", "커뮤니케이션·미디어 — 글로벌 선행",
+                      "YAHOO_GLOBAL_XLC", 1.5, "USD"),
+    # 교육·에듀테크
+    VolumeSurgeTarget("215200.KQ", "메가스터디교육", "에듀테크/입시·이러닝",
+                      "YAHOO_STOCK_KR_MEGASTUDY", 1.8, "KRW"),
+    VolumeSurgeTarget("068930.KQ", "디지털대성", "에듀테크/입시",
+                      "YAHOO_STOCK_KR_DIGITALDAESUNG", 2.0, "KRW"),
+    # 물류·유통
+    VolumeSurgeTarget("140710.KS", "KODEX 운송", "물류/운송 지수",
+                      "YAHOO_ETF_TRANSPORT", 2.0, "KRW"),
+    VolumeSurgeTarget("000120.KS", "CJ대한통운", "물류/택배 1위",
+                      "YAHOO_STOCK_KR_CJLOGISTICS", 1.8, "KRW"),
+    # 뷰티·패션
+    VolumeSurgeTarget("228790.KS", "TIGER 화장품", "뷰티/화장품 지수",
+                      "YAHOO_ETF_COSMETIC", 2.0, "KRW"),
+    VolumeSurgeTarget("479850.KS", "HANARO K-뷰티", "뷰티/K-뷰티 지수",
+                      "YAHOO_ETF_KBEAUTY", 2.2, "KRW"),
+    VolumeSurgeTarget("383220.KS", "F&F", "패션/브랜드 대표",
+                      "YAHOO_STOCK_KR_FNF", 2.0, "KRW"),
+)
+
+# 최종 모니터링 대상 = 한국 ETF + 한국 대형주 + 글로벌 ETF + 미달섹터 활성화
 VOLUME_SURGE_TARGETS: tuple[VolumeSurgeTarget, ...] = (
     _KOREAN_ETF_TARGETS + _KOREAN_STOCK_TARGETS + _GLOBAL_ETF_TARGETS
+    + _UNDERCOVERED_TARGETS
 )
 
 # 하위 호환: 기존 코드에서 `ETF_TARGETS` 로 참조하던 경우를 위한 alias.
