@@ -2,12 +2,14 @@
 
 import { motion } from "framer-motion";
 import { CalendarDays, ChevronLeft, ChevronRight, Save } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ARCHIVE_ACTIVITY_SEED,
   flattenQuestTitles,
   QUEST_TREE,
 } from "@/data/roadmapQuestMap";
+import { useArchive, useJourney, useUpsertArchiveDay } from "@/hooks/useRoadmap";
+import { useStore } from "@/store";
 
 type DayLog = {
   completedQuestIds: string[];
@@ -30,7 +32,15 @@ function parseKey(key: string): Date {
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function GrowthArchiveTab() {
-  const allQuests = useMemo(() => flattenQuestTitles(QUEST_TREE).filter((q) => q.id !== "root"), []);
+  const profile = useStore((s) => s.profile);
+  const enabled = !!profile?.id;
+
+  // 퀘스트 체크리스트 — 라이브 트리 있으면 그 제목, 없으면 로컬 목업.
+  const { data: journey } = useJourney(enabled);
+  const allQuests = useMemo(
+    () => flattenQuestTitles(journey?.questTree ?? QUEST_TREE).filter((q) => q.id !== "root"),
+    [journey],
+  );
 
   const [monthOffset, setMonthOffset] = useState(0);
   const today = useMemo(() => new Date(), []);
@@ -43,6 +53,15 @@ export function GrowthArchiveTab() {
 
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
+  const monthKey = `${year}-${pad2(month + 1)}`;
+
+  // 보고 있는 달의 로그를 백엔드에서 받아 로컬 state 에 병합(서버가 진실원).
+  const { data: monthLogs } = useArchive(monthKey, enabled);
+  useEffect(() => {
+    if (monthLogs) setLogs((prev) => ({ ...prev, ...monthLogs }));
+  }, [monthLogs]);
+
+  const upsertDay = useUpsertArchiveDay();
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -94,10 +113,12 @@ export function GrowthArchiveTab() {
     }));
   };
 
-  const save = useCallback(() => {
-    // 로컬 목업: 추후 API 연동
-    setLogs((prev) => ({ ...prev }));
-  }, []);
+  const save = () => {
+    const cur = logs[selectedKey] ?? { completedQuestIds: [], note: "" };
+    setLogs((prev) => ({ ...prev, [selectedKey]: cur }));
+    // 로그인 사용자만 서버 영속화. 비로그인은 로컬 보존(추후 로그인 유도).
+    if (enabled) upsertDay.mutate({ date: selectedKey, payload: cur });
+  };
 
   const hasActivity = (key: string) => {
     const e = logs[key];
@@ -232,10 +253,11 @@ export function GrowthArchiveTab() {
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={save}
-          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+          disabled={upsertDay.isPending}
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
         >
           <Save className="h-4 w-4" />
-          저장 (로컬)
+          {upsertDay.isPending ? "저장 중…" : enabled ? "저장" : "저장 (로컬)"}
         </motion.button>
       </section>
     </div>

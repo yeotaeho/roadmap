@@ -8,6 +8,8 @@ import {
   QUEST_TREE,
   SKILL_TRIANGLE,
 } from "@/data/roadmapQuestMap";
+import { useJourney } from "@/hooks/useRoadmap";
+import { useStore } from "@/store";
 
 const DIFFICULTY_RING: Record<string, string> = {
   입문: "ring-emerald-200 bg-emerald-50 text-emerald-800",
@@ -76,12 +78,30 @@ function QuestTreeCard({ node, depth }: { node: QuestTreeNode; depth: number }) 
 }
 
 export function JourneyMapTab() {
+  const profile = useStore((s) => s.profile);
+  const { data, isLoading } = useJourney(!!profile?.id);
+
+  // 로그인 사용자에게 생성된 로드맵이 있으면 라이브, 없으면 로컬 목업으로 폴백.
+  const pillars = data?.roadmap?.skillPillars ?? SKILL_TRIANGLE;
+  const bridge = data?.roadmap?.bridgeKeywords ?? BRIDGE_KEYWORDS;
+  const tree = data?.questTree ?? QUEST_TREE;
+  const isLive = Boolean(data?.questTree);
+
   return (
     <div className="space-y-8 pb-4">
       <section className="rounded-2xl border border-slate-200 bg-[#F8FAFC] p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-          스킬 트라이앵글
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+            스킬 트라이앵글
+          </p>
+          {isLoading ? (
+            <span className="text-[11px] text-slate-400">불러오는 중…</span>
+          ) : !isLive ? (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              예시 로드맵
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           획득해야 할 핵심 3축입니다. 일정이 아니라 <strong className="text-slate-800 dark:text-slate-200">역량 방향</strong>
           을 먼저 고정합니다.
@@ -97,7 +117,7 @@ export function JourneyMapTab() {
           </div>
 
           <div className="relative h-52">
-            {SKILL_TRIANGLE.map((s, i) => {
+            {pillars.map((s, i) => {
               const pos =
                 i === 0
                   ? "left-1/2 top-0 -translate-x-1/2"
@@ -128,7 +148,7 @@ export function JourneyMapTab() {
           대시보드 트렌드와 상담 결과를 잇는 태그입니다.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {BRIDGE_KEYWORDS.map((k) => (
+          {bridge.map((k) => (
             <span
               key={k}
               className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300"
@@ -152,7 +172,7 @@ export function JourneyMapTab() {
           </div>
         </div>
         <div className="mt-6">
-          <QuestTreeCard node={QUEST_TREE} depth={0} />
+          <QuestTreeCard node={tree} depth={0} />
         </div>
       </section>
     </div>
