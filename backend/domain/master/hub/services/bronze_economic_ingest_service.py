@@ -71,6 +71,9 @@ from domain.master.hub.services.collectors.economic.kipris.kipris_patent_collect
     KiprisPatentCollector,
     KiprisWatermark,
 )
+from domain.master.hub.services.collectors.economic.kobis.kobis_box_office_collector import (
+    KobisBoxOfficeCollector,
+)
 from domain.master.hub.services.collectors.economic.naver.naver_datalab_collector import (
     NaverDatalabCollector,
     NaverDatalabWatermark,
@@ -132,6 +135,7 @@ class BronzeEconomicIngestService:
         naver_client_id: str | None = None,
         naver_client_secret: str | None = None,
         kipris_api_key: str | None = None,
+        kobis_service_key: str | None = None,
     ):
         self._session = session
         self._dart_key = dart_api_key
@@ -141,7 +145,34 @@ class BronzeEconomicIngestService:
         self._naver_client_id = naver_client_id
         self._naver_client_secret = naver_client_secret
         self._kipris_key = kipris_api_key
+        self._kobis_key = kobis_service_key
         self._economic_repo = EconomicRepository(session)
+
+    async def ingest_kobis_box_office(self, *, days_back: int = 1) -> dict[str, Any]:
+        """KOBIS 일별 박스오피스 → raw_economic_data 적재(콘텐츠 수요 신호, CONTENT_MEDIA).
+
+        days_back: 어제부터 과거로 수집할 일수. 초기 backfill 은 크게(예: 30) 준다.
+        """
+        if not self._kobis_key:
+            raise ValueError("KOBIS_API_KEY 가 설정되어 있지 않습니다.")
+
+        collector = KobisBoxOfficeCollector(self._kobis_key)
+        dtos: list[EconomicCollectDto] = []
+        try:
+            dtos = await collector.collect(days_back=days_back)
+        except Exception:
+            logger.exception("KOBIS 박스오피스 수집 실패")
+
+        inserted = await self._economic_repo.insert_many_skip_duplicates(dtos)
+        result = {
+            "source": "kobis_box_office",
+            "fetched": len(dtos),
+            "inserted": inserted,
+            "not_inserted": max(0, len(dtos) - inserted),
+            "days_back": days_back,
+        }
+        logger.info("Bronze economic KOBIS box office ingest: %s", result)
+        return result
 
     async def ingest_dart(
         self,

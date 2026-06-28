@@ -278,6 +278,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("TECH_DEMAND_SIGNAL", "KIAT_TECH_DEMAND_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
     )
 
+    # 영화진흥위원회(KOBIS) 일별 박스오피스 OpenAPI 키 (Bronze — raw_economic_data, 콘텐츠 수요)
+    #   발급: https://www.kobis.or.kr/kobisopenapi/ 무료 회원가입 → 키 발급. data.go.kr 계열 아님.
+    kobis_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("KOBIS_API_KEY", "KOBIS_SERVICE_KEY"),
+    )
+
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)
     #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
     #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡

@@ -230,6 +230,18 @@ async def _job_subsidy24() -> dict[str, Any] | None:
         return await svc.ingest_subsidy24(max_items=500)
 
 
+async def _job_kobis_box_office() -> dict[str, Any] | None:
+    settings = get_settings()
+    if not settings.kobis_api_key:
+        logger.warning("[scheduler] kobis_api_key 없음 — KOBIS 박스오피스 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        svc = BronzeEconomicIngestService(
+            session, None, kobis_service_key=settings.kobis_api_key
+        )
+        return await svc.ingest_kobis_box_office(days_back=1)
+
+
 async def _job_dart_periodic() -> dict[str, Any] | None:
     settings = get_settings()
     if not settings.dart_api_key:
@@ -691,6 +703,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("saramin_recruit",   _job_saramin_recruit),
     ("news_rss",          _job_news_rss),
     ("gov_report",        _job_gov_report),
+    ("kobis_box_office",  _job_kobis_box_office),
     # 정제 체인은 순서 보장을 위해 단일 파이프라인 잡으로 등록(_REFINE_PIPELINE).
     ("insight_refine",    _job_insight_refine_pipeline),
 )

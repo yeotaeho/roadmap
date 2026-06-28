@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-28 — 콘텐츠 신호 해상도: KOBIS 일별 박스오피스 수집기 (Phase 2 확장)
+- **무엇** — KOBIS 일별 박스오피스 OpenAPI 수집기 신설. 영화 행을 `raw_economic_data`(`industry_sector='CONTENT_MEDIA'`)로 적재 → 경제 축이 content-creator 에 일별 수요 신호로 합류. `settings.kobis_api_key` + `ingest_kobis_box_office` + 일일 스케줄러 잡(`kobis_box_office`).
+- **왜** — content-creator 는 이미 활성이나 신호가 discourse 뉴스 중심. 박스오피스는 실제 일별 소비(수요) 신호라 해상도를 높인다. `industry_sector` 코드(정적 매핑) 우회로 파이프라인 무변경.
+- **어디** — [kobis_box_office_collector.py](../../master/hub/services/collectors/economic/kobis/kobis_box_office_collector.py)(신규), [settings.py](../../../core/config/settings.py), [bronze_economic_ingest_service.py](../../master/hub/services/bronze_economic_ingest_service.py), [scheduler.py](../../../core/scheduler.py).
+- **검증** — `kobis_box_office_test` 파서 15 PASS(무키·무DB), settings/scheduler/ingest 와이어링 import 검증. ⚠️ 라이브 수집은 `KOBIS_API_KEY`(무료) 필요 — 키 설정 시 일일 스케줄러 자동 수집(키 None이면 잡 스킵). (`scheduler_refine_pipeline_test` 3건 실패는 본 변경 무관·기존 stale — 별도 태스크.)
+- **후속** — 키 설정 후 1회 backfill(`days_back` 크게). 경제 축 수요 신호 혼입은 단일 score엔 무해, 추후 per-axis 해석 시 분리 검토.
+
 ## 2026-06-28 — 미달 섹터 활성화 Phase 2: 토픽 RSS 11종 → social-service 활성 (전 12섹터 활성)
 - **무엇** — [news_rss_collector.py](../../../master/hub/services/collectors/discourse/news_rss/news_rss_collector.py) `_FEEDS` 에 토픽 전문지 RSS 11종 추가(복지 3·금융 3·콘텐츠 1·모빌리티 1·에듀 1·물류 1·뷰티 1). discourse 축은 LLM 섹터 분류라 피드별 섹터 매핑 불필요(category 는 메타로만).
 - **왜** — Phase 1 후 남은 회색 1섹터 `social-service` 는 깨끗한 시장 티커가 없는 구조적 예외. 해법은 LLM 텍스트 축(discourse). 라이브 진단상 social-service 는 분류 누적 27건이나 윈도우 내 discourse 가 3일에 그쳐(시간 밀도 부족) 게이트 미달. 복지 전문지(웰페어뉴스·복지타임즈·정책브리핑 복지부) 일별 피드로 분산 날짜를 공급.
