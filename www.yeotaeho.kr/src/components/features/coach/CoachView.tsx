@@ -15,6 +15,7 @@ import {
   type CoachAttachedContext,
   type CoachWalletItem,
 } from "@/data/coachContext";
+import { streamCoach } from "@/lib/api/coach";
 import { InsightWalletPanel } from "./InsightWalletPanel";
 
 type CoachMessage = {
@@ -29,27 +30,6 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-const PYTHON_SNIPPET = `from dataclasses import dataclass
-from enum import Enum
-
-class Factor(str, Enum):
-    SCOPE1 = "scope1"
-    SCOPE2 = "scope2"
-
-@dataclass(frozen=True)
-class ScoreInput:
-    factor: Factor
-    raw_value: float
-
-class RuleCalculator:
-    """룰만 바꿔 끼우기 쉬운 최소 점수기."""
-
-    def total(self, rows: list[ScoreInput]) -> float:
-        return sum(r.raw_value for r in rows)
-
-# 가중치 정책은 별도 Policy 객체로 분리하면
-# 전국 단위 확장 시에도 교체 범위가 명확합니다.`;
-
 function buildProactiveGreeting(): CoachMessage {
   return {
     id: "m0",
@@ -57,48 +37,6 @@ function buildProactiveGreeting(): CoachMessage {
     badge: "로드맵 연계 질문",
     text:
       "안녕하세요, Daily Mentor입니다. 지금 로드맵에서는 **탄소 배출 룰 기반 계산**과 **IFRS S1/S2 데이터 맵핑**이 한 묶로 보이고 있어요. \"어떤 엔티티까지 공시 스키마에 넣을지\"를 먼저 고정하면, 이후 파이프라인·감사 추적까지 덜 흔들립니다. 오늘은 그 경계부터 같이 짚어볼까요?",
-  };
-}
-
-function mockReply(userText: string, ctx: CoachAttachedContext | null): CoachMessage {
-  const t = userText.toLowerCase();
-  const fromChance =
-    ctx?.source === "chance" ||
-    t.includes("지원") ||
-    t.includes("강점") ||
-    t.includes("부족");
-
-  if (fromChance) {
-    return {
-      id: uid(),
-      role: "assistant",
-      text:
-        "좋은 공고예요. 지금 역량 스냅샷 기준으로 보면, **FastAPI + PostgreSQL**로 에너지·최적화 도메인 API를 설계해 본 경험과, **ESG 지표를 스키마에 매핑**해 본 흔적은 ‘파이프라인 구축’ 요구에 바로 연결됩니다. 포트폴리오에서는 IFRS S1/S2 흐름을 전면에 두세요.\n\n보완으로는 공고가 강조하는 **대용량·쿼리 성능**입니다. 로드맵의 ‘룰 기반 계산 엔진’에서 트래픽이 몰렸을 때 **인덱싱·배치·캐시**를 어떻게 잡았는지 로그로 남겨 두면 면접 때 강한 근거가 됩니다. 오늘 그 부분 리뷰할까요?",
-    };
-  }
-
-  if (
-    ctx?.source === "roadmap" ||
-    t.includes("룰") ||
-    t.includes("규칙") ||
-    t.includes("합산") ||
-    t.includes("계산")
-  ) {
-    return {
-      id: uid(),
-      role: "assistant",
-      badge: "기술 스니펫",
-      text:
-        "추론 모델 대신 룰 기반을 택한 건 **의사결정 속도·감사 가능성** 측면에서 좋은 선택이에요. FastAPI에서는 ‘점수 계산기’를 독립 모듈로 두고, 정책(가중치·상한)만 바꿔 끼우는 구조가 깔끔합니다. 아래 스니펫을 우측 **Insight Wallet**에 저장해 두었다가 로드맵 아카이브에 옮겨 적어 보세요.",
-      code: PYTHON_SNIPPET,
-    };
-  }
-
-  return {
-    id: uid(),
-    role: "assistant",
-    text:
-      "맥락(로드맵·공고)과 연결해서 답할게요. 구체적으로 어떤 출력(공시 필드, 내부 리포트, API 응답)까지를 목표로 하는지 한 줄만 더 알려주세요.",
   };
 }
 
@@ -149,11 +87,28 @@ export function CoachView() {
     if (!text || isLoading) return;
     setInput("");
     setMessages((m) => [...m, { id: uid(), role: "user", text }]);
+    const assistantId = uid();
+    setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }]);
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 520));
-    const reply = mockReply(text, attached);
-    setMessages((m) => [...m, reply]);
-    setIsLoading(false);
+    try {
+      await streamCoach(text, (delta) => {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === assistantId ? { ...msg, text: msg.text + delta } : msg,
+          ),
+        );
+      });
+    } catch {
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === assistantId && !msg.text
+            ? { ...msg, text: "코치 응답을 불러오지 못했어요. 로그인 상태를 확인하고 다시 시도해 주세요." }
+            : msg,
+        ),
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

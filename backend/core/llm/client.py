@@ -108,6 +108,12 @@ _ROADMAP_SYSTEM_PROMPT = (
     "사용자의 현재 스킬 수준에 맞춰 난이도를 배분하고 관심 키워드·시장 트렌드를 반영하라."
 )
 
+_COACH_SYSTEM_PROMPT = (
+    "너는 청년 진로 내비게이터의 'AI 코치'다. 사용자의 페르소나·로드맵·관심 섹터를 근거로 "
+    "구체적이고 실천 가능한 조언을 한국어로 한다. 막연한 응원 대신 다음 한 걸음을 제시하라. "
+    "근거 없는 단정·과장은 피하고, 모르면 모른다고 말하라. 답변은 간결하게(보통 3~6문장)."
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -595,6 +601,21 @@ class LlmClient:
             ],
         )
         return _parse_investment(resp.choices[0].message.content)
+
+    async def stream_chat(self, messages: list[dict], temperature: float = 0.5):
+        """messages 를 받아 응답 토큰을 비동기 스트리밍(async generator)으로 내보낸다."""
+        stream = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=temperature,
+            messages=messages,
+            stream=True,
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
 
     async def generate_roadmap(self, context: str) -> dict:
         """페르소나·목표·트렌드 맥락에서 개인화 로드맵(퀘스트 트리)을 생성한다. 무효/실패 시 {}."""
