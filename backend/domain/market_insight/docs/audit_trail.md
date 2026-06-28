@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-28 — 미달 섹터 활성화 Phase 2: 토픽 RSS 11종 → social-service 활성 (전 12섹터 활성)
+- **무엇** — [news_rss_collector.py](../../../master/hub/services/collectors/discourse/news_rss/news_rss_collector.py) `_FEEDS` 에 토픽 전문지 RSS 11종 추가(복지 3·금융 3·콘텐츠 1·모빌리티 1·에듀 1·물류 1·뷰티 1). discourse 축은 LLM 섹터 분류라 피드별 섹터 매핑 불필요(category 는 메타로만).
+- **왜** — Phase 1 후 남은 회색 1섹터 `social-service` 는 깨끗한 시장 티커가 없는 구조적 예외. 해법은 LLM 텍스트 축(discourse). 라이브 진단상 social-service 는 분류 누적 27건이나 윈도우 내 discourse 가 3일에 그쳐(시간 밀도 부족) 게이트 미달. 복지 전문지(웰페어뉴스·복지타임즈·정책브리핑 복지부) 일별 피드로 분산 날짜를 공급.
+- **어디** — [news_rss_collector.py](../../../master/hub/services/collectors/discourse/news_rss/news_rss_collector.py) `_FEEDS`(11종 추가).
+- **검증** — 11피드 live 파싱(각 50엔트리, 0 실패). 수집(`ingest_news_rss`)→discourse LLM 분류→`refine_and_serve` 후 **social-service discourse 3→11일, 회색 4→0 — 전 12섹터 활성**(market 0인데 discourse만으로 게이트 통과 = 텍스트 축 해법 실증). 타 섹터 discourse 밀도 동반 상승(mobility 5→9·content-creator 4→8·bio-health 3→9). `sector_axis_density_test` 12 PASS(무회귀).
+- **후속** — KOBIS 일별 박스오피스 등 도메인 공개 API 수집기는 별도(신호 해상도 추가). RSS 피드 사망 모니터링(수집기 자동 스킵). 축 가중치 실데이터 튜닝.
+
 ## 2026-06-28 — 미달 섹터 활성화 Phase 0 진단 + Phase 1 시장축 티커 확충
 - **무엇** — ① 섹터×축 신호밀도 진단 스크립트 신설(`compute_density_report` 순수함수 + 라이브 `main`). ② 미달 6섹터(핀테크·모빌리티·콘텐츠·에듀테크·물류·뷰티패션) 시장축 티커 16종을 Yahoo 수집기·`_MARKET_SOURCE_MAP` 에 추가(16→32티커). ③ 1y 백필 + pulse refine 실행으로 회색 4→1 전환 실증.
 - **왜** — 미달 섹터가 "데이터 수집 중"인 근본 원인은 데이터 부재가 아니라 **시장축(일별 고밀도) 부재로 min_history 게이트(5/20일) 미달**. 라이브 진단 결과 실제 회색은 4섹터(뷰티·에듀·물류·사회서비스)였고 전부 market 신호 0일이 공통. 웹조사 적대 검증으로 확보한 일별 티커로 게이트를 메움. 정적 매핑 우회 해법은 [SECTOR_ACTIVATION_STRATEGY.md](SECTOR_ACTIVATION_STRATEGY.md) 참조.

@@ -32,11 +32,25 @@ class NewsFeed:
 
 
 # 2026-06 live 검증 완료 피드. URL이 죽으면 수집기는 해당 피드만 스킵(메모리 교훈).
+# discourse 축은 LLM 섹터 분류라 피드별 섹터 매핑 불필요 — category 는 메타로만 남긴다.
 _FEEDS: tuple[NewsFeed, ...] = (
     NewsFeed("한국경제", "economy", "https://www.hankyung.com/feed/economy"),
     NewsFeed("전자신문", "tech", "https://rss.etnews.com/Section901.xml"),
     NewsFeed("전자신문", "breaking", "https://rss.etnews.com/Section902.xml"),
     NewsFeed("ZDNet Korea", "it", "https://feeds.feedburner.com/zdkorea"),
+    # 2026-06-28 미달 섹터 활성화(Phase 2) — 토픽 전문지 피드 11종 live 검증 후 추가.
+    # 사회서비스(시장축 없는 마지막 회색 섹터)에 복지 전문지 3종을 집중 공급한다.
+    NewsFeed("웰페어뉴스", "welfare", "https://www.welfarenews.net/rss/allArticle.xml"),
+    NewsFeed("복지타임즈", "welfare", "https://www.bokjitimes.com/rss/allArticle.xml"),
+    NewsFeed("정책브리핑", "welfare", "https://www.korea.kr/rss/dept_mw.xml"),
+    NewsFeed("전자신문", "finance", "http://rss.etnews.com/02027.xml"),
+    NewsFeed("한국경제", "finance", "https://www.hankyung.com/feed/finance"),
+    NewsFeed("금융위원회", "finance", "http://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111"),
+    NewsFeed("전자신문", "content", "http://rss.etnews.com/03104.xml"),
+    NewsFeed("모터그래프", "mobility", "https://www.motorgraph.com/rss/allArticle.xml"),
+    NewsFeed("에듀플러스", "edutech", "https://www.eduplusnews.com/rss/allArticle.xml"),
+    NewsFeed("물류신문", "logistics", "https://www.klnews.co.kr/rss/allArticle.xml"),
+    NewsFeed("뷰티경제", "beauty", "https://www.thebk.co.kr/rss/allArticle.xml"),
 )
 
 
