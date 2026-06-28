@@ -1,5 +1,11 @@
 # hrowth_journey (Roadmap) 작업 기록
 
+## 2026-06-28 — RoadmapPlanner 맥락에 Pulse movers·Gap 주입
+- **무엇** — RoadmapPlanner LLM 입력 맥락에 최신 Pulse 상위 모멘텀 섹터·최근 활성 Gap 미해결 기회를 추가. 페르소나+목표+관심사만 쓰던 것을 시장 트렌드 반영으로 강화.
+- **왜** — 개인화 로드맵이 사용자 데이터뿐 아니라 시장 흐름과 연결되도록.
+- **어디** — [roadmap_repository.py](../hub/repositories/roadmap_repository.py) `fetch_top_movers`(최신일 모멘텀순)·`fetch_recent_gaps`(활성 최근). [roadmap_planner_service.py](../hub/services/roadmap_planner_service.py) `build_planner_context(movers·gaps 옵션 인자, 없으면 섹션 생략)`.
+- **검증** — `scripts/roadmap_planner_parse_test.py` 21/21(맥락 주입 케이스 추가), `/refine` 라이브 source=llm·7퀘스트. 커밋 09c7b29.
+
 ## 2026-06-28 — LLM RoadmapPlanner: /refine 개인화 로드맵 실제 생성
 - **무엇** — `/api/roadmap/refine` 을 internal 스텁에서 인증 사용자 LLM 생성 엔드포인트로 전환. 페르소나·목표 직무·관심 키워드로 RPG 퀘스트 트리를 LLM 생성, 실패/무키 시 결정론 템플릿 폴백.
 - **왜** — Roadmap을 목업 페르소나 전제에서 실데이터·LLM 기반 개인화로 전환(3단 계획의 마지막).

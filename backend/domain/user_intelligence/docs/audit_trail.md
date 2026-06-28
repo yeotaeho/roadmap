@@ -1,5 +1,11 @@
 # user_intelligence 작업 기록
 
+## 2026-06-28 — PersonaForm 저장 시 로드맵 자동 재생성 연계
+- **무엇** — 페르소나 저장 성공 후 `/api/roadmap/refine` 자동 호출 → 역량 입력 즉시 로드맵에 반영. 재생성 실패는 저장 성공을 막지 않음(try/catch).
+- **왜** — 페르소나 수집과 로드맵 생성 사이 수동 단계 제거(역량 입력→개인화 로드맵 즉시 루프).
+- **어디** — `www.yeotaeho.kr/src/components/features/profile/PersonaForm.tsx`(useRefreshRoadmap 연계, 버튼 "로드맵 생성 중…").
+- **검증** — tsc --noEmit 0 에러. 커밋 7fcc486.
+
 ## 2026-06-28 — 구조화 폼 페르소나 수집(도메인 첫 구현)
 - **무엇** — 빈 스텁이던 user_intelligence 도메인에 페르소나(스킬·경험·학력·요약) 구조화 폼 수집 기능 구현. Roadmap·Sync 분석의 실데이터 기반.
 - **왜** — Roadmap을 실데이터 기반으로 전환하려면 사용자 역량 데이터 수집 주체가 필요. 대화형 LLM 추출 대신 결정론 폼으로 확정(LLM은 RoadmapPlanner에서).
