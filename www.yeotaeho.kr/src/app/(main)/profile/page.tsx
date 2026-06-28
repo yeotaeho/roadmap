@@ -15,6 +15,7 @@ import {
   Camera,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useStore";
+import { PersonaForm } from "@/components/features/profile/PersonaForm";
 import { getUserName, getUserEmail, getUserId } from "@/utils/tokenStorage";
 import {
   getCurrentUser,
@@ -444,6 +445,8 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      <PersonaForm />
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-800 mb-4">계정 정보</h3>
