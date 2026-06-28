@@ -11,6 +11,7 @@ import type {
   SkillLevel,
 } from "@/lib/api/persona";
 import { usePersona, useUpsertPersona } from "@/hooks/usePersona";
+import { useRefreshRoadmap } from "@/hooks/useRoadmap";
 
 const LEVELS: SkillLevel[] = ["입문", "중급", "심화"];
 
@@ -36,6 +37,7 @@ const inputCls =
 export function PersonaForm() {
   const { data, isLoading } = usePersona(true);
   const upsert = useUpsertPersona();
+  const refresh = useRefreshRoadmap();
 
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(data));
@@ -56,7 +58,15 @@ export function PersonaForm() {
   const save = async () => {
     await upsert.mutateAsync(draft);
     setIsEditing(false);
+    // 페르소나 반영해 로드맵 자동 재생성(LLM). 실패해도 저장은 유지.
+    try {
+      await refresh.mutateAsync();
+    } catch {
+      /* 로드맵 재생성 실패는 저장 성공을 막지 않는다. */
+    }
   };
+
+  const busy = upsert.isPending || refresh.isPending;
 
   // ── 스킬 ──
   const addSkill = () =>
@@ -118,15 +128,16 @@ export function PersonaForm() {
             <button
               type="button"
               onClick={save}
-              disabled={upsert.isPending}
+              disabled={busy}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-50"
             >
-              <Save size={16} /> {upsert.isPending ? "저장 중…" : "저장"}
+              <Save size={16} />{" "}
+              {refresh.isPending ? "로드맵 생성 중…" : upsert.isPending ? "저장 중…" : "저장"}
             </button>
             <button
               type="button"
               onClick={cancel}
-              disabled={upsert.isPending}
+              disabled={busy}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 text-sm hover:bg-gray-200 disabled:opacity-50"
             >
               <X size={16} /> 취소
@@ -135,7 +146,7 @@ export function PersonaForm() {
         )}
       </div>
       <p className="text-sm text-gray-500 mb-4">
-        스킬·경험·학력은 로드맵·싱크 분석의 기반이 됩니다.
+        스킬·경험·학력은 로드맵·싱크 분석의 기반이 됩니다. 저장하면 내 로드맵이 자동으로 다시 생성됩니다.
       </p>
 
       {isLoading ? (
