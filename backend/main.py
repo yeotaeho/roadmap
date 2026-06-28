@@ -27,6 +27,7 @@ from api.v1.insight.insight_routor import router as insight_v1_router
 from api.v1.master.master_routor import router as master_v1_router
 from api.v1.news.news_routor import router as news_v1_router
 from api.v1.oauth.oauth_routor import router as oauth_v1_router
+from api.v1.roadmap.roadmap_routor import router as roadmap_v1_router
 from api.v1.sync.sync_routor import router as sync_v1_router
 from api.v1.user.user_routor import router as user_v1_router
 from core.scheduler import start_scheduler, stop_scheduler
@@ -97,6 +98,7 @@ app.include_router(master_v1_router, prefix=API_V1_PREFIX)
 app.include_router(insight_v1_router, prefix=API_V1_PREFIX)
 app.include_router(chance_v1_router, prefix=API_V1_PREFIX)
 app.include_router(sync_v1_router, prefix=API_V1_PREFIX)
+app.include_router(roadmap_v1_router, prefix=API_V1_PREFIX)
 logger.info(
     "Routers registered: %s/oauth, %s/news, %s/user, %s/master, %s/insight",
     API_V1_PREFIX,
