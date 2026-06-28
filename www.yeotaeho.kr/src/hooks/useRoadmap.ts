@@ -8,6 +8,7 @@ import {
   DayLog,
   fetchArchive,
   fetchJourney,
+  refreshRoadmap,
   upsertArchiveDay,
 } from '@/lib/api/roadmap';
 
@@ -30,6 +31,16 @@ export function useArchive(month: string, enabled = true) {
     enabled,
     staleTime: STALE,
     retry: 1,
+  });
+}
+
+export function useRefreshRoadmap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: refreshRoadmap,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roadmap-journey'] });
+    },
   });
 }
 

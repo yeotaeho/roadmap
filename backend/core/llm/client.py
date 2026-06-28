@@ -89,6 +89,25 @@ _INVESTMENT_SYSTEM_PROMPT = (
     '"series": <문자열 또는 null>, "company": <문자열 또는 null>}.'
 )
 
+_ROADMAP_DIFFICULTIES = ("입문", "중급", "심화")
+_ROADMAP_STATES = ("start", "available", "active", "done", "locked")
+
+_ROADMAP_SYSTEM_PROMPT = (
+    "너는 청년 진로 내비게이터의 '로드맵 플래너'다. 사용자의 페르소나(스킬·경험·학력·요약)와 "
+    "목표 직무·관심 키워드·시장 트렌드를 바탕으로 RPG 스킬트리 형태의 개인화 성장 로드맵을 설계한다. "
+    "일정·마감을 강제하지 말고 '역량 방향'과 '과제(퀘스트)'만 제시하라. "
+    "출력은 JSON 객체 하나. 형식: {"
+    '"title": <로드맵 제목>, "summary": <한 줄 요약>, '
+    '"skill_pillars": [정확히 3개 {"id": <영문 slug>, "label": <축 이름>, "blurb": <한 줄 설명>}], '
+    '"bridge_keywords": [3~6개 문자열], '
+    '"quests": [5~9개 {"quest_key": <영문 소문자-하이픈 slug>, "parent_key": <상위 quest_key 또는 null>, '
+    '"title": <과제명>, "purpose": <목적 한 줄>, "difficulty": <"입문"|"중급"|"심화">, '
+    '"keywords": [문자열], "state": <"start"|"available"|"active"|"done"|"locked">, "sort_order": <정수>}]}. '
+    '제약: quests 중 정확히 1개는 parent_key=null·quest_key="root"·state="start"인 시작점이어야 한다. '
+    "나머지 퀘스트의 parent_key 는 반드시 존재하는 quest_key 를 가리킨다. "
+    "사용자의 현재 스킬 수준에 맞춰 난이도를 배분하고 관심 키워드·시장 트렌드를 반영하라."
+)
+
 
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
@@ -356,6 +375,105 @@ def _parse_investment(raw: str | None) -> dict:
     }
 
 
+def _coerce_quest(item: dict, idx: int) -> dict | None:
+    """퀘스트 항목 1건을 스키마에 맞게 보정. title 없으면 None(드롭)."""
+    if not isinstance(item, dict):
+        return None
+    title = item.get("title")
+    if not isinstance(title, str) or not title.strip():
+        return None
+    key = item.get("quest_key")
+    key = key.strip()[:60] if isinstance(key, str) and key.strip() else f"q-{idx}"
+    parent = item.get("parent_key")
+    parent = parent.strip()[:60] if isinstance(parent, str) and parent.strip() else None
+    diff = item.get("difficulty")
+    diff = diff if diff in _ROADMAP_DIFFICULTIES else "입문"
+    state = item.get("state")
+    state = state if state in _ROADMAP_STATES else "available"
+    keywords = item.get("keywords")
+    keywords = [k.strip() for k in keywords if isinstance(k, str) and k.strip()][:6] if isinstance(keywords, list) else []
+    try:
+        order = int(item.get("sort_order"))
+    except (TypeError, ValueError):
+        order = idx
+    purpose = item.get("purpose")
+    purpose = purpose.strip()[:255] if isinstance(purpose, str) else ""
+    # 시작점 정규화 — quest_key=="root" 는 항상 루트(parent 없음, state start).
+    if key == "root":
+        parent, state = None, "start"
+    return {
+        "quest_key": key,
+        "parent_key": parent,
+        "title": title.strip()[:120],
+        "purpose": purpose,
+        "difficulty": diff,
+        "keywords": keywords,
+        "state": state,
+        "sort_order": order,
+    }
+
+
+def _parse_roadmap(raw: str | None) -> dict:
+    """로드맵 생성 LLM 응답을 검증된 로드맵 dict 로 파싱한다. 무네트워크 순수 함수.
+
+    title 과 '정확히 1개의 루트(parent_key None)' 와 퀘스트가 있어야 유효. 아니면 {}(템플릿 폴백 신호).
+    난이도·상태는 닫힌 집합 외/누락 시 보정. pillars 는 label 있는 항목만 최대 3개.
+    """
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(obj, dict):
+        return {}
+    title = obj.get("title")
+    if not isinstance(title, str) or not title.strip():
+        return {}
+
+    pillars_raw = obj.get("skill_pillars")
+    pillars: list[dict] = []
+    if isinstance(pillars_raw, list):
+        for i, p in enumerate(pillars_raw):
+            if not isinstance(p, dict):
+                continue
+            label = p.get("label")
+            if not isinstance(label, str) or not label.strip():
+                continue
+            blurb = p.get("blurb")
+            pid = p.get("id")
+            pillars.append(
+                {
+                    "id": pid.strip()[:40] if isinstance(pid, str) and pid.strip() else f"pillar-{i}",
+                    "label": label.strip()[:40],
+                    "blurb": blurb.strip()[:120] if isinstance(blurb, str) else "",
+                }
+            )
+            if len(pillars) == 3:
+                break
+
+    bridge_raw = obj.get("bridge_keywords")
+    bridge = (
+        [k.strip()[:40] for k in bridge_raw if isinstance(k, str) and k.strip()][:8]
+        if isinstance(bridge_raw, list)
+        else []
+    )
+
+    quests_raw = obj.get("quests")
+    if not isinstance(quests_raw, list):
+        return {}
+    quests = [q for q in (_coerce_quest(it, i) for i, it in enumerate(quests_raw)) if q]
+    roots = [q for q in quests if q["parent_key"] is None]
+    if not quests or len(roots) != 1:
+        return {}
+
+    return {
+        "title": title.strip()[:120],
+        "summary": (obj.get("summary") or "").strip()[:255] if isinstance(obj.get("summary"), str) else "",
+        "skill_pillars": pillars,
+        "bridge_keywords": bridge,
+        "quests": quests,
+    }
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -477,6 +595,19 @@ class LlmClient:
             ],
         )
         return _parse_investment(resp.choices[0].message.content)
+
+    async def generate_roadmap(self, context: str) -> dict:
+        """페르소나·목표·트렌드 맥락에서 개인화 로드맵(퀘스트 트리)을 생성한다. 무효/실패 시 {}."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.4,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _ROADMAP_SYSTEM_PROMPT},
+                {"role": "user", "content": context},
+            ],
+        )
+        return _parse_roadmap(resp.choices[0].message.content)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""

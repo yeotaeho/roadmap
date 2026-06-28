@@ -35,3 +35,13 @@ export async function upsertArchiveDay(date: string, payload: DayLog): Promise<D
   const { data } = await apiClient.put(`/api/roadmap/archive/${date}`, payload);
   return { completedQuestIds: data?.completedQuestIds ?? [], note: data?.note ?? '' };
 }
+
+export interface RefreshResult {
+  source: 'llm' | 'template';
+  questCount: number;
+}
+
+export async function refreshRoadmap(): Promise<RefreshResult> {
+  const { data } = await apiClient.post('/api/roadmap/refine');
+  return { source: data?.source ?? 'template', questCount: data?.quest_count ?? 0 };
+}

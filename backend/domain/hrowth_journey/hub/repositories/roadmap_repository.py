@@ -48,6 +48,45 @@ _UPSERT_LOG = text(
     """
 )
 
+# ── RoadmapPlanner 입력(공유 DB read — 교차 도메인 직접 import 회피) ──
+_FETCH_PERSONA = text(
+    """
+    SELECT skills, experiences, education, summary
+    FROM user_personas WHERE user_id = CAST(:user_id AS UUID)
+    """
+)
+
+_FETCH_SYNC_PROFILE = text(
+    """
+    SELECT target_job, interest_keywords
+    FROM user_sync_profiles WHERE user_id = CAST(:user_id AS UUID)
+    """
+)
+
+_UPSERT_ROADMAP = text(
+    """
+    INSERT INTO user_roadmaps (user_id, title, summary, skill_pillars, bridge_keywords, status, generated_at, updated_at)
+    VALUES (CAST(:user_id AS UUID), :title, :summary, CAST(:pillars AS JSONB),
+            CAST(:bridge AS JSONB), 'active', now(), now())
+    ON CONFLICT (user_id) DO UPDATE SET
+        title = EXCLUDED.title, summary = EXCLUDED.summary,
+        skill_pillars = EXCLUDED.skill_pillars, bridge_keywords = EXCLUDED.bridge_keywords,
+        generated_at = now(), updated_at = now()
+    RETURNING id
+    """
+)
+
+_DELETE_QUESTS = text("DELETE FROM roadmap_quests WHERE roadmap_id = :roadmap_id")
+
+_INSERT_QUEST = text(
+    """
+    INSERT INTO roadmap_quests
+        (roadmap_id, quest_key, parent_key, title, purpose, difficulty, keywords, state, sort_order)
+    VALUES (:roadmap_id, :quest_key, :parent_key, :title, :purpose, :difficulty,
+            CAST(:keywords AS JSONB), :state, :sort_order)
+    """
+)
+
 
 class RoadmapRepository(BaseRepository):
     async def fetch_roadmap(self, user_id: str) -> dict | None:
@@ -107,3 +146,53 @@ class RoadmapRepository(BaseRepository):
             },
         )
         await self.session.commit()
+
+    async def fetch_persona(self, user_id: str) -> dict:
+        r = (await self.session.execute(_FETCH_PERSONA, {"user_id": user_id})).first()
+        if r is None:
+            return {"skills": [], "experiences": [], "education": [], "summary": ""}
+        return {
+            "skills": r.skills or [],
+            "experiences": r.experiences or [],
+            "education": r.education or [],
+            "summary": r.summary or "",
+        }
+
+    async def fetch_sync_profile(self, user_id: str) -> dict:
+        r = (await self.session.execute(_FETCH_SYNC_PROFILE, {"user_id": user_id})).first()
+        if r is None:
+            return {"target_job": None, "interest_keywords": []}
+        return {"target_job": r.target_job, "interest_keywords": r.interest_keywords or []}
+
+    async def save_roadmap(self, user_id: str, roadmap: dict) -> int:
+        """로드맵 헤더 upsert + 퀘스트 전체 교체. roadmap_id 반환."""
+        rid = (
+            await self.session.execute(
+                _UPSERT_ROADMAP,
+                {
+                    "user_id": user_id,
+                    "title": roadmap["title"],
+                    "summary": roadmap.get("summary") or "",
+                    "pillars": json.dumps(roadmap.get("skill_pillars") or []),
+                    "bridge": json.dumps(roadmap.get("bridge_keywords") or []),
+                },
+            )
+        ).scalar_one()
+        await self.session.execute(_DELETE_QUESTS, {"roadmap_id": rid})
+        for q in roadmap.get("quests") or []:
+            await self.session.execute(
+                _INSERT_QUEST,
+                {
+                    "roadmap_id": rid,
+                    "quest_key": q["quest_key"],
+                    "parent_key": q.get("parent_key"),
+                    "title": q["title"],
+                    "purpose": q.get("purpose") or "",
+                    "difficulty": q["difficulty"],
+                    "keywords": json.dumps(q.get("keywords") or []),
+                    "state": q["state"],
+                    "sort_order": q.get("sort_order") or 0,
+                },
+            )
+        await self.session.commit()
+        return rid

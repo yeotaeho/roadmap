@@ -8,7 +8,7 @@ import {
   QUEST_TREE,
   SKILL_TRIANGLE,
 } from "@/data/roadmapQuestMap";
-import { useJourney } from "@/hooks/useRoadmap";
+import { useJourney, useRefreshRoadmap } from "@/hooks/useRoadmap";
 import { useStore } from "@/store";
 
 const DIFFICULTY_RING: Record<string, string> = {
@@ -79,7 +79,9 @@ function QuestTreeCard({ node, depth }: { node: QuestTreeNode; depth: number }) 
 
 export function JourneyMapTab() {
   const profile = useStore((s) => s.profile);
-  const { data, isLoading } = useJourney(!!profile?.id);
+  const loggedIn = !!profile?.id;
+  const { data, isLoading } = useJourney(loggedIn);
+  const refresh = useRefreshRoadmap();
 
   // 로그인 사용자에게 생성된 로드맵이 있으면 라이브, 없으면 로컬 목업으로 폴백.
   const pillars = data?.roadmap?.skillPillars ?? SKILL_TRIANGLE;
@@ -170,7 +172,27 @@ export function JourneyMapTab() {
               시작점에서 가지처럼 퍼지는 과제들입니다. 잠금(회색)은 앞 단계를 밟으면 열립니다.
             </p>
           </div>
+          {loggedIn ? (
+            <button
+              type="button"
+              onClick={() => refresh.mutate()}
+              disabled={refresh.isPending}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+            >
+              <Sparkles className="h-4 w-4" />
+              {refresh.isPending
+                ? "생성 중…"
+                : isLive
+                  ? "로드맵 다시 생성"
+                  : "내 로드맵 생성"}
+            </button>
+          ) : null}
         </div>
+        {loggedIn && !isLive && !isLoading ? (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            프로필의 역량 정보를 바탕으로 나만의 로드맵을 생성합니다. (아래는 예시)
+          </p>
+        ) : null}
         <div className="mt-6">
           <QuestTreeCard node={tree} depth={0} />
         </div>

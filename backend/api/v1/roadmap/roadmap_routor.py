@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.api_guards import get_authenticated_user_id, require_internal_token
+from core.api_guards import get_authenticated_user_id
 from core.database import get_db
 from domain.hrowth_journey.hub.services.archive_service import ArchiveService
 from domain.hrowth_journey.hub.services.journey_service import JourneyService
+from domain.hrowth_journey.hub.services.roadmap_planner_service import RoadmapPlannerService
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +87,15 @@ async def upsert_archive_day(
         raise HTTPException(status_code=500, detail=f"Roadmap 아카이브 저장 실패: {str(e)}")
 
 
-@router.post("/refine", dependencies=[Depends(require_internal_token)])
-async def refine_roadmap():
-    """페르소나→로드맵 재생성 훅(향후 LLM RoadmapPlanner). 현재는 시드 스크립트로 대체."""
-    return {
-        "success": True,
-        "detail": "목업 단계 — scripts/seed_roadmap_mock.py 로 시드합니다. LLM 생성은 미구현.",
-    }
+@router.post("/refine")
+async def refine_roadmap(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """페르소나·목표·관심사 → 개인화 로드맵 재생성(LLM, 폴백 템플릿)."""
+    try:
+        result = await RoadmapPlannerService(db).generate_for_user(user_id)
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"Roadmap 생성 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Roadmap 생성 실패: {str(e)}")
