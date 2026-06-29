@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import aiohttp
 
-from domain.master.models.transfer.innovation_collect_dto import InnovationCollectDto
+from domain.master.models.transfer.tech_adoption_collect_dto import TechAdoptionCollectDto
 
 logger = logging.getLogger(__name__)
 
-_SOURCE_TYPE = "INNOVATION_PYPI_DOWNLOADS"
 _BASE_URL = "https://pypistats.org/api/packages/{pkg}/recent"
 
 _SECTOR_PACKAGES: dict[str, list[str]] = {
@@ -38,19 +37,18 @@ _SECTOR_PACKAGES: dict[str, list[str]] = {
 }
 
 
-def _this_monday() -> datetime:
-    today = datetime.now()
+def _this_monday() -> date:
+    today = datetime.now().date()
     return today - timedelta(days=today.weekday())
 
 
 class PypiDownloadsCollector:
     """PyPI 패키지 주간 다운로드 통계를 수집한다."""
 
-    async def collect(self) -> tuple[list[InnovationCollectDto], dict[str, int | str]]:
-        monday = _this_monday().replace(hour=0, minute=0, second=0, microsecond=0)
-        monday_str = monday.strftime("%Y-%m-%d")
+    async def collect(self) -> tuple[list[TechAdoptionCollectDto], dict[str, int | str]]:
+        monday = _this_monday()
 
-        rows: list[InnovationCollectDto] = []
+        rows: list[TechAdoptionCollectDto] = []
         attempted = 0
         failed = 0
 
@@ -61,7 +59,7 @@ class PypiDownloadsCollector:
             for sector, packages in _SECTOR_PACKAGES.items():
                 for pkg in packages:
                     attempted += 1
-                    dto = await self._fetch_package(session, sem, pkg, sector, monday, monday_str)
+                    dto = await self._fetch_package(session, sem, pkg, sector, monday)
                     if dto is None:
                         failed += 1
                     else:
@@ -71,7 +69,7 @@ class PypiDownloadsCollector:
             "packages_attempted": attempted,
             "packages_collected": attempted - failed,
             "packages_failed": failed,
-            "week_start": monday_str,
+            "week_start": str(monday),
         }
         return rows, stats
 
@@ -81,9 +79,8 @@ class PypiDownloadsCollector:
         sem: asyncio.Semaphore,
         pkg: str,
         sector: str,
-        monday: datetime,
-        monday_str: str,
-    ) -> InnovationCollectDto | None:
+        monday: date,
+    ) -> TechAdoptionCollectDto | None:
         url = _BASE_URL.format(pkg=pkg)
         retries = 3
         backoff = 1.0
@@ -111,24 +108,19 @@ class PypiDownloadsCollector:
                     await asyncio.sleep(0.5)
 
                 stats_data: dict[str, Any] = data.get("data", {})
-                last_day: int = stats_data.get("last_day", 0)
                 last_week: int = stats_data.get("last_week", 0)
-                last_month: int = stats_data.get("last_month", 0)
 
-                return InnovationCollectDto(
-                    source_type=_SOURCE_TYPE,
-                    source_url=f"https://pypistats.org/packages/{pkg}?week={monday_str}",
-                    title=f"PyPI {pkg} weekly downloads: {last_week:,}",
-                    author_or_assignee=sector,
-                    abstract_text=f"last_day={last_day:,} last_week={last_week:,} last_month={last_month:,}",
+                return TechAdoptionCollectDto(
+                    ecosystem="pypi",
+                    package_name=pkg,
+                    sector=sector,
+                    weekly_downloads=last_week,
+                    week_start_date=monday,
                     raw_metadata={
-                        "sector": sector,
-                        "package": pkg,
-                        "last_day": last_day,
+                        "last_day": stats_data.get("last_day", 0),
                         "last_week": last_week,
-                        "last_month": last_month,
+                        "last_month": stats_data.get("last_month", 0),
                     },
-                    published_at=monday,
                 )
 
         return None

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.master.hub.repositories.innovation_repository import InnovationRepository
+from domain.master.hub.repositories.tech_adoption_repository import TechAdoptionRepository
 from domain.master.hub.services.collectors.innovation.arxiv.arxiv_papers_collector import (
     ArxivPapersCollector,
     ArxivWatermark,
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 class BronzeInnovationIngestService:
     def __init__(self, session: AsyncSession, *, github_token: str | None = None) -> None:
         self._repo = InnovationRepository(session)
+        self._tech_repo = TechAdoptionRepository(session)
         self._github_token = github_token
 
     async def ingest_arxiv(
@@ -147,5 +149,44 @@ class BronzeInnovationIngestService:
             "stats": stats,
         }
         logger.info("Bronze innovation KIAT 수요기술 ingest: %s", result)
+        return result
+
+    async def ingest_pypi_downloads(self) -> dict[str, Any]:
+        """PyPI 패키지 주간 다운로드 통계 수집 → raw_tech_adoption_data."""
+        from domain.master.hub.services.collectors.innovation.tech_adoption.pypi_downloads_collector import PypiDownloadsCollector
+        rows, stats = [], {}
+        try:
+            rows, stats = await PypiDownloadsCollector().collect()
+        except Exception:
+            logger.exception("PyPI 다운로드 Bronze 수집 실패. 빈 결과로 진행합니다.")
+        upserted = await self._tech_repo.upsert_many(rows)
+        result = {"source": "pypi_downloads", "fetched": len(rows), "upserted": upserted, "stats": stats}
+        logger.info("Bronze tech adoption PyPI downloads ingest: %s", result)
+        return result
+
+    async def ingest_npm_downloads(self) -> dict[str, Any]:
+        """npm 패키지 주간 다운로드 통계 수집 → raw_tech_adoption_data."""
+        from domain.master.hub.services.collectors.innovation.tech_adoption.npm_downloads_collector import NpmDownloadsCollector
+        rows, stats = [], {}
+        try:
+            rows, stats = await NpmDownloadsCollector().collect()
+        except Exception:
+            logger.exception("npm 다운로드 Bronze 수집 실패. 빈 결과로 진행합니다.")
+        upserted = await self._tech_repo.upsert_many(rows)
+        result = {"source": "npm_downloads", "fetched": len(rows), "upserted": upserted, "stats": stats}
+        logger.info("Bronze tech adoption npm downloads ingest: %s", result)
+        return result
+
+    async def ingest_hf_trending(self, *, top_n: int = 30) -> dict[str, Any]:
+        """HuggingFace Hub 태그별 트렌딩 모델 수집 → raw_tech_adoption_data."""
+        from domain.master.hub.services.collectors.innovation.tech_adoption.hf_trending_collector import HfTrendingCollector
+        rows, stats = [], {}
+        try:
+            rows, stats = await HfTrendingCollector().collect(top_n=top_n)
+        except Exception:
+            logger.exception("HF 트렌딩 Bronze 수집 실패. 빈 결과로 진행합니다.")
+        upserted = await self._tech_repo.upsert_many(rows)
+        result = {"source": "hf_trending", "fetched": len(rows), "upserted": upserted, "stats": stats}
+        logger.info("Bronze tech adoption HF trending ingest: %s", result)
         return result
 

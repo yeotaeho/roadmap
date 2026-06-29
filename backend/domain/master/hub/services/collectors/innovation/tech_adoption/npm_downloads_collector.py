@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import aiohttp
 
-from domain.master.models.transfer.innovation_collect_dto import InnovationCollectDto
+from domain.master.models.transfer.tech_adoption_collect_dto import TechAdoptionCollectDto
 
 logger = logging.getLogger(__name__)
-
-_SOURCE_TYPE = "INNOVATION_NPM_DOWNLOADS"
 
 _SECTOR_PACKAGES: dict[str, list[str]] = {
     "FRONTEND": [
@@ -36,23 +34,17 @@ _SECTOR_PACKAGES: dict[str, list[str]] = {
 }
 
 
-def _this_monday() -> datetime:
-    today = datetime.now()
+def _this_monday() -> date:
+    today = datetime.now().date()
     return today - timedelta(days=today.weekday())
-
-
-def _pkg_to_sector(pkg: str, sector_map: dict[str, str]) -> str:
-    return sector_map.get(pkg, "UNKNOWN")
 
 
 class NpmDownloadsCollector:
     """npm 패키지 주간 다운로드 통계를 일괄 수집한다."""
 
-    async def collect(self) -> tuple[list[InnovationCollectDto], dict[str, int | str]]:
-        monday = _this_monday().replace(hour=0, minute=0, second=0, microsecond=0)
-        monday_str = monday.strftime("%Y-%m-%d")
+    async def collect(self) -> tuple[list[TechAdoptionCollectDto], dict[str, int | str]]:
+        monday = _this_monday()
 
-        # 패키지 → 섹터 역방향 맵
         pkg_to_sector: dict[str, str] = {}
         all_packages: list[str] = []
         for sector, packages in _SECTOR_PACKAGES.items():
@@ -61,14 +53,13 @@ class NpmDownloadsCollector:
                     pkg_to_sector[pkg] = sector
                     all_packages.append(pkg)
 
-        rows: list[InnovationCollectDto] = []
+        rows: list[TechAdoptionCollectDto] = []
         failed = 0
         timeout = aiohttp.ClientTimeout(total=30)
 
-        # scoped 패키지(@로 시작)는 벌크 API에서 /가 path로 해석되어 실패 → 개별 요청
+        # scoped 패키지(@로 시작)는 벌크 API에서 /가 path로 해석되어 HTTP 400 → 개별 요청
         unscoped = [p for p in all_packages if not p.startswith("@")]
         scoped = [p for p in all_packages if p.startswith("@")]
-
         bulk_data: dict = {}
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -105,26 +96,15 @@ class NpmDownloadsCollector:
             downloads_list: list[dict] = pkg_data.get("downloads", [])
             total_week: int = sum(d.get("downloads", 0) for d in downloads_list)
             daily_summary = [{"day": d["day"], "downloads": d["downloads"]} for d in downloads_list]
-            sector = pkg_to_sector.get(pkg, "UNKNOWN")
-
-            # 일별 요약 텍스트
-            day_texts = [f"{d['day']}:{d['downloads']:,}" for d in daily_summary[:3]]
-            abstract = f"total_week={total_week:,} recent_days=[{', '.join(day_texts)}...]"
 
             rows.append(
-                InnovationCollectDto(
-                    source_type=_SOURCE_TYPE,
-                    source_url=f"https://www.npmjs.com/package/{pkg}?week={monday_str}",
-                    title=f"npm {pkg} weekly downloads: {total_week:,}",
-                    author_or_assignee=sector,
-                    abstract_text=abstract,
-                    raw_metadata={
-                        "sector": sector,
-                        "package": pkg,
-                        "daily_downloads": daily_summary,
-                        "total_week": total_week,
-                    },
-                    published_at=monday,
+                TechAdoptionCollectDto(
+                    ecosystem="npm",
+                    package_name=pkg,
+                    sector=pkg_to_sector.get(pkg, "UNKNOWN"),
+                    weekly_downloads=total_week,
+                    week_start_date=monday,
+                    raw_metadata={"daily_downloads": daily_summary},
                 )
             )
 
@@ -132,6 +112,6 @@ class NpmDownloadsCollector:
             "packages_attempted": len(all_packages),
             "packages_collected": len(rows),
             "packages_failed": failed,
-            "week_start": monday_str,
+            "week_start": str(monday),
         }
         return rows, stats

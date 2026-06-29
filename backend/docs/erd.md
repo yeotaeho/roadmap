@@ -32,13 +32,19 @@
 
 > **⚠️ 2026-06-27 갱신 — 마이그레이션 head·인사이트 물리화·Phase 2 반영**
 > - **마이그레이션 파일 head = `d7a1f3c9e2b5`** (체인: … `b8e4c2a6f1d9`(Causal) → `c5f9a3b7d1e2`(투자금액 `refined_investment_flows`) → `d7a1f3c9e2b5`(`refined_gap_insights.youth_fit_score`)). 본 세션 `alembic current` = head 확인.
+
+> **⚠️ 2026-06-29 갱신 — NCS 온톨로지 + 기술채택 Bronze 신설**
+> - **마이그레이션 파일 head = `c7e3a9f1b5d2`** (체인: … `d7a1f3c9e2b5` → `3d459abe4fb1`(Roadmap/Task) → `8ada7f5586d9`(ncs_competency_master) → `c7e3a9f1b5d2`(raw_tech_adoption_data)). **Neon 미적용** — 배포 전 `alembic upgrade head` 필수.
+> - **신설 Bronze 테이블 2종**: `ncs_competency_master`(NCS L1~L6 역량 온톨로지 정적 마스터, UPSERT 시맨틱) · `raw_tech_adoption_data`(npm·PyPI·HuggingFace 주간 다운로드 스냅샷, 시계열 grain). 두 테이블은 기존 `raw_innovation_data`(논문/특허 엔티티)와 semantics가 달라 분리.
+> - **수집기 3종 → `TechAdoptionCollectDto` + `TechAdoptionRepository` 전환**: `npm_downloads_collector`, `pypi_downloads_collector`, `hf_trending_collector` 모두 `raw_tech_adoption_data` 전용 UPSERT 경로로 라우팅됨. `BronzeInnovationIngestService`의 pypi/npm/hf 메서드는 `_tech_repo.upsert_many()`를 호출.
+> - **ERD 문서 §4 Bronze DDL 추가**: `raw_tech_adoption_data`·`ncs_competency_master` DDL이 이 절(§4 코드블록 내)에 추가됨.
 > - **인사이트 6수직 Silver/Gold 는 실제 라이브 확인** — 본 세션 백필로 `gap_issues`·`issue_evidences`(discourse 280 + KIAT tech_demand)가 실제 적재됨. §5~§6 의 해당 테이블은 더 이상 🔴(목표 모델)이 아니라 **✅ 물리 구현**.
 > - **Phase 2(KIAT 수요기술 → Gap)**: `refined_gap_insights` 에 `youth_fit_score FLOAT`(`d7a1f3c9e2b5`), `data_role` 에 `TECH_DEMAND_SIGNAL`, `issue_evidences.evidence_type` 에 `TECH_DEMAND` 값 추가(소스-인지 Gold 사영, youth_fit 게이트). 설계: `backend/docs/specs/2026-06-27-kiat-gap-tech-demand-phase2-design.md`.
 > - **추가 미문서 실재 테이블**: `refined_investment_flows`(`c5f9a3b7d1e2` — 투자 뉴스 금액 추출 Silver). §0 카탈로그 정식 편입 필요.
 
-**현재 물리 존재 테이블 (✅, 총 14)**
-`users` · `user_sync_profiles` · `sectors` · `sub_sectors` · `sector_source_map` · `raw_economic_data` · `raw_market_timeseries` · `raw_innovation_data` · `raw_people_data` · `raw_opportunity_data` · `raw_discourse_data`\* · `verified_company_master`\* · `refined_innovation_signal`🟡 · `refined_signal_sources`🟡
-(\* = `e2c5a7b9d3f4` 적용 시 존재. refined_* 2종은 DDL만 있고 정제 로직이 없어 🟡)
+**현재 물리 존재 테이블 (✅, 총 16)**
+`users` · `user_sync_profiles` · `sectors` · `sub_sectors` · `sector_source_map` · `raw_economic_data` · `raw_market_timeseries` · `raw_innovation_data` · `raw_people_data` · `raw_opportunity_data` · `raw_discourse_data`\* · `verified_company_master`\* · `refined_innovation_signal`🟡 · `refined_signal_sources`🟡 · `ncs_competency_master`†(마이그 `8ada7f5586d9`) · `raw_tech_adoption_data`†(마이그 `c7e3a9f1b5d2`)
+(\* = `e2c5a7b9d3f4` 적용 시 존재. refined_* 2종은 DDL만 있고 정제 로직이 없어 🟡. † = 2026-06-29 신설, Neon 적용 필요)
 
 **미존재 (🔴 목표 모델)** — 본 문서에 DDL이 있어도 물리 테이블이 없다
 - Silver §5.1: `refined_trend_insights` · `refined_gap_insights` · `refined_chance_insights`.
@@ -123,7 +129,9 @@ flowchart TD
         DI["raw_discourse_data<br/>news_rss·gov_report"]
         EC["raw_economic_data<br/>DART·Yahoo·DataLab"]
         OP["raw_opportunity_data<br/>K-Startup·SMES·나라장터"]
-        PE["raw_people_data"]
+        PE["raw_people_data<br/>saramin·ncs_standard"]
+        TA["raw_tech_adoption_data<br/>npm·PyPI·HuggingFace 주간 스냅샷"]
+        NCS["ncs_competency_master<br/>NCS L1~L6 역량 온톨로지 (정적 마스터)"]
     end
     subgraph Silver["Silver · LLM 정제"]
         TC["refined_text_sector_class<br/>섹터 분류"]
@@ -405,6 +413,53 @@ CREATE INDEX idx_verified_company_source_type ON verified_company_master(source_
 CREATE UNIQUE INDEX uq_verified_company_source_biz ON verified_company_master(source_type, business_number) 
     WHERE business_number IS NOT NULL;
 -- 설명: 동일 출처(source_type)에서 동일 사업자번호는 1개만 존재 (갱신 시 UPDATE)
+
+-- Bronze: 기술 채택 미시신호 — npm/PyPI/HuggingFace 주간 스냅샷 (마이그 c7e3a9f1b5d2)
+-- raw_innovation_data(논문/특허/레포 엔티티)와 다른 시계열 grain이므로 별도 테이블
+CREATE TABLE raw_tech_adoption_data (
+    id BIGSERIAL PRIMARY KEY,
+    ecosystem VARCHAR(10) NOT NULL,             -- 'npm' | 'pypi' | 'hf'
+    package_name VARCHAR(200) NOT NULL,         -- 패키지명 또는 HuggingFace 모델 ID
+    sector VARCHAR(50) NOT NULL,                -- FRONTEND / AI_ML / DEVOPS / MOBILE / STYLING 등
+    weekly_downloads BIGINT,                    -- 주간 다운로드 수 (HF trending은 NULL 가능)
+    week_start_date DATE NOT NULL,              -- 해당 주 월요일 (ISO 8601 기준)
+    raw_metadata JSONB,                         -- hf={downloads_alltime, trending_rank, pipeline_tag}
+                                                -- npm={daily_downloads}, pypi={last_day, last_month}
+    collected_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX uq_raw_tech_adoption_ecosystem_pkg_week
+    ON raw_tech_adoption_data(ecosystem, package_name, week_start_date);
+CREATE INDEX ix_raw_tech_adoption_ecosystem_week ON raw_tech_adoption_data(ecosystem, week_start_date);
+CREATE INDEX ix_raw_tech_adoption_sector_week ON raw_tech_adoption_data(sector, week_start_date);
+
+-- Bronze(정적 마스터): NCS 국가직무능력표준 역량 온톨로지 L1~L6 (마이그 8ada7f5586d9)
+-- 시계열이 아닌 정적 분류 체계 — UPSERT 시맨틱(갱신 가능), 별도 마스터 테이블
+CREATE TABLE ncs_competency_master (
+    id BIGSERIAL PRIMARY KEY,
+    source_type VARCHAR(50) NOT NULL,           -- NCS_CLASSIFICATION(L1~L4) | NCS_COMPETENCY_UNIT(L5) | NCS_COMPETENCY_ELEMENT(L6)
+    ncs_code VARCHAR(30) NOT NULL,              -- 역량단위코드 또는 분류코드
+    level SMALLINT NOT NULL,                    -- 위계 깊이 1(대분류)~6(능력단위요소)
+    name VARCHAR(300) NOT NULL,                 -- 분류명 / 역량단위명 / 능력단위요소명
+    parent_code VARCHAR(30),                    -- 상위 코드 (L1은 NULL)
+    category_l1_code VARCHAR(10),              -- 대분류 코드 (비정규화 ancestor, 빠른 필터용)
+    category_l1_name VARCHAR(100),
+    category_l2_code VARCHAR(10),              -- 중분류 코드
+    category_l2_name VARCHAR(100),
+    category_l3_code VARCHAR(10),              -- 소분류 코드
+    category_l3_name VARCHAR(100),
+    category_l4_code VARCHAR(10),              -- 세분류 코드
+    category_l4_name VARCHAR(100),
+    description TEXT,                           -- 역량 설명 / 분류 개요
+    performance_criteria JSONB,                 -- 수행준거 (L5~L6)
+    knowledge_skills JSONB,                     -- 지식·기술·도구 목록 (L5~L6)
+    raw_metadata JSONB,                         -- API 원본 응답 전체
+    collected_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX uq_ncs_source_code ON ncs_competency_master(source_type, ncs_code);
+CREATE INDEX ix_ncs_level ON ncs_competency_master(level);
+CREATE INDEX ix_ncs_parent_code ON ncs_competency_master(parent_code);
+CREATE INDEX ix_ncs_category_l1 ON ncs_competency_master(category_l1_code);
 ```
 
 ---

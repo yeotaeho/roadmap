@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import aiohttp
 
-from domain.master.models.transfer.innovation_collect_dto import InnovationCollectDto
+from domain.master.models.transfer.tech_adoption_collect_dto import TechAdoptionCollectDto
 
 logger = logging.getLogger(__name__)
 
-_SOURCE_TYPE = "INNOVATION_HF_TRENDING"
 _HF_API_BASE = "https://huggingface.co/api/models"
 
 _HF_TAGS: list[str] = [
@@ -21,20 +20,33 @@ _HF_TAGS: list[str] = [
     "translation", "summarization", "question-answering", "object-detection",
 ]
 
+# HF pipeline_tag → sector 매핑
+_TAG_TO_SECTOR: dict[str, str] = {
+    "text-generation": "AI_ML",
+    "text-to-image": "AI_ML",
+    "automatic-speech-recognition": "AI_ML",
+    "text-classification": "AI_ML",
+    "token-classification": "AI_ML",
+    "feature-extraction": "AI_ML",
+    "translation": "AI_ML",
+    "summarization": "AI_ML",
+    "question-answering": "AI_ML",
+    "object-detection": "AI_ML",
+}
 
-def _this_monday() -> datetime:
-    today = datetime.now()
+
+def _this_monday() -> date:
+    today = datetime.now().date()
     return today - timedelta(days=today.weekday())
 
 
 class HfTrendingCollector:
     """HuggingFace Hub 태그별 상위 다운로드 모델을 수집한다."""
 
-    async def collect(self, *, top_n: int = 30) -> tuple[list[InnovationCollectDto], dict[str, int | str]]:
-        monday = _this_monday().replace(hour=0, minute=0, second=0, microsecond=0)
-        monday_str = monday.strftime("%Y-%m-%d")
+    async def collect(self, *, top_n: int = 30) -> tuple[list[TechAdoptionCollectDto], dict[str, int | str]]:
+        monday = _this_monday()
 
-        rows: list[InnovationCollectDto] = []
+        rows: list[TechAdoptionCollectDto] = []
         seen_model_ids: set[str] = set()
         failed_tags = 0
 
@@ -44,7 +56,7 @@ class HfTrendingCollector:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for tag in _HF_TAGS:
                 tag_rows = await self._fetch_tag(
-                    session, sem, tag, top_n, monday, monday_str, seen_model_ids
+                    session, sem, tag, top_n, monday, seen_model_ids
                 )
                 if tag_rows is None:
                     failed_tags += 1
@@ -55,7 +67,7 @@ class HfTrendingCollector:
             "tags_attempted": len(_HF_TAGS),
             "tags_failed": failed_tags,
             "models_collected": len(rows),
-            "week_start": monday_str,
+            "week_start": str(monday),
         }
         return rows, stats
 
@@ -65,10 +77,9 @@ class HfTrendingCollector:
         sem: asyncio.Semaphore,
         tag: str,
         top_n: int,
-        monday: datetime,
-        monday_str: str,
+        monday: date,
         seen_model_ids: set[str],
-    ) -> list[InnovationCollectDto] | None:
+    ) -> list[TechAdoptionCollectDto] | None:
         url = f"{_HF_API_BASE}?sort=downloads&direction=-1&limit={top_n}&filter={tag}"
         async with sem:
             try:
@@ -83,8 +94,8 @@ class HfTrendingCollector:
             finally:
                 await asyncio.sleep(0.3)
 
-        tag_rows: list[InnovationCollectDto] = []
-        for model in models:
+        tag_rows: list[TechAdoptionCollectDto] = []
+        for rank, model in enumerate(models, start=1):
             model_id: str = model.get("id", "")
             if not model_id or model_id in seen_model_ids:
                 continue
@@ -92,27 +103,22 @@ class HfTrendingCollector:
 
             downloads: int = model.get("downloads", 0)
             likes: int = model.get("likes", 0)
-            tags: list[str] = model.get("tags", [])
             pipeline_tag: str = model.get("pipeline_tag", tag)
 
-            # org/model → org 추출
-            author = model_id.split("/")[0] if "/" in model_id else model_id
-
             tag_rows.append(
-                InnovationCollectDto(
-                    source_type=_SOURCE_TYPE,
-                    source_url=f"https://huggingface.co/{model_id}?week={monday_str}",
-                    title=f"HF {model_id} ({tag}): {downloads:,} downloads, {likes:,} likes",
-                    author_or_assignee=author,
-                    abstract_text=", ".join(tags),
+                TechAdoptionCollectDto(
+                    ecosystem="hf",
+                    package_name=model_id,
+                    sector=_TAG_TO_SECTOR.get(tag, "AI_ML"),
+                    weekly_downloads=None,  # HF API는 주간 단위 다운로드 미제공
+                    week_start_date=monday,
                     raw_metadata={
-                        "pipeline_tag": pipeline_tag,
-                        "model_id": model_id,
-                        "downloads": downloads,
+                        "downloads_alltime": downloads,
                         "likes": likes,
-                        "tags": tags,
+                        "pipeline_tag": pipeline_tag,
+                        "trending_rank": rank,
+                        "tags": model.get("tags", []),
                     },
-                    published_at=monday,
                 )
             )
 
