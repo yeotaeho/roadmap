@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-28 — Pulse 점수에 감성·시장 방향 가산 이동 융합 (방향성 modifier)
+- **무엇** — 건수(활동량)만 보던 Pulse 점수에 방향성을 더한다. ① 텍스트 감성: `classify_sector` 같은 LLM 호출에 `sentiment`·`sentiment_score`(-1~1)를 얹어(토큰 0) `refined_text_sector_class` 에 적재. ② 시장 방향: `raw_market_timeseries.close_price` 전일 대비 등락(LAG·0.2% 데드밴드)을 스키마 변경 없이 SQL 산출. ③ 두 신호를 (섹터×일자) 방향성 modifier(-1~1)로 결합해, 활동 점수 위에 `score + K(15)×modifier` 가산 이동. 적용은 직전 7일 평균 + carry-forward.
+- **왜** — "AI 줄도산 50건"과 "AI 투자유치 50건"이 동일하게 뜨겁게 집계되던 문제. 곱셈은 z-score 가 균일 스케일을 상쇄해 정상상태 부정 심리를 못 반영하므로 가산 이동을 택함. 정확-일자 매칭은 최신 활동일(예 06-28)에 같은 날 modifier 가 없어(시장 06-26까지·감성 희소) 사용자 화면 점수에 안 잡혀, 트레일링 평균+carry-forward 로 보정.
+- **어디** — [client.py](../../../core/llm/client.py)(`_SYSTEM_PROMPT`·`_parse_classification`), [refined_text_sector_class.py](../models/bases/refined_text_sector_class.py)(컬럼 2개·제약 2개), [text_sector_classify_service.py](../hub/services/text_sector_classify_service.py)(payload), [pulse_repository.py](../hub/repositories/pulse_repository.py)(`_TEXT_SENTIMENT_SQL`·`_MARKET_DIRECTION_SQL`·`fetch_directional_modifiers`), [pulse_pipeline.py](../hub/services/pulse_pipeline.py)(`compute_silver(modifiers, sentiment_k, modifier_window_days)`·`_trailing_modifier`), [pulse_refine_service.py](../hub/services/pulse_refine_service.py)(배선). 마이그레이션 [a9d2f7c4e1b8](../../../alembic/versions/a9d2f7c4e1b8_add_sentiment_to_text_sector.py).
+- **검증** — [pulse_scoring_test.py](../../../scripts/pulse_scoring_test.py) 47 PASS(modifier tilt·carry-forward·트레일링 평균·윈도우 이탈 신규), [llm_sector_classify_test.py](../../../scripts/llm_sector_classify_test.py) 24 PASS(감성 파싱), 축 18·텍스트축 8·overview 23 무회귀. prod **읽기전용** 검증(쓰기 없음) — `fetch_directional_modifiers` 2,758건 산출, 최신일 carry-forward tilt 반영(ai-data 45→33·mobility 57→44·food-agri 89→95, 데이터 없는 social-service 무변동). 마이그레이션은 prod head(`d1a2b3c4e5f6` 머지) 에 이미 적용됨.
+- **후속** — `sentiment_k`(15)·`modifier_window_days`(7)·데드밴드(0.2%)·텍스트:시장 결합 가중치는 실데이터 튜닝 대상. modifier 60%가 ±1.0 극단(단일 관측일) — 관측수 가중 평균 검토. PROMPT_VERSION 미bump 라 기존 분류행 sentiment NULL(tilt 0) — 활성 섹터 즉시 효과 원하면 최근 윈도우 감성 백필. prod write 는 브랜치 미배포라 보류(배포 후 일별 잡이 자동 생성). 브랜치 `feat/pulse-sentiment-fusion`(커밋 `aa32987`·`a52ae22`).
+
 ## 2026-06-28 — 콘텐츠 신호 해상도: KOBIS 일별 박스오피스 수집기 (Phase 2 확장)
 - **무엇** — KOBIS 일별 박스오피스 OpenAPI 수집기 신설. 영화 행을 `raw_economic_data`(`industry_sector='CONTENT_MEDIA'`)로 적재 → 경제 축이 content-creator 에 일별 수요 신호로 합류. `settings.kobis_api_key` + `ingest_kobis_box_office` + 일일 스케줄러 잡(`kobis_box_office`).
 - **왜** — content-creator 는 이미 활성이나 신호가 discourse 뉴스 중심. 박스오피스는 실제 일별 소비(수요) 신호라 해상도를 높인다. `industry_sector` 코드(정적 매핑) 우회로 파이프라인 무변경.
