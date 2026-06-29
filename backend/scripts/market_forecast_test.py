@@ -146,6 +146,8 @@ def test_orm_tables() -> None:
     check("Gold 테이블명", MarketForecastLog.__tablename__ == "market_forecast_log")
     cols = set(RefinedMarketForecastSilver.__table__.columns.keys())
     check("Silver 필수 컬럼", {"sector_slug", "reference_date", "forecast_score", "confidence"} <= cols)
+    gold_cols = set(MarketForecastLog.__table__.columns.keys())
+    check("Gold 필수 컬럼", {"sector_slug", "forecast_date", "score", "direction_badge"} <= gold_cols)
 
 
 def main() -> None:
