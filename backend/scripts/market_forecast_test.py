@@ -18,6 +18,14 @@ from domain.market_insight.hub.services.forecast_pipeline import (  # noqa: E402
     project_to_gold,
 )
 
+import numpy as np  # noqa: E402
+
+from domain.market_insight.spokes.infra.timesfm_forecaster import (  # noqa: E402
+    FakeForecaster,
+    point_to_return,
+    quantile_to_band_rel,
+)
+
 PASS = 0
 FAIL = 0
 
@@ -106,6 +114,26 @@ def test_project_to_gold() -> None:
     check("Gold score 매핑", gold[0].score == 100)
 
 
+def test_point_to_return() -> None:
+    check("수익률 +10%", abs(point_to_return(100.0, [101, 105, 110]) - 10.0) < 1e-9)
+    check("last_close 0 → 0", point_to_return(0.0, [1, 2, 3]) == 0.0)
+
+
+def test_quantile_band_rel() -> None:
+    # 마지막 스텝 point=100, q[lo]=90 q[hi]=110 → (110-90)/100 = 0.2
+    point = [100.0, 100.0]
+    quant = [[0.0] * 10, [0.0, 90.0, 0, 0, 0, 0, 0, 0, 0, 110.0]]
+    check("band_rel=0.2", abs(quantile_to_band_rel(point, quant, 1, 9) - 0.2) < 1e-9)
+    check("point 0 → band 0", quantile_to_band_rel([0.0], [[0.0] * 10], 1, 9) == 0.0)
+
+
+def test_fake_forecaster() -> None:
+    fake = FakeForecaster({"AAA": (10.0, 0.1), "BBB": (-5.0, 0.2)})
+    out = fake.forecast_returns({"AAA": [1, 2], "BBB": [3, 4], "CCC": [5, 6]}, 14)
+    check("fake 매핑된 2개만", set(out.keys()) == {"AAA", "BBB"})
+    check("fake AAA 값", out["AAA"] == (10.0, 0.1))
+
+
 def main() -> None:
     test_score_and_badge()
     test_negative_and_neutral()
@@ -114,6 +142,9 @@ def main() -> None:
     test_confidence_band()
     test_empty_and_unmapped()
     test_project_to_gold()
+    test_point_to_return()
+    test_quantile_band_rel()
+    test_fake_forecaster()
     print(f"\n{PASS} PASS, {FAIL} FAIL")
     sys.exit(1 if FAIL else 0)
 
