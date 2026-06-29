@@ -595,13 +595,14 @@ class PulseRepository(BaseRepository):
         text_confidence_min: float = 0.0,
         text_prompt_version: str | None = None,
         min_text_rows: int = 1,
-    ) -> dict[tuple[str, object], tuple[float, float]]:
-        """(섹터, 발생일) → (방향성 value -1~1, 관측수 weight) 를 반환한다. Pulse 가산 이동 입력.
+    ) -> dict[tuple[str, object], tuple[float, float, float, float]]:
+        """(섹터, 발생일) → (감성 value, 감성 관측수, 시장 value, 시장 관측수) 를 반환한다.
 
-        텍스트 감성(LLM)과 시장 방향(전일 대비 등락)을 관측수 가중으로 결합한다. value 는
-        (Σ감성 + 시장방향×티커수) / (행수 + 티커수), weight 는 행수 + 티커수다. weight 는
-        트레일링 평균의 가중·shrinkage 입력 — 단일 관측일의 ±1 노이즈를 억제한다(compute_silver).
-        신호 없는 (섹터, 일자)는 키 부재 → tilt 0. text_prompt_version 이 None 이면 감성 제외.
+        텍스트 감성과 시장 방향을 **축별로 분리**해 내보낸다. 결합·트레일링·shrinkage 는
+        compute_silver 에서 축별로 따로 수행한 뒤 고정 축 가중으로 합쳐, 텍스트 행수가
+        시장 티커수를 압도해도 시장 방향이 묻히지 않게 한다('둘 다 의미 있게'). 관측수는
+        축별 shrinkage 입력 — 관측이 적은 축은 그 축 자체가 0 으로 수축한다. 한 축이 없으면
+        그 축 관측수 0. text_prompt_version 이 None 이면 감성 축 제외.
         """
         # 텍스트 감성 — (평균 감성, 행수).
         text_mod: dict[tuple[str, object], tuple[float, float]] = {}
@@ -615,7 +616,7 @@ class PulseRepository(BaseRepository):
                 if r.avg_sent is not None and r.n >= min_text_rows:
                     text_mod[(r.sector_slug, r.ref_date)] = (float(r.avg_sent), float(r.n))
 
-        # 시장 방향 — turnover 가중 등락 부호(value) + 티커 수(weight).
+        # 시장 방향 — turnover 가중 등락 부호(value) + 티커 수(관측수).
         mkt_num: dict[tuple[str, object], float] = {}
         mkt_den: dict[tuple[str, object], float] = {}
         mkt_cnt: dict[tuple[str, object], float] = {}
@@ -630,18 +631,12 @@ class PulseRepository(BaseRepository):
             mkt_cnt[key] = mkt_cnt.get(key, 0.0) + 1.0
         mkt_mod = {k: (mkt_num[k] / mkt_den[k], mkt_cnt[k]) for k in mkt_num if mkt_den[k] > 0}
 
-        # 결합 — 관측수 가중 평균, weight 합산.
-        out: dict[tuple[str, object], tuple[float, float]] = {}
+        # 축별 값을 (감성 value, 감성 관측수, 시장 value, 시장 관측수) 로 병합(결합은 호출측).
+        out: dict[tuple[str, object], tuple[float, float, float, float]] = {}
         for key in set(text_mod) | set(mkt_mod):
-            num = 0.0
-            wsum = 0.0
-            for src in (text_mod, mkt_mod):
-                if key in src:
-                    v, w = src[key]
-                    num += v * w
-                    wsum += w
-            if wsum > 0:
-                out[key] = (max(-1.0, min(1.0, num / wsum)), wsum)
+            tv, tw = text_mod.get(key, (0.0, 0.0))
+            mv, mw = mkt_mod.get(key, (0.0, 0.0))
+            out[key] = (tv, tw, mv, mw)
         return out
 
     async def fetch_rows_needing_sentiment(

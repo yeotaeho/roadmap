@@ -184,42 +184,42 @@ def test_tech_demand_axis_weight() -> None:
 # 감성·방향 가산 이동(modifier) — 활동 점수 위에 직전 윈도우 평균(-1~1) × K 를 얹는다
 # ---------------------------------------------------------------------------
 def test_modifier_tilt() -> None:
-    # 가산 이동 산술 검증 — shrinkage 끄고(modifier_shrink_k=0) weight 1.0, value 만 본다.
+    # 가산 이동 산술 검증 — shrinkage 끄고(modifier_shrink_k=0) 텍스트축만(감성, 행수, 0, 0).
     flat = _series("ai-data", [5, 5, 5, 5])  # 평탄 → 전부 score 50
     d_last = date(2026, 6, 4)
-    up = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): (0.4, 1.0)}, modifier_shrink_k=0)
+    up = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): (0.4, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)
     check("modifier +0.4 → score 50+6=56", up[-1].normalized_score == 56)
-    dn = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): (-0.4, 1.0)}, modifier_shrink_k=0)
+    dn = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): (-0.4, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)
     check("modifier -0.4 → score 50-6=44", dn[-1].normalized_score == 44)
-    miss = compute_silver(flat, baseline_method="zscore", modifiers={("fintech", d_last): (0.9, 1.0)}, modifier_shrink_k=0)
+    miss = compute_silver(flat, baseline_method="zscore", modifiers={("fintech", d_last): (0.9, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)
     check("modifier 키 부재 → 불변(50)", all(r.normalized_score == 50 for r in miss))
     check("modifiers None → 불변(50)", all(r.normalized_score == 50 for r in compute_silver(flat)))
     # 상한 클램프 — zscore 급등(95)에 +1.0 → 95+15=110 → 100.
     jump = _series("ai-data", [10, 10, 10, 10, 12])
-    hi = compute_silver(jump, baseline_method="zscore", modifiers={("ai-data", date(2026, 6, 5)): (1.0, 1.0)}, modifier_shrink_k=0)
+    hi = compute_silver(jump, baseline_method="zscore", modifiers={("ai-data", date(2026, 6, 5)): (1.0, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)
     check("modifier 상한 클램프 100", hi[-1].normalized_score == 100)
     # 하한 클램프 — pct_change 급락(5)에 -1.0 → 5-15=-10 → 0.
     drop = _series("fintech", [100, 50])
-    lo = compute_silver(drop, baseline_method="pct_change", modifiers={("fintech", date(2026, 6, 2)): (-1.0, 1.0)}, modifier_shrink_k=0)
+    lo = compute_silver(drop, baseline_method="pct_change", modifiers={("fintech", date(2026, 6, 2)): (-1.0, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)
     check("modifier 하한 클램프 0", lo[-1].normalized_score == 0)
     # 배지 재계산 — tilt 가 점수를 85 이상으로 올리면 태풍급(momentum 은 활동 기반 그대로).
     ma = _series("ai-data", [30, 30, 30, 46])  # ma_ratio score 77·momentum 40 → 급상승
     plain = compute_silver(ma, baseline_method="ma_ratio")[-1]
     check("tilt 전 score 77·급상승", plain.normalized_score == 77 and plain.status_badge == "급상승")
-    tilted = compute_silver(ma, baseline_method="ma_ratio", modifiers={("ai-data", date(2026, 6, 4)): (0.7, 1.0)}, modifier_shrink_k=0)[-1]
+    tilted = compute_silver(ma, baseline_method="ma_ratio", modifiers={("ai-data", date(2026, 6, 4)): (0.7, 1.0, 0.0, 0.0)}, modifier_shrink_k=0)[-1]
     check("tilt 후 score>=85 → 태풍급", tilted.normalized_score >= 85 and tilted.status_badge == "태풍급")
     check("tilt 후에도 momentum 활동 기반 유지", tilted.momentum_pct == plain.momentum_pct)
 
 
 # ---------------------------------------------------------------------------
-# modifier 트레일링 윈도우 — carry-forward·평균·윈도우 이탈 (shrinkage 끔)
+# modifier 트레일링 윈도우 — carry-forward·평균·윈도우 이탈 (shrinkage 끔, 텍스트축)
 # ---------------------------------------------------------------------------
 def test_modifier_trailing_window() -> None:
     flat5 = _series("ai-data", [5, 5, 5, 5, 5])  # 6/1~6/5, 전부 score 50
     # carry-forward — 6/3 modifier 가 같은 날 신호 없는 6/5 에도 직전 윈도우로 반영.
     cf = compute_silver(
         flat5, baseline_method="zscore",
-        modifiers={("ai-data", date(2026, 6, 3)): (0.4, 1.0)}, modifier_shrink_k=0,
+        modifiers={("ai-data", date(2026, 6, 3)): (0.4, 1.0, 0.0, 0.0)}, modifier_shrink_k=0,
     )
     by_date = {r.reference_date: r.normalized_score for r in cf}
     check("carry-forward: 6/5 = 50+6=56", by_date[date(2026, 6, 5)] == 56)
@@ -227,7 +227,10 @@ def test_modifier_trailing_window() -> None:
     # 트레일링 평균 — 같은 윈도우의 +1.0·-1.0 이 상쇄되어 tilt 0.
     avg = compute_silver(
         flat5, baseline_method="zscore",
-        modifiers={("ai-data", date(2026, 6, 4)): (1.0, 1.0), ("ai-data", date(2026, 6, 5)): (-1.0, 1.0)},
+        modifiers={
+            ("ai-data", date(2026, 6, 4)): (1.0, 1.0, 0.0, 0.0),
+            ("ai-data", date(2026, 6, 5)): (-1.0, 1.0, 0.0, 0.0),
+        },
         modifier_shrink_k=0,
     )
     check("트레일링 평균: 6/5 = (+1-1)/2=0 → 50", avg[-1].normalized_score == 50)
@@ -235,7 +238,7 @@ def test_modifier_trailing_window() -> None:
     flat10 = _series("ai-data", [5] * 10)  # 6/1~6/10
     fall = compute_silver(
         flat10, baseline_method="zscore",
-        modifiers={("ai-data", date(2026, 6, 1)): (0.6, 1.0)}, modifier_window_days=7, modifier_shrink_k=0,
+        modifiers={("ai-data", date(2026, 6, 1)): (0.6, 1.0, 0.0, 0.0)}, modifier_window_days=7, modifier_shrink_k=0,
     )
     fd = {r.reference_date: r.normalized_score for r in fall}
     check("윈도우 내(6/7) = 50+9=59", fd[date(2026, 6, 7)] == 59)
@@ -243,24 +246,60 @@ def test_modifier_trailing_window() -> None:
 
 
 # ---------------------------------------------------------------------------
-# modifier shrinkage — 관측수 적으면 0 으로 수축(단일 관측 ±1 노이즈 억제)
+# modifier shrinkage — 관측수 적으면 0 으로 수축(단일 관측 ±1 노이즈 억제, 텍스트축)
 # ---------------------------------------------------------------------------
 def test_modifier_shrinkage() -> None:
     flat = _series("ai-data", [5, 5, 5, 5, 5])  # 전부 score 50
     d = date(2026, 6, 5)
     # 단일 관측(weight 1) +1.0, shrink_k=8 → 1×1/(1+8)=0.111, tilt=15×0.111≈1.67 → 52.
-    w1 = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d): (1.0, 1.0)})[-1]
+    w1 = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d): (1.0, 1.0, 0.0, 0.0)})[-1]
     check("shrinkage: 단일 관측 +1.0 → 52(노이즈 억제)", w1.normalized_score == 52)
     # 많은 관측(weight 100) +1.0 → 100/108≈0.926, tilt≈13.9 → 64.
-    w100 = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d): (1.0, 100.0)})[-1]
+    w100 = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d): (1.0, 100.0, 0.0, 0.0)})[-1]
     check("shrinkage: 다수 관측 +1.0 → 64(거의 전부 반영)", w100.normalized_score == 64)
     check("shrinkage: 관측 많을수록 tilt 큼", w100.normalized_score > w1.normalized_score)
     # 윈도우 내 관측 누적 — 2일치 단일관측이 합산 weight 2 → 50+3=53(> 단일 52).
     two = compute_silver(
         flat, baseline_method="zscore",
-        modifiers={("ai-data", date(2026, 6, 4)): (1.0, 1.0), ("ai-data", d): (1.0, 1.0)},
+        modifiers={
+            ("ai-data", date(2026, 6, 4)): (1.0, 1.0, 0.0, 0.0),
+            ("ai-data", d): (1.0, 1.0, 0.0, 0.0),
+        },
     )[-1]
     check("shrinkage: 윈도우 관측 누적(W=2) → 53", two.normalized_score == 53)
+
+
+# ---------------------------------------------------------------------------
+# modifier 축 가중 결합 — 텍스트 관측수가 시장을 압도해도 시장 방향이 묻히지 않음
+# ---------------------------------------------------------------------------
+def test_modifier_axis_balance() -> None:
+    flat = _series("ai-data", [5, 5, 5, 5])  # 전부 score 50
+    d = date(2026, 6, 4)
+    # 텍스트 +1(관측 100) vs 시장 -1(관측 4): 관측수 무관 1:1 결합 → (1-1)/2=0 → 50.
+    bal = compute_silver(
+        flat, baseline_method="zscore",
+        modifiers={("ai-data", d): (1.0, 100.0, -1.0, 4.0)}, modifier_shrink_k=0,
+    )[-1]
+    check("축 결합: 텍스트100 vs 시장4 도 1:1 → 상쇄 50(시장 안 묻힘)", bal.normalized_score == 50)
+    # 시장축만 존재(텍스트 관측 0) → 시장 -1 그대로 → 50-15=35.
+    mkt_only = compute_silver(
+        flat, baseline_method="zscore",
+        modifiers={("ai-data", d): (0.0, 0.0, -1.0, 1.0)}, modifier_shrink_k=0,
+    )[-1]
+    check("축 결합: 시장축만 -1 → 35", mkt_only.normalized_score == 35)
+    # 텍스트축만 존재 → +1 그대로 → 65.
+    txt_only = compute_silver(
+        flat, baseline_method="zscore",
+        modifiers={("ai-data", d): (1.0, 1.0, 0.0, 0.0)}, modifier_shrink_k=0,
+    )[-1]
+    check("축 결합: 텍스트축만 +1 → 65", txt_only.normalized_score == 65)
+    # 축 가중 오버라이드 — 텍스트2:시장1, 텍스트+1·시장-1 → (2-1)/3=0.333 → 50+5=55.
+    weighted = compute_silver(
+        flat, baseline_method="zscore",
+        modifiers={("ai-data", d): (1.0, 1.0, -1.0, 1.0)}, modifier_shrink_k=0,
+        text_axis_weight=2.0, market_axis_weight=1.0,
+    )[-1]
+    check("축 결합: 가중 2:1 → 55", weighted.normalized_score == 55)
 
 
 def main() -> int:
@@ -278,6 +317,7 @@ def main() -> int:
     test_modifier_tilt()
     test_modifier_trailing_window()
     test_modifier_shrinkage()
+    test_modifier_axis_balance()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 
