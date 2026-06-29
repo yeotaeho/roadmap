@@ -12,6 +12,7 @@ from domain.market_insight.hub.services.pulse_pipeline import (  # noqa: E402
     AxisSignal,
     DEFAULT_AXIS_WEIGHTS,
     SignalInput,
+    center_text_sentiment,
     compute_silver,
     fuse_signals,
     project_to_gold,
@@ -302,6 +303,28 @@ def test_modifier_axis_balance() -> None:
     check("축 결합: 가중 2:1 → 55", weighted.normalized_score == 55)
 
 
+# ---------------------------------------------------------------------------
+# 감성 중심화 — 전 섹터 양수 쏠림(LLM bias) 제거, 평균 대비 상대값
+# ---------------------------------------------------------------------------
+def test_center_text_sentiment() -> None:
+    d = date(2026, 6, 4)
+    # 전부 양수(0.8·0.4·0.6) → baseline 0.6 → 중심화 0.2·-0.2·0.0 (평균 대비 상대).
+    out = center_text_sentiment({
+        ("ai-data", d): (0.8, 1.0),
+        ("fintech", d): (0.4, 1.0),
+        ("bio-health", d): (0.6, 1.0),
+    })
+    check("중심화: 평균(0.6) 위 → 양수", abs(out[("ai-data", d)][0] - 0.2) < 1e-9)
+    check("중심화: 평균 아래 → 음수", abs(out[("fintech", d)][0] + 0.2) < 1e-9)
+    check("중심화: 평균값 → 0", abs(out[("bio-health", d)][0]) < 1e-9)
+    check("중심화: 합 0 근처(양수 오프셋 제거)", abs(sum(v for v, _ in out.values())) < 1e-9)
+    check("중심화: weight 보존", out[("ai-data", d)][1] == 1.0)
+    # 관측수 가중 baseline — (1.0,3)·(0.0,1) → baseline 0.75.
+    w = center_text_sentiment({("a", d): (1.0, 3.0), ("b", d): (0.0, 1.0)})
+    check("중심화: 관측수 가중 baseline(0.75)", abs(w[("a", d)][0] - 0.25) < 1e-9 and abs(w[("b", d)][0] + 0.75) < 1e-9)
+    check("중심화: 빈 입력 → 빈 출력", center_text_sentiment({}) == {})
+
+
 def main() -> int:
     test_zscore_jump()
     test_other_methods()
@@ -318,6 +341,7 @@ def main() -> int:
     test_modifier_trailing_window()
     test_modifier_shrinkage()
     test_modifier_axis_balance()
+    test_center_text_sentiment()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

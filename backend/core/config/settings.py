@@ -169,6 +169,20 @@ class Settings(BaseSettings):
     )
     llm_embed_dim: int = Field(default=3072, validation_alias="LLM_EMBED_DIM")
 
+    # Pulse 방향성 modifier 튜닝(감성·시장 방향 가산 이동) — 실사용 데이터 축적 후 .env 로 재조정.
+    pulse_sentiment_k: float = Field(default=15.0, validation_alias="PULSE_SENTIMENT_K")
+    pulse_modifier_window_days: int = Field(
+        default=7, validation_alias="PULSE_MODIFIER_WINDOW_DAYS"
+    )
+    pulse_modifier_shrink_k: float = Field(default=8.0, validation_alias="PULSE_MODIFIER_SHRINK_K")
+    pulse_text_axis_weight: float = Field(default=1.0, validation_alias="PULSE_TEXT_AXIS_WEIGHT")
+    pulse_market_axis_weight: float = Field(
+        default=1.0, validation_alias="PULSE_MARKET_AXIS_WEIGHT"
+    )
+    pulse_center_text_sentiment: bool = Field(
+        default=True, validation_alias="PULSE_CENTER_TEXT_SENTIMENT"
+    )
+
     # Open DART (Bronze — raw_economic_data 등)
     dart_api_key: Optional[str] = Field(
         default=None,

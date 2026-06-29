@@ -126,6 +126,28 @@ def _normalize(value: float, window: list[float], method: str) -> tuple[int, flo
     return score, round(momentum_pct, 2)
 
 
+def center_text_sentiment(
+    text_values: dict[tuple[str, date], tuple[float, float]],
+) -> dict[tuple[str, date], tuple[float, float]]:
+    """텍스트 감성을 전체 관측수-가중 평균(baseline) 대비로 중심화한다. 순수 함수.
+
+    LLM 감성이 산업 뉴스 특성상 양(陽)으로 쏠려 전 섹터 양수 오프셋이 되는 것을 제거하고,
+    '평균보다 긍정/부정인가'의 상대 변별로 바꾼다. baseline = Σ(value×weight)/Σweight,
+    centered = clamp(value − baseline, -1, 1). 시장 방향(이미 ±대칭)은 중심화하지 않는다.
+    """
+    total_v = 0.0
+    total_w = 0.0
+    for v, w in text_values.values():
+        total_v += v * w
+        total_w += w
+    if total_w <= 0:
+        return dict(text_values)
+    baseline = total_v / total_w
+    return {
+        k: (max(-1.0, min(1.0, v - baseline)), w) for k, (v, w) in text_values.items()
+    }
+
+
 def _trailing_axis(
     dates: list[date],
     vals: list[float],

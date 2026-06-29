@@ -11,6 +11,7 @@ from domain.market_insight.hub.services.pulse_pipeline import (
     AxisSignal,
     PulseGoldRow,
     PulseSilverRow,
+    center_text_sentiment,
 )
 
 # economic industry_sector/group_name·people HRDNET sector_name 코드 → sectors.slug.
@@ -595,6 +596,7 @@ class PulseRepository(BaseRepository):
         text_confidence_min: float = 0.0,
         text_prompt_version: str | None = None,
         min_text_rows: int = 1,
+        center_text: bool = True,
     ) -> dict[tuple[str, object], tuple[float, float, float, float]]:
         """(섹터, 발생일) → (감성 value, 감성 관측수, 시장 value, 시장 관측수) 를 반환한다.
 
@@ -602,7 +604,8 @@ class PulseRepository(BaseRepository):
         compute_silver 에서 축별로 따로 수행한 뒤 고정 축 가중으로 합쳐, 텍스트 행수가
         시장 티커수를 압도해도 시장 방향이 묻히지 않게 한다('둘 다 의미 있게'). 관측수는
         축별 shrinkage 입력 — 관측이 적은 축은 그 축 자체가 0 으로 수축한다. 한 축이 없으면
-        그 축 관측수 0. text_prompt_version 이 None 이면 감성 축 제외.
+        그 축 관측수 0. text_prompt_version 이 None 이면 감성 축 제외. center_text 면 텍스트
+        감성을 전체 평균 대비로 중심화해 LLM 양수 편향을 제거한다(상대 변별).
         """
         # 텍스트 감성 — (평균 감성, 행수).
         text_mod: dict[tuple[str, object], tuple[float, float]] = {}
@@ -615,6 +618,8 @@ class PulseRepository(BaseRepository):
             ).all():
                 if r.avg_sent is not None and r.n >= min_text_rows:
                     text_mod[(r.sector_slug, r.ref_date)] = (float(r.avg_sent), float(r.n))
+        if center_text:
+            text_mod = center_text_sentiment(text_mod)
 
         # 시장 방향 — turnover 가중 등락 부호(value) + 티커 수(관측수).
         mkt_num: dict[tuple[str, object], float] = {}
