@@ -74,6 +74,8 @@ from domain.user_intelligence.models.bases.user_persona import UserPersona  # Pe
 from domain.hrowth_journey.models.bases.user_roadmap import UserRoadmap  # Roadmap
 from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roadmap
 from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
+from domain.market_insight.models.bases.sector_master import Sector, SubSector  # Sector master
+from domain.task.models.bases.task import Task  # Task
 
 target_metadata = Base.metadata
 
