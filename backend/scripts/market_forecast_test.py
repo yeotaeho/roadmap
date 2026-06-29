@@ -25,6 +25,10 @@ from domain.market_insight.spokes.infra.timesfm_forecaster import (  # noqa: E40
     point_to_return,
     quantile_to_band_rel,
 )
+from domain.market_insight.models.bases.market_forecast_log import MarketForecastLog  # noqa: E402
+from domain.market_insight.models.bases.refined_market_forecast_silver import (  # noqa: E402
+    RefinedMarketForecastSilver,
+)
 
 PASS = 0
 FAIL = 0
@@ -137,6 +141,13 @@ def test_fake_forecaster() -> None:
     check("fake AAA 값", out["AAA"] == (10.0, 0.1))
 
 
+def test_orm_tables() -> None:
+    check("Silver 테이블명", RefinedMarketForecastSilver.__tablename__ == "refined_market_forecast_silver")
+    check("Gold 테이블명", MarketForecastLog.__tablename__ == "market_forecast_log")
+    cols = set(RefinedMarketForecastSilver.__table__.columns.keys())
+    check("Silver 필수 컬럼", {"sector_slug", "reference_date", "forecast_score", "confidence"} <= cols)
+
+
 def main() -> None:
     test_score_and_badge()
     test_negative_and_neutral()
@@ -148,6 +159,7 @@ def main() -> None:
     test_point_to_return()
     test_quantile_band_rel()
     test_fake_forecaster()
+    test_orm_tables()
     print(f"\n{PASS} PASS, {FAIL} FAIL")
     sys.exit(1 if FAIL else 0)
 

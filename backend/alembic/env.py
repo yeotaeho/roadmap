@@ -77,6 +77,12 @@ from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
 from domain.market_insight.models.bases.sector_master import Sector, SubSector  # Sector master
 from domain.task.models.bases.task import Task  # Task
 from domain.master.models.bases.ncs_competency_master import NcsCompetencyMaster  # NCS 마스터
+from domain.market_insight.models.bases.refined_market_forecast_silver import (  # Silver
+    RefinedMarketForecastSilver,
+)
+from domain.market_insight.models.bases.market_forecast_log import (  # Gold
+    MarketForecastLog,
+)
 
 target_metadata = Base.metadata
 
