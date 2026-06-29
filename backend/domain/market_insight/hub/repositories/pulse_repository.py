@@ -533,14 +533,16 @@ class PulseRepository(BaseRepository):
         text_confidence_min: float = 0.0,
         text_prompt_version: str | None = None,
         min_text_rows: int = 1,
-    ) -> dict[tuple[str, object], float]:
-        """(섹터, 발생일) → 방향성 modifier(-1~1) 를 반환한다. Pulse 점수 가산 이동 입력.
+    ) -> dict[tuple[str, object], tuple[float, float]]:
+        """(섹터, 발생일) → (방향성 value -1~1, 관측수 weight) 를 반환한다. Pulse 가산 이동 입력.
 
-        텍스트 감성(LLM)과 시장 방향(전일 대비 등락)을 결합한다. 둘 다 있으면 평균,
-        한쪽만 있으면 그 값. 신호 없는 (섹터, 일자)는 키 부재 → tilt 0(현 동작 유지).
-        text_prompt_version 이 None 이면 텍스트 감성은 합류시키지 않는다.
+        텍스트 감성(LLM)과 시장 방향(전일 대비 등락)을 관측수 가중으로 결합한다. value 는
+        (Σ감성 + 시장방향×티커수) / (행수 + 티커수), weight 는 행수 + 티커수다. weight 는
+        트레일링 평균의 가중·shrinkage 입력 — 단일 관측일의 ±1 노이즈를 억제한다(compute_silver).
+        신호 없는 (섹터, 일자)는 키 부재 → tilt 0. text_prompt_version 이 None 이면 감성 제외.
         """
-        text_mod: dict[tuple[str, object], float] = {}
+        # 텍스트 감성 — (평균 감성, 행수).
+        text_mod: dict[tuple[str, object], tuple[float, float]] = {}
         if text_prompt_version is not None:
             for r in (
                 await self.session.execute(
@@ -549,11 +551,12 @@ class PulseRepository(BaseRepository):
                 )
             ).all():
                 if r.avg_sent is not None and r.n >= min_text_rows:
-                    text_mod[(r.sector_slug, r.ref_date)] = float(r.avg_sent)
+                    text_mod[(r.sector_slug, r.ref_date)] = (float(r.avg_sent), float(r.n))
 
-        # 시장 방향 — turnover 가중으로 (섹터×거래일) 등락 부호 평균.
+        # 시장 방향 — turnover 가중 등락 부호(value) + 티커 수(weight).
         mkt_num: dict[tuple[str, object], float] = {}
         mkt_den: dict[tuple[str, object], float] = {}
+        mkt_cnt: dict[tuple[str, object], float] = {}
         for r in (await self.session.execute(_MARKET_DIRECTION_SQL)).all():
             slug = _MARKET_SOURCE_MAP.get(r.source_type)
             if not slug or r.tv is None:
@@ -562,13 +565,21 @@ class PulseRepository(BaseRepository):
             w = float(r.tv)
             mkt_num[key] = mkt_num.get(key, 0.0) + w * float(r.dir)
             mkt_den[key] = mkt_den.get(key, 0.0) + w
-        mkt_mod = {k: mkt_num[k] / mkt_den[k] for k in mkt_num if mkt_den[k] > 0}
+            mkt_cnt[key] = mkt_cnt.get(key, 0.0) + 1.0
+        mkt_mod = {k: (mkt_num[k] / mkt_den[k], mkt_cnt[k]) for k in mkt_num if mkt_den[k] > 0}
 
-        out: dict[tuple[str, object], float] = {}
+        # 결합 — 관측수 가중 평균, weight 합산.
+        out: dict[tuple[str, object], tuple[float, float]] = {}
         for key in set(text_mod) | set(mkt_mod):
-            vals = [m[key] for m in (text_mod, mkt_mod) if key in m]
-            net = sum(vals) / len(vals)
-            out[key] = max(-1.0, min(1.0, net))
+            num = 0.0
+            wsum = 0.0
+            for src in (text_mod, mkt_mod):
+                if key in src:
+                    v, w = src[key]
+                    num += v * w
+                    wsum += w
+            if wsum > 0:
+                out[key] = (max(-1.0, min(1.0, num / wsum)), wsum)
         return out
 
     async def fetch_unclassified_text_rows(
