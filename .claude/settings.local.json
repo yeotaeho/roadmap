@@ -4,19 +4,72 @@
       "WebFetch(domain:wowtale.net)",
       "Bash(Get-ChildItem -Path \"C:\\\\project\\\\roadmap\\\\backend\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(xargs grep -l \"is_active\")",
+      "WebSearch",
+      "WebFetch(domain:finance.yahoo.com)",
+      "WebFetch(domain:www.kobis.or.kr)",
+      "WebFetch(domain:stockanalysis.com)",
+      "WebFetch(domain:www.data.go.kr)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:www.etoday.co.kr)",
+      "WebFetch(domain:www.bokjiro.go.kr)",
+      "WebFetch(domain:www.fsc.go.kr)",
+      "WebFetch(domain:kosis.kr)",
+      "WebFetch(domain:www.klnews.co.kr)",
+      "WebFetch(domain:www.dailycar.co.kr)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:www.etnews.com)",
+      "WebFetch(domain:www.bkn24.com)",
+      "WebFetch(domain:www.newswire.co.kr)",
+      "WebFetch(domain:platum.kr)",
+      "WebFetch(domain:query1.finance.yahoo.com)",
+      "WebFetch(domain:alphasquare.co.kr)",
+      "WebFetch(domain:rss.etoday.co.kr)",
+      "WebFetch(domain:www.motorgraph.com)",
+      "WebFetch(domain:www.nlic.go.kr)",
+      "WebFetch(domain:www.eduplusnews.com)",
+      "WebFetch(domain:www.apparelnews.co.kr)",
+      "WebFetch(domain:rss.etnews.com)",
+      "WebFetch(domain:news.sbs.co.kr)",
+      "WebFetch(domain:www.autoelectronics.co.kr)",
+      "WebFetch(domain:www.mohw.go.kr)",
+      "WebFetch(domain:developers.naver.com)",
+      "WebFetch(domain:www.retailtalk.co.kr)",
+      "WebFetch(domain:www.cosinkorea.com)",
+      "WebFetch(domain:chargeinfo.ksga.org)",
+      "WebFetch(domain:www.welfarenews.net)",
+      "WebFetch(domain:www.beautynury.com)",
+      "WebFetch(domain:www.bokjitimes.com)",
+      "WebFetch(domain:www.bizinfo.go.kr)",
+      "WebFetch(domain:www.cmn.co.kr)",
+      "WebFetch(domain:www.top-rider.com)",
+      "WebFetch(domain:www.thebk.co.kr)",
+      "WebFetch(domain:flixpatrol.com)",
+      "WebFetch(domain:rss.hankyung.com)",
+      "WebFetch(domain:www.hankyung.com)",
+      "WebFetch(domain:www.sedaily.com)",
+      "WebFetch(domain:www.asiae.co.kr)",
+      "Bash(python3 -c \"import curl_cffi,bs4,yaml; v=curl_cffi.__version__.split\\('.'\\); assert \\(int\\(v[0]\\),int\\(v[1]\\)\\)>=\\(0,15\\)\")",
+      "Bash(pip install *)",
+      "Bash(curl -s \"https://pypistats.org/api/packages/langchain/recent\")"
     ]
   },
+  "enabledMcpjsonServers": [
+    "code-review-graph",
+    "datacommons"
+  ],
   "mcpServers": {
     "neon-db": {
-  "command": "npx",
-  "args": [
-    "-y",
-    "@neondatabase/mcp-server-neon",
-    "start",
-    "napi_13h0kjijjbnmyh3a928dse81rq321gp8725wqjypr3w0ilgyv90dulnouyftfjmn"
-  ]
-},
+      "command": "npx",
+      "args": [
+        "-y",
+        "@neondatabase/mcp-server-neon",
+        "start",
+        "napi_13h0kjijjbnmyh3a928dse81rq321gp8725wqjypr3w0ilgyv90dulnouyftfjmn"
+      ]
+    },
     "brave-search": {
       "command": "npx",
       "args": [

@@ -76,6 +76,7 @@ from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roa
 from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
 from domain.market_insight.models.bases.sector_master import Sector, SubSector  # Sector master
 from domain.task.models.bases.task import Task  # Task
+from domain.master.models.bases.ncs_competency_master import NcsCompetencyMaster  # NCS 마스터
 
 target_metadata = Base.metadata
 

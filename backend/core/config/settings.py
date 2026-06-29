@@ -285,6 +285,23 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("KOBIS_API_KEY", "KOBIS_SERVICE_KEY"),
     )
 
+    # NCS 국가직무능력표준 기준정보 조회 (data.go.kr 15128213, 역량 온톨로지 마스터)
+    ncs_standard_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("NCS_STANDARD_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
+    )
+    # NCS 관련 정보 (data.go.kr 15063879, 능력단위 정의·자격 연계 보충)
+    ncs_info_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("NCS_INFO_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
+    )
+
+    # 온통청년 청년정책 API (youthcenter.go.kr, Chance 탭 청년 기회 인벤토리)
+    youth_policy_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias="YOUTH_POLICY_SERVICE_KEY",
+    )
+
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)
     #   - dev: SCHEDULER_ENABLED=false 로 끄고 수동 트리거(/bronze/...) 사용 권장
     #   - prod: true 로 두고 KST 기준 매일 오전 9시 일일 잡 + 월요일 주간 잡

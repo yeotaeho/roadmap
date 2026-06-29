@@ -1,4 +1,4 @@
-# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.4 · 2026-06-27 갱신)
+# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.5 · 2026-06-29 갱신)
 
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
@@ -36,6 +36,7 @@
 | **Platum RSS** | `PLATUM_*` | RSS | 일별 | ✅ | `platum_collector.py` |
 | **벤처스퀘어 RSS** | `VSQUARE_*` | RSS | 일별 | ✅ | `venturesquare_collector.py` |
 | **스타트업레시피 RSS** | `STARTUPRECIPE_*` | RSS | 일별 | ✅ | `startup_recipe_collector.py` — `investment_amount` 미추출 |
+| **KOBIS 박스오피스** | `KOBIS_BOXOFFICE_DAILY` | Open API | 일별 | ✅ | `kobis_box_office_collector.py` — 콘텐츠 소비(수요) 신호, `raw_economic_data` 적재 |
 | **DART 주요사항보고(B)·지분공시(D)** | `DART_*` | Open API | 일별 | ✅ | `dart_collector.py` — M&A·증자·대량보유 |
 | **DART 정기공시(A)** | `DART_PERIODIC_*` | Open API | 주별 | ✅ | `dart_periodic_collector.py` — 사업보고서 R&D/CAPEX |
 | **DART 발행공시(C) — IPO** | `DART_IPO_DISCLOSURE` | Open API | 일별 | ✅ | `dart_ipo_collector.py` — 증권신고서(지분증권) 접수 → 상장 2~3개월 전 신호 |
@@ -87,6 +88,7 @@
 | **기업 기술 블로그 RSS** | `INNOVATION_TECHBLOG_KR` | RSS | 월별 | ✅ | 네이버D2·카카오Tech 등 108건 |
 | **관세청 수출 통계** | `INNOVATION_CUSTOMS_EXPORT` | Open API | 월별 | ✅ | HS 그룹 월간 집계라 구조적 소량(26건) |
 | **KISTEP 기술 보고서** | `INNOVATION_KISTEP_REPORT` | 수집 | 주별 | ✅ | 소량(4건). Phase 1·2에서 KIAT와 함께 섹터분류·tech_demand 입력 |
+| **KIAT 기술은행 수요기술** | `INNOVATION_KIAT_TECH_DEMAND` | Open API XML | 주별 | ✅ | `tech_demand_collector.py` — 기업 기술수요 신호, `raw_innovation_data` |
 
 > **KIPRIS API 핵심 파라미터**: 인증 파라미터명은 `ServiceKey`이며 날짜는
 > `applicationDate=YYYYMMDD~YYYYMMDD` 형식이다. IPC 필터 대신 검증된
@@ -103,12 +105,14 @@
 
 | 출처 | source_type | 수집 방법 | 스케줄 | 구현 | 비고 |
 |------|------------|-----------|--------|------|------|
-| **네이버 DataLab 검색량** | `DISCOURSE_NAVER_DATALAB` | Open API | 주별 | ✅ | 논리 분류 People/Demand, 현재는 `raw_economic_data` 적재 |
+| **네이버 DataLab 검색량** | `DISCOURSE_NAVER_DATALAB` | Open API | 주별 | ✅ | 논리 분류 People/Demand, 물리 경로 `collectors/economic/naver/`, `raw_economic_data` 적재 |
 | **고용24 직업정보** | `PEOPLE_WORKNET_JOB` | Open API XML | 월별 | ✅ | 직업 분류 492건. 채용 건수가 아닌 `JOB_TAXONOMY_SIGNAL` |
 | **고용24 국민내일배움카드 훈련과정** | `PEOPLE_HRDNET_TRAINING` | Open API XML | 월별 | ✅ | 12개 NCS 분야 과정 수·훈련비·정원 집계 |
+| **고용24 채용공고 (직종별 수요)** | `PEOPLE_WORK24_RECRUIT` | Open API XML | — | 🦴 골격 | `goyong24/recruit_collector.py` — **기업회원 전용 API**, 개인회원 authKey 불가(2026-06-23 live 확인) |
+| **사람인 OpenAPI** | `PEOPLE_SARAMIN_RECRUIT` | Open API | 주별 | ✅ | `saramin_recruit_collector.py` — 키워드별 `jobs.total` 수집(일 500콜 한도), `DEMAND_HIRING_SIGNAL` |
+| **커리어넷 직업·학과 정보** | `PEOPLE_CAREERNET_*` | Open API JSON | 월별 | ✅ | `careernet_collector.py` — 직업정보·학과정보, `possibility`(발전가능성) 포함. `prospect` 필드는 API 빈값 반환 |
 | **Google Trends (한국)** | `PEOPLE_GTRENDS_*` | PyTrends | — | ❌ | 글로벌 vs 한국 비교 |
 | **원티드 채용 공고** | `PEOPLE_WANTED_*` | Playwright | — | ❌ P1 | IT/스타트업 기술 스택 수요 |
-| **사람인 OpenAPI** | `PEOPLE_SARAMIN_*` | Open API | — | ❌ | 채용 공고 수량·요구 기술 |
 
 > **DataLab vs 뉴스 기사 수 차이**: DataLab = 사용자 검색 **수요**(선행), 뉴스 기사 수 = 언론 **공급**(후행). 두 시계열을 Silver에서 교차하면 "검색 급증 → 뉴스 급증" 패턴 탐지 가능.
 > **DataLab backfill**: `start_date` 파라미터로 최대 1년치 과거 수집 가능.
@@ -121,6 +125,7 @@
 |------|-----------|-------------|------|------|
 | **언론사 뉴스 RSS** (`DISCOURSE_NEWS_RSS`) | feedparser + `extract_article_body` | `raw_discourse_data` | ✅ | 일별 450건. 본문 보강(`extract_article_body`)으로 content_body NULL 36.2%→0.2% |
 | **정부 정책브리핑** (`DISCOURSE_GOV_REPORT`) | korea.kr RSS | `raw_discourse_data` | ✅ | 일별 50건. 스케줄러 `_job_gov_report` 등록(`1ea91c3`) |
+| **네이버 뉴스 기사 수** (`NAVER_SEARCH_NEWS`) | Naver Search API | `raw_discourse_data` (또는 `raw_economic_data`) | 일별 | ✅ | `naver_search_collector.py` (`collectors/economic/naver/`) — 키워드별 일별 언론 보도량(공급 측). DataLab 수요와 교차 분석용 |
 | Yonhap / JoongAng Daily RSS | feedparser | `raw_discourse_data` | ❌ | 공식 뉴스 |
 | 나무위키 최근 변경 | GitHub Extractor / Playwright | `raw_discourse_data` | ❌ | 신조어·급부상 트렌드 빠름 (강력 추천) |
 | Theqoo / 에펨코리아 | Playwright | `raw_discourse_data` | ❌ | 20~30대 실시간 반응 |
@@ -142,7 +147,7 @@
 | **JOB** | 워크넷 정부지원일자리 | Open API | ❌ | 고용부 주관 |
 | **JOB** | 원티드 | Playwright | ❌ P1 | IT/스타트업 채용 |
 | **CONTEST** | 위비티(Wevity) | 스크래핑 | ❌ | 공모전·해커톤 최다 |
-| **BID** | 조달청 나라장터(KONEPS) | Open API | ❌ P1 | 정부 입찰 공고 통합 — "정부 자본이 민간으로 흐르는" 거시 지표 |
+| **BID** | 조달청 나라장터(KONEPS) | Open API | 🦴 골격 | `narajangteo_collector.py` 존재 — 미완성. 정부 입찰 공고 통합 — "정부 자본이 민간으로 흐르는" 거시 지표 |
 
 ---
 
@@ -151,8 +156,9 @@
 | 출처 | 수집 방법 | 구현 | 비고 |
 |------|-----------|------|------|
 | K-예비유니콘 선정 기업현황 | CSV 다운로드 | ❌ | 정부 선정 유망 스타트업 |
-| 중소벤처기업부 벤처기업명단 | CSV 다운로드 | ❌ | 벤처인증 전체 명단 |
+| 중소벤처기업부 벤처기업명단 | data.go.kr Open API (odcloud) | ✅ | `venture_list_collector.py` — `VENTURE_CERTIFIED`, 39,668건 (2026-06-01판) |
 | ALIO 공공기관 기본정보 | Open API | ❌ | 기관 마스터 |
+| DART 기업개황 | Open API | 🦴 골격 | `dart_overview_collector.py` — corpCode.xml 매핑 선행 필요. 현재 항상 빈 결과 반환 |
 
 ---
 

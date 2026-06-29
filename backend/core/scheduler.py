@@ -83,6 +83,9 @@ from domain.master.hub.services.bronze_discourse_ingest_service import (
 from domain.master.hub.services.bronze_company_ingest_service import (
     BronzeCompanyIngestService,
 )
+from domain.master.hub.services.bronze_ncs_ingest_service import (
+    BronzeNcsIngestService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -519,6 +522,51 @@ async def _job_saramin_recruit() -> dict[str, Any] | None:
         ).ingest_saramin_recruit()
 
 
+async def _job_ncs_standard() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "ncs_standard_service_key", None)
+    if not key:
+        logger.warning("[scheduler] ncs_standard_service_key 없음 — NCS 역량 마스터 잡 스킵")
+        return None
+    async with AsyncSessionLocal() as session:
+        return await BronzeNcsIngestService(
+            session, ncs_standard_key=key
+        ).ingest_ncs_standard()
+
+
+async def _job_youth_policy() -> dict[str, Any] | None:
+    settings = get_settings()
+    key = getattr(settings, "youth_policy_service_key", None)
+    if not key:
+        logger.warning("[scheduler] youth_policy_service_key 없음 — 온통청년 잡 스킵")
+        return None
+    results: dict[str, Any] = {}
+    async with AsyncSessionLocal() as session:
+        svc = BronzeOpportunityIngestService(session, youth_policy_service_key=key)
+        for method_name in ("ingest_youth_policy", "ingest_youth_center", "ingest_youth_content", "ingest_youth_policy_direction"):
+            try:
+                r = await getattr(svc, method_name)()
+                results[method_name] = r
+            except Exception:
+                logger.exception("[scheduler] %s 실패", method_name)
+    return results
+
+
+async def _job_pypi_downloads() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_pypi_downloads()
+
+
+async def _job_npm_downloads() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_npm_downloads()
+
+
+async def _job_hf_trending() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await BronzeInnovationIngestService(session).ingest_hf_trending()
+
+
 # ---------------------------------------------------------------------------
 # 등록 & 라이프사이클
 # ---------------------------------------------------------------------------
@@ -704,6 +752,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("news_rss",          _job_news_rss),
     ("gov_report",        _job_gov_report),
     ("kobis_box_office",  _job_kobis_box_office),
+    ("youth_policy",      _job_youth_policy),
     # 정제 체인은 순서 보장을 위해 단일 파이프라인 잡으로 등록(_REFINE_PIPELINE).
     ("insight_refine",    _job_insight_refine_pipeline),
 )
@@ -721,6 +770,9 @@ _WEEKLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("github_trending",  _job_github_trending),
     ("kistep_report",    _job_kistep),
     ("kiat_tech_demand", _job_kiat_tech_demand),
+    ("pypi_downloads",   _job_pypi_downloads),
+    ("npm_downloads",    _job_npm_downloads),
+    ("hf_trending",      _job_hf_trending),
 )
 
 _MONTHLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
@@ -729,6 +781,7 @@ _MONTHLY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("customs_export",    _job_customs_export),
     ("careernet",         _job_careernet),
     ("venture_list",      _job_venture_list),
+    ("ncs_standard",      _job_ncs_standard),
 )
 
 

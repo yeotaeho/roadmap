@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "code-review-graph": {
+      "command": "C:\\anaconda3\\python.exe",
+      "args": [
+        "-m",
+        "code_review_graph",
+        "serve"
+      ],
+      "cwd": "C:\\project\\roadmap",
+      "type": "stdio"
+    },
+    "datacommons": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}

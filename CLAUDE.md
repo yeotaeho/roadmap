@@ -11,6 +11,7 @@
    예) `// 사용자 인증 상태를 관리하는 Context Provider` / `# KIS API 클라이언트`
 7. **Semantic commits** — 논리적 단위 완성 시 즉시 커밋. 무관한 변경 묶지 않기.
 8. **Read errors** — 실제 에러/스택 트레이스 읽고 수정. 패턴 매칭 추측 금지.
+9. **Work log** — 작업 단위 완료(커밋 직후)마다 변경 내용을 관련 md 에 기록. 형식·위치는 아래 [작업 기록 규칙](#작업-기록-규칙-audit-trail) 참고. **md 를 수정·생성하기 전 반드시 대상 경로를 제시하고 허락받기.**
 
 ---
 
@@ -61,27 +62,40 @@ python scripts/yahoo_finance_integration_test.py
 
 ```
 backend/
-├── main.py                    # FastAPI 앱 엔트리, CORS, 라우터 등록
-├── api/routers/               # 도메인별 HTTP 라우터
-├── domain/
-│   ├── auth/                  # 1. Auth & Identity — JWT·OAuth·세션
-│   ├── pipeline/              # 2. Master & Pipeline — Bronze 수집·Silver 정제·배치
-│   ├── insight/               # 3. Market Insight — Pulse·Gap Gold 서빙
-│   ├── chance/                # 4. Opportunity — 공고·매칭·북마크
-│   ├── profile/               # 5. User Intelligence — AI 상담·페르소나·싱크로율
-│   ├── roadmap/               # 6. Growth Journey — 퀘스트 트리·아카이브
-│   └── coach/                 # 7. AI Coach — SSE·RAG·FastMCP·지갑
-├── data/pipelines/            # 수집·정제 구현
-├── data/workers/              # Celery/ARQ 태스크
-├── core/config/               # Pydantic settings, DB/Redis 연결
-├── core/scheduler.py          # APScheduler 배치 잡
-└── alembic/                   # 마이그레이션
+├── main.py                         # FastAPI 엔트리, CORS, 라우터 등록 (API_V1_PREFIX="/api")
+├── api/v1/<name>/<name>_routor.py  # HTTP 라우터 — chance·insight·master·news·oauth·sync·trend_analysis·user
+├── core/
+│   ├── config/settings.py          # Pydantic settings
+│   ├── database.py                 # DB 세션·엔진
+│   ├── llm/client.py               # LLM 클라이언트
+│   ├── logging_config.py
+│   └── scheduler.py                # APScheduler 배치 잡
+├── domain/                         # 7대 Bounded Context + 보조 도메인
+│   ├── auth/                       # 1. Auth & Identity — JWT·OAuth·세션
+│   ├── master/                     # 2. Master & Pipeline — Bronze 수집기(collectors)·정제
+│   ├── market_insight/             # 3. Market Insight — Pulse·Gap·Chance·Sync·Causal Silver→Gold
+│   ├── opportunity/                # 4. Opportunity — 공고·매칭·북마크 (스캐폴딩)
+│   ├── user_intelligence/          # 5. User Intelligence — AI 상담·페르소나·싱크 (스캐폴딩)
+│   ├── hrowth_journey/             # 6. Growth Journey — 로드맵·퀘스트·아카이브 (스캐폴딩·폴더명 오타)
+│   ├── ai_coach/                   # 7. AI Coach — SSE·RAG·FastMCP·지갑 (스캐폴딩)
+│   ├── news/                       # 보조 — RSS 뉴스 수집·서빙
+│   └── shard/                      # 공유 (현재 비어있음·"shared" 오타)
+├── alembic/                        # 마이그레이션
+├── docs/                           # 백엔드 공통 설계 문서·ERD SSOT
+└── scripts/                        # 통합 테스트·운영 스크립트
 ```
 
-각 `domain/<name>/` 내부: `router.py` · `application/` · `model/` · `repository/` · `schemas/` · (선택)`llm/` `tasks/`
+각 DDD 도메인 `domain/<name>/` 내부 — **Hub-Spoke (Star Topology)**:
+- `hub/` — 중심부. `orchestrator/` · `services/`(유스케이스·파이프라인) · `repositories/`(DB 접근) · `routing/` · `mcp/`(FastMCP 툴)
+- `models/` — `bases/`(SQLAlchemy 테이블) · `enums/` · `states/`(LangGraph State) · `transfer/`(DTO)
+- `spokes/` — 외곽부. `agents/`(LangGraph 노드) · `infra/`(외부 API) · `retreivers/`(RAG·폴더명 오타)
+- `docs/` — 도메인 설계 스펙 + `audit_trail.md`(작업 기록)
 
-**요청 흐름**: Router → Application Service → Repository → DB  
-**도메인 간 호출**: 직접 import 최소화, 교차 접근은 상위 Application Service에서 orchestration
+- 수집기 위치: `domain/master/hub/services/collectors/<axis>/<source>/` (axis: economic·innovation·people·discourse·opportunity·company)
+- 현 구현 분포: Pulse·Gap·Chance·Sync·Causal·Briefing 등 인사이트 수직은 `market_insight` 한 도메인에 집중. `opportunity`·`user_intelligence`·`hrowth_journey`·`ai_coach` 는 스캐폴딩 단계.
+
+**요청 흐름**: `api/v1/<name>/<name>_routor.py` → `domain/<name>/hub/services` → `hub/repositories` → DB  
+**도메인 간 호출**: 직접 import 최소화, 교차 접근은 hub orchestrator 에서 조율.
 
 ### 데이터 계층 — Medallion
 
@@ -143,20 +157,39 @@ raw_opportunity_data                          user_roadmaps / coach_sessions
 
 ## Adding New Endpoints
 
-1. `domain/<domain>/router.py` 라우터 정의
-2. `domain/<domain>/application/` 유스케이스 구현
-3. `domain/<domain>/schemas/` Pydantic DTO 정의
-4. `domain/<domain>/repository/` DB 접근 레이어
-5. `main.py`에 `app.include_router(router, prefix="/api")` 등록
+1. `api/v1/<name>/<name>_routor.py` 라우터 정의 (`router = APIRouter(prefix="/<name>")`)
+2. `domain/<name>/hub/services/` 유스케이스 구현
+3. `domain/<name>/models/transfer/` Pydantic DTO 정의
+4. `domain/<name>/hub/repositories/` DB 접근 레이어
+5. `main.py`에 `app.include_router(<name>_router, prefix=API_V1_PREFIX)` 등록
 
 ## Database Changes
 
-1. `domain/<domain>/model/` ORM 모델 수정
+1. `domain/<name>/models/bases/` ORM 모델 수정
 2. `alembic revision --autogenerate -m "..."` — 생성 파일 검토 필수
 3. `alembic upgrade head` → 마이그레이션 파일 커밋 (수동 DDL 금지)
+
+## 작업 기록 규칙 (Audit Trail)
+
+작업 단위 완료 시(커밋 직후) 변경 내용을 **관련 도메인**의 작업 기록 md 에 남긴다.
+
+- **위치** — 도메인 작업은 `backend/domain/<name>/docs/audit_trail.md`, 공통·인프라는 `backend/docs/`. 적절한 md 가 없으면 새로 만든다.
+- **순서** — 최신 항목을 맨 위에 추가(역순).
+- **허락** — md 를 수정·생성하기 전 반드시 대상 경로를 제시하고 사용자 승인을 받는다. 승인 없이는 쓰지 않는다.
+
+**기록 형식**
+
+```markdown
+## YYYY-MM-DD — <작업 한 줄 제목>
+- **무엇** — 무엇을 바꿨나 (요약 한 줄)
+- **왜** — 배경·트리거
+- **어디** — 핵심 파일·테이블 (`경로:라인` clickable)
+- **검증** — 실행한 테스트·결과 (`pytest` / `pnpm test`)
+- **후속** — 남은 TODO (없으면 생략)
+```
 
 ## MSA 분리 후보
 
 현재 모듈러 모놀리스. 아래 조건 충족 시 분리 검토.
-1. `coach` — 대화량·LLM 비용·SSE 집중 시 1순위
-2. `pipeline` — 배치 독립 스케일아웃 필요 시
+1. `ai_coach` — 대화량·LLM 비용·SSE 집중 시 1순위
+2. `master` — 배치(수집·정제) 독립 스케일아웃 필요 시
