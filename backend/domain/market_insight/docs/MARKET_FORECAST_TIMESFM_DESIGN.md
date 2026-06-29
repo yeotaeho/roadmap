@@ -64,7 +64,7 @@ domain/market_insight/
 ├── hub/repositories/forecast_repository.py  # 티커 시계열 조회·Silver/Gold replace·서빙
 ├── models/bases/refined_market_forecast_silver.py
 ├── models/bases/market_forecast_log.py
-└── models/transfer/forecast_dto.py          # Pydantic 응답 DTO
+└── (forecast_dto.py 미채택 — 라우터가 dict 직접 반환, 기존 insight 라우터 관례)
 ```
 
 **Forecaster Protocol** — `forecast_pipeline`·`forecast_refine_service`는 추상 인터페이스에만 의존한다. 테스트는 결정론적 fake forecaster를 주입해 모델·네트워크 없이 검증한다.
@@ -191,7 +191,7 @@ confidence = clamp(1 − band_rel / band_norm, 0, 1)                      # band
 - `hub/services/forecast_pipeline.py` (순수 산출)
 - `hub/services/forecast_refine_service.py` (오케스트레이션)
 - `hub/repositories/forecast_repository.py` (조회·replace·서빙)
-- `models/transfer/forecast_dto.py` (응답 DTO)
+- ~~`models/transfer/forecast_dto.py`~~ (미채택 — 라우터가 `{"success": True, ...}` dict 직접 반환, 기존 insight 라우터와 동일 관례. 구현 시 정정)
 - `alembic/versions/<hash>_add_market_forecast_tables.py` (수동 작성)
 - `scripts/market_forecast_test.py` (순수 단위·fake forecaster)
 - `scripts/market_forecast_refine.py` (수동/cron 배치 엔트리)
