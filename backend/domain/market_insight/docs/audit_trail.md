@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-28 — Pulse 방향성 융합 2차: shrinkage·축 가중·30일 감성 백필·배포
+- **무엇** — 1차(가산 이동) 후 prod 읽기전용 검증에서 드러난 문제들을 보정하고 데이터·원격을 정렬. ① modifier에 관측수(weight)를 실어 트레일링을 관측수 가중으로 내고 `W/(W+8)` shrinkage로 단일 관측 ±1 노이즈 억제. ② 텍스트·시장을 축별로 트레일링·shrinkage 후 고정 축 가중(1:1)으로 결합 — 텍스트 행수(수천)가 시장 티커수를 압도해 시장이 묻히던 것을 해소. ③ 기존 분류행 30일치 감성 백필(`sentiment_backfill.py`). ④ 브랜치 main 머지 + `origin/main` push.
+- **왜** — 1차 검증 결과 (a) 정확-일자 매칭이라 최신일 tilt 미반영(시장 06-26·활동 06-28 시차) → carry-forward, (b) modifier 60%가 ±1.0 극단(단일 관측일) → shrinkage, (c) 백필 후 텍스트 볼륨이 시장 방향을 압도하고 점수가 전 섹터 양수 쏠림 → 축 가중. 단위 테스트(합성 정렬 데이터)로는 안 잡히고 prod 실데이터 읽기전용 시뮬레이션으로만 드러난 문제들.
+- **어디** — [pulse_repository.py](../hub/repositories/pulse_repository.py)(`fetch_directional_modifiers` 축 분리 반환·감성 백필 SQL·`fetch_rows_needing_sentiment`·`update_sentiment`), [pulse_pipeline.py](../hub/services/pulse_pipeline.py)(`_trailing_axis`·`compute_silver` 축 가중·shrinkage 파라미터), [sentiment_backfill.py](../../../scripts/sentiment_backfill.py)(신규, `count` 드라이런 + 청크 백필).
+- **검증** — [pulse_scoring_test.py](../../../scripts/pulse_scoring_test.py) 55 PASS(shrinkage·축 결합 8건 추가). 감성 백필 prod 실행 **2,464행 전부 채움**(경제 254·담론 1130·혁신 1080, 30일 윈도우 NULL 0). prod 읽기전용 재검증: 시장 보유 섹터에 시장 하락 반영(ai-data 백필후 +7→축가중 +1·energy-climate +5→0), 전 섹터 양수 편향 해소, 12섹터 날짜 06-28 정렬. push `fee2a69..63003ad`(ff).
+- **후속** — ⚠️ **prod 배포 미완** — `docker-compose build && up` 호스트 재기동은 사용자 수행 예정(배포 전까지 일별 잡은 구 코드라 tilt 미생성). origin/main 이 직전 23커밋 미푸시 상태였어 함께 발행됨. 30일 밖 행은 sentiment NULL(필요 시 윈도우 확대 재백필). 축 가중 1:1·`sentiment_k`15·`shrink_k`8·윈도우7·데드밴드0.2%는 실사용 후 재튜닝. 텍스트 감성 양수 쏠림(LLM bias) 잔존 — 섹터 평균 대비 중심화는 미적용(후속 검토).
+
 ## 2026-06-28 — Pulse 점수에 감성·시장 방향 가산 이동 융합 (방향성 modifier)
 - **무엇** — 건수(활동량)만 보던 Pulse 점수에 방향성을 더한다. ① 텍스트 감성: `classify_sector` 같은 LLM 호출에 `sentiment`·`sentiment_score`(-1~1)를 얹어(토큰 0) `refined_text_sector_class` 에 적재. ② 시장 방향: `raw_market_timeseries.close_price` 전일 대비 등락(LAG·0.2% 데드밴드)을 스키마 변경 없이 SQL 산출. ③ 두 신호를 (섹터×일자) 방향성 modifier(-1~1)로 결합해, 활동 점수 위에 `score + K(15)×modifier` 가산 이동. 적용은 직전 7일 평균 + carry-forward.
 - **왜** — "AI 줄도산 50건"과 "AI 투자유치 50건"이 동일하게 뜨겁게 집계되던 문제. 곱셈은 z-score 가 균일 스케일을 상쇄해 정상상태 부정 심리를 못 반영하므로 가산 이동을 택함. 정확-일자 매칭은 최신 활동일(예 06-28)에 같은 날 modifier 가 없어(시장 06-26까지·감성 희소) 사용자 화면 점수에 안 잡혀, 트레일링 평균+carry-forward 로 보정.
