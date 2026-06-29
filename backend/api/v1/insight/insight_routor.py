@@ -11,6 +11,7 @@ from domain.market_insight.hub.repositories.briefing_repository import BriefingR
 from domain.market_insight.hub.repositories.causal_chain_repository import CausalChainRepository
 from domain.market_insight.hub.repositories.gap_repository import GapRepository
 from domain.market_insight.hub.repositories.pulse_repository import PulseRepository
+from domain.market_insight.hub.repositories.forecast_repository import ForecastRepository
 from domain.market_insight.hub.repositories.signal_repository import SignalRepository
 from domain.market_insight.hub.services.briefing_service import BriefingRefineService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
@@ -18,6 +19,9 @@ from domain.market_insight.hub.services.gap_refine_service import GapRefineServi
 from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
+from domain.market_insight.hub.services.forecast_refine_service import (
+    MarketForecastRefineService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +111,28 @@ async def get_pulse_crossover(
     except Exception as e:
         logger.error(f"크로스오버 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"크로스오버 조회 실패: {str(e)}")
+
+
+@router.get("/forecast")
+async def get_market_forecast(db: AsyncSession = Depends(get_db)):
+    """시장 전망 탭 서빙 — 섹터별 최신 TimesFM 예측 점수(Gold market_forecast_log)."""
+    try:
+        forecasts = await ForecastRepository(db).fetch_latest_forecast()
+        return {"success": True, "sectors": forecasts, "count": len(forecasts)}
+    except Exception as e:
+        logger.error(f"시장 전망 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"시장 전망 조회 실패: {str(e)}")
+
+
+@router.post("/forecast/refine", dependencies=[Depends(require_internal_token)])
+async def refine_market_forecast(db: AsyncSession = Depends(get_db)):
+    """시장 전망 정제·서빙 수동 트리거 — 티커 시계열 → TimesFM → Silver → Gold 재생성."""
+    try:
+        result = await MarketForecastRefineService(db).refine_and_serve()
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"시장 전망 정제 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"시장 전망 정제 실패: {str(e)}")
 
 
 @router.get("/keywords")

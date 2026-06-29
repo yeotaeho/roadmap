@@ -74,6 +74,8 @@ dart-fss>=0.4.7
 xmltodict>=0.13.0
 yfinance>=0.2.40
 tenacity>=8.2.0
+# 시장 전망 — TimesFM 2.5(torch 백엔드, JAX 불필요). 모델 체크포인트는 huggingface 캐시.
+timesfm[torch]==2.0.1
 
 pdfplumber>=0.10
 pandas>=2.2.0

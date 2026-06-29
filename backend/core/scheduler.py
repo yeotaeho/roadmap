@@ -675,6 +675,21 @@ async def _job_pulse_refine() -> dict[str, Any]:
         return await svc.refine_and_serve()
 
 
+async def _job_market_forecast() -> dict[str, Any] | None:
+    """티커 시계열 → TimesFM 14일 예측 → 시장 전망 Silver/Gold 재생성(멱등). timesfm 없으면 스킵."""
+    try:
+        import timesfm  # noqa: F401
+    except ImportError:
+        logger.warning("[scheduler] timesfm 미설치 — 시장 전망 스킵")
+        return None
+    from domain.market_insight.hub.services.forecast_refine_service import (
+        MarketForecastRefineService,
+    )
+
+    async with AsyncSessionLocal() as session:
+        return await MarketForecastRefineService(session).refine_and_serve()
+
+
 async def _job_sync_refine() -> dict[str, Any]:
     """사용자 임베딩×섹터 트렌드 적합도(Sync) 재계산(멱등, LLM 무관)."""
     async with AsyncSessionLocal() as session:
@@ -712,6 +727,7 @@ _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("document_embed",    _job_document_embed),
     ("user_embed",        _job_user_embed),
     ("pulse_refine",      _job_pulse_refine),
+    ("market_forecast",   _job_market_forecast),
     ("briefing_refine",   _job_briefing_refine),
     ("sync_refine",       _job_sync_refine),
 )
