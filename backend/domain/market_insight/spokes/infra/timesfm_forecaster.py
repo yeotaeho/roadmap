@@ -51,7 +51,7 @@ class TimesfmForecaster:
     """TimesFM 2.5(torch) lazy 싱글톤 래퍼. 모든 티커를 단일 forecast 호출로 배치한다."""
 
     _DEFAULT_REPO = "google/timesfm-2.5-200m-pytorch"
-    # 분위수 10열 중 내부 밴드 인덱스(0.1·0.9 근사). Step 4 에서 실제 배열로 확인·조정.
+    # 분위수 10열: idx 0=mean, idx 1~9=q0.1~q0.9. 실측 확인 — idx 1(q0.1)·9(q0.9)가 내부 밴드.
     _Q_LO_IDX = 1
     _Q_HI_IDX = 9
 
@@ -65,28 +65,32 @@ class TimesfmForecaster:
         self._max_context = max_context
         self._min_history = min_history
         self._model = None
+        self._compiled_horizon = 0
 
     def _ensure(self, horizon: int) -> None:
-        if self._model is not None:
+        if self._model is not None and horizon <= self._compiled_horizon:
             return
         import timesfm
 
+        compiled_horizon = max(64, horizon)
         model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(self._repo_id)
         model.compile(
             timesfm.ForecastConfig(
                 max_context=self._max_context,
-                max_horizon=max(64, horizon),
+                max_horizon=compiled_horizon,
                 normalize_inputs=True,
                 use_continuous_quantile_head=True,
                 fix_quantile_crossing=True,
             )
         )
         self._model = model
+        self._compiled_horizon = compiled_horizon
         logger.info("[forecast] TimesFM loaded repo=%s", self._repo_id)
 
     def forecast_returns(
         self, series_by_ticker: dict[str, list[float]], horizon: int
     ) -> dict[str, tuple[float, float]]:
+        """티커 시계열 → (예측 수익률%, 밴드폭). 모델 추론 예외는 삼키지 않고 호출측(스케줄러·라우터)에 전파한다."""
         usable = {
             t: s for t, s in series_by_ticker.items() if len(s) >= self._min_history
         }
@@ -109,3 +113,4 @@ class TimesfmForecaster:
     def unload(self) -> None:
         """배치 종료 후 모델 해제 — API 프로세스 영구 상주 회피."""
         self._model = None
+        self._compiled_horizon = 0

@@ -125,6 +125,9 @@ def test_quantile_band_rel() -> None:
     quant = [[0.0] * 10, [0.0, 90.0, 0, 0, 0, 0, 0, 0, 0, 110.0]]
     check("band_rel=0.2", abs(quantile_to_band_rel(point, quant, 1, 9) - 0.2) < 1e-9)
     check("point 0 → band 0", quantile_to_band_rel([0.0], [[0.0] * 10], 1, 9) == 0.0)
+    # q_lo(idx1)=110 > q_hi(idx9)=90 → 음수 밴드, max(0.0) 가드로 0
+    neg = [[0.0] * 10, [0.0, 110.0, 0, 0, 0, 0, 0, 0, 0, 90.0]]
+    check("음수 밴드 → 0(가드)", quantile_to_band_rel([100.0, 100.0], neg, 1, 9) == 0.0)
 
 
 def test_fake_forecaster() -> None:
