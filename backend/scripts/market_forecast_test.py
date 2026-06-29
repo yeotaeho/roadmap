@@ -13,7 +13,6 @@ from domain.market_insight.hub.services.forecast_pipeline import (  # noqa: E402
     BADGE_STRONG_DOWN,
     BADGE_STRONG_UP,
     ForecastGoldRow,
-    SectorForecastRow,
     TickerForecast,
     compute_forecast,
     project_to_gold,

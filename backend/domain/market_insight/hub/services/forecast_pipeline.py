@@ -60,7 +60,7 @@ def return_to_score(sector_return: float, score_k: float) -> int:
     return int(_clamp(round(50 + score_k * sector_return), 0, 100))
 
 
-def direction_badge(sector_return: float, up: float, up_strong: float) -> str:
+def _direction_badge(sector_return: float, up: float, up_strong: float) -> str:
     if sector_return >= up_strong:
         return BADGE_STRONG_UP
     if sector_return >= up:
@@ -124,7 +124,7 @@ def compute_forecast(
                 target_date=target_date,
                 predicted_return_pct=round(sector_return, 4),
                 forecast_score=return_to_score(sector_return, score_k),
-                direction_badge=direction_badge(sector_return, up_threshold, up_strong_threshold),
+                direction_badge=_direction_badge(sector_return, up_threshold, up_strong_threshold),
                 confidence=band_to_confidence(avg_band, band_norm),
                 ticker_count=len(items),
             )
