@@ -337,6 +337,68 @@ _MARKET_DIRECTION_SQL = text(
     """
 )
 
+# 감성 백필 — 이미 분류됐으나 sentiment NULL 인 행(구버전 분류분)을 (class_id, 입력 텍스트)로 조회.
+# 분류는 보존하고 감성만 LLM 재추출해 채운다. 입력 텍스트 구성은 _FETCH_UNCLASSIFIED_* 와 동일.
+_FETCH_SENTIMENT_BACKFILL_ECONOMIC = text(
+    """
+    SELECT c.id AS class_id,
+           e.raw_title || E'\n' ||
+           COALESCE(e.raw_metadata->>'content_text', e.raw_metadata->>'body_text',
+                    e.raw_metadata->>'summary', '') AS body
+    FROM refined_text_sector_class c
+    JOIN raw_economic_data e ON e.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_economic_data'
+      AND c.prompt_version = :pv
+      AND c.sentiment IS NULL
+      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY c.id
+    LIMIT :lim
+    """
+)
+_FETCH_SENTIMENT_BACKFILL_DISCOURSE = text(
+    """
+    SELECT c.id AS class_id,
+           d.headline || E'\n' || COALESCE(d.content_body, '') AS body
+    FROM refined_text_sector_class c
+    JOIN raw_discourse_data d ON d.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_discourse_data'
+      AND c.prompt_version = :pv
+      AND c.sentiment IS NULL
+      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY c.id
+    LIMIT :lim
+    """
+)
+_FETCH_SENTIMENT_BACKFILL_INNOVATION = text(
+    """
+    SELECT c.id AS class_id,
+           r.title || E'\n' ||
+           COALESCE(r.abstract_text, '') || E'\n' ||
+           COALESCE(r.raw_metadata->>'keyword', '') AS body
+    FROM refined_text_sector_class c
+    JOIN raw_innovation_data r ON r.id = c.raw_id
+    WHERE c.raw_table_ref = 'raw_innovation_data'
+      AND c.prompt_version = :pv
+      AND c.sentiment IS NULL
+      AND COALESCE(r.published_at::date, r.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+    ORDER BY c.id
+    LIMIT :lim
+    """
+)
+_FETCH_SENTIMENT_BACKFILL_BY_TABLE = {
+    "raw_economic_data": _FETCH_SENTIMENT_BACKFILL_ECONOMIC,
+    "raw_discourse_data": _FETCH_SENTIMENT_BACKFILL_DISCOURSE,
+    "raw_innovation_data": _FETCH_SENTIMENT_BACKFILL_INNOVATION,
+}
+
+_UPDATE_SENTIMENT = text(
+    """
+    UPDATE refined_text_sector_class
+    SET sentiment = :sentiment, sentiment_score = :sentiment_score
+    WHERE id = :class_id
+    """
+)
+
 _INSERT_SILVER = text(
     """
     INSERT INTO refined_pulse_metric_silver
@@ -581,6 +643,27 @@ class PulseRepository(BaseRepository):
             if wsum > 0:
                 out[key] = (max(-1.0, min(1.0, num / wsum)), wsum)
         return out
+
+    async def fetch_rows_needing_sentiment(
+        self, table_ref: str, prompt_version: str, window_days: int, limit: int
+    ) -> list[tuple[int, str]]:
+        """sentiment NULL 인 기존 분류행을 (class_id, 입력 텍스트) 목록으로 반환한다(감성 백필용)."""
+        sql = _FETCH_SENTIMENT_BACKFILL_BY_TABLE.get(table_ref)
+        if sql is None:
+            return []
+        rows = (
+            await self.session.execute(
+                sql, {"pv": prompt_version, "win": window_days, "lim": limit}
+            )
+        ).all()
+        return [(r.class_id, r.body) for r in rows]
+
+    async def update_sentiment(self, payload: list[dict]) -> int:
+        """class_id 별 sentiment·sentiment_score 만 UPDATE 한다(섹터 분류 보존). 건수를 반환한다."""
+        if not payload:
+            return 0
+        await self.session.execute(_UPDATE_SENTIMENT, payload)
+        return len(payload)
 
     async def fetch_unclassified_text_rows(
         self, table_ref: str, prompt_version: str, window_days: int, limit: int
