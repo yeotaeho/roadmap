@@ -5,10 +5,14 @@ from __future__ import annotations
 import json
 
 _SYSTEM_PROMPT = (
-    "너는 한국어 산업·투자 텍스트를 섹터로 분류하는 분류기다. "
+    "너는 한국어 산업·투자 텍스트를 섹터로 분류하고 그 텍스트가 해당 섹터에 주는 감성을 판단하는 분석기다. "
     "주어진 텍스트를 아래 섹터 슬러그 중 가장 적합한 하나로 분류하라. "
     "어느 섹터에도 명확히 속하지 않으면 sector_slug 를 null 로 두라(억지 매핑 금지). "
-    'JSON 객체만 출력하라. 형식: {"sector_slug": <슬러그 또는 null>, "confidence": <0~1 실수>}.'
+    "감성은 그 섹터의 성장·기회 관점에서 긍정/중립/부정 중 하나로 판단하라(투자 유치·성장·채용 확대는 긍정, "
+    "도산·규제 충격·구조조정·수요 위축은 부정, 단순 사실 전달은 중립). "
+    "sentiment_score 는 -1(매우 부정)~1(매우 긍정) 실수로, 중립이면 0 근처로 매겨라. "
+    'JSON 객체만 출력하라. 형식: {"sector_slug": <슬러그 또는 null>, "confidence": <0~1 실수>, '
+    '"sentiment": <"긍정"|"중립"|"부정">, "sentiment_score": <-1~1 실수>}.'
 )
 
 _EXTRACT_SYSTEM_PROMPT = (
@@ -115,18 +119,23 @@ _COACH_SYSTEM_PROMPT = (
 )
 
 
+_SENTIMENT_LABELS = ("긍정", "중립", "부정")
+
+
 def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     """LLM 원시 응답(JSON 문자열)을 검증된 분류 결과로 파싱한다. 무네트워크 순수 함수.
 
     목록 외 슬러그·"unknown"·파싱 불가는 sector_slug=None 으로 떨군다(강제 매핑 금지).
     confidence 누락/이상치는 0.0 으로 처리하고, slug 가 None 이면 confidence 도 0.0 이다.
+    sentiment 는 닫힌 집합 외/누락 시 None, sentiment_score 는 -1~1 클램프(sentiment None 이면 0.0).
     """
+    empty = {"sector_slug": None, "confidence": 0.0, "sentiment": None, "sentiment_score": 0.0}
     try:
         obj = json.loads(raw) if raw else {}
     except (json.JSONDecodeError, TypeError):
-        return {"sector_slug": None, "confidence": 0.0}
+        return dict(empty)
     if not isinstance(obj, dict):
-        return {"sector_slug": None, "confidence": 0.0}
+        return dict(empty)
 
     slug = obj.get("sector_slug")
     if not isinstance(slug, str) or slug not in sector_list:
@@ -139,7 +148,24 @@ def _parse_classification(raw: str | None, sector_list: list[str]) -> dict:
     conf = max(0.0, min(1.0, conf))
     if slug is None:
         conf = 0.0
-    return {"sector_slug": slug, "confidence": conf}
+
+    sentiment = obj.get("sentiment")
+    if sentiment not in _SENTIMENT_LABELS:
+        sentiment = None
+    try:
+        sent_score = float(obj.get("sentiment_score"))
+    except (TypeError, ValueError):
+        sent_score = 0.0
+    sent_score = max(-1.0, min(1.0, sent_score))
+    if sentiment is None:
+        sent_score = 0.0
+
+    return {
+        "sector_slug": slug,
+        "confidence": conf,
+        "sentiment": sentiment,
+        "sentiment_score": sent_score,
+    }
 
 
 def _parse_extract(raw: str | None) -> dict:
@@ -497,7 +523,11 @@ class LlmClient:
         self._embed_model = embed_model
 
     async def classify_sector(self, text: str, sector_list: list[str]) -> dict:
-        """텍스트를 단일 섹터로 분류한다. {"sector_slug": str|None, "confidence": float} 를 반환."""
+        """텍스트를 단일 섹터로 분류하고 감성을 판단한다.
+
+        반환: {"sector_slug": str|None, "confidence": float, "sentiment": str|None, "sentiment_score": float}.
+        섹터 분류와 같은 호출에서 감성을 함께 뽑아 추가 토큰 비용이 없다.
+        """
         user = f"섹터 슬러그 목록: {', '.join(sector_list)}\n\n분류할 텍스트:\n{text}"
         resp = await self._client.chat.completions.create(
             model=self._model,

@@ -27,6 +27,14 @@ class RefinedTextSectorClass(Base):
             "confidence IS NULL OR (confidence BETWEEN 0 AND 1)",
             name="ck_refined_text_sector_confidence",
         ),
+        CheckConstraint(
+            "sentiment IS NULL OR sentiment IN ('긍정', '중립', '부정')",
+            name="ck_refined_text_sector_sentiment_enum",
+        ),
+        CheckConstraint(
+            "sentiment_score IS NULL OR (sentiment_score BETWEEN -1 AND 1)",
+            name="ck_refined_text_sector_sentiment_score",
+        ),
         # 멱등 재처리용 자연키 (raw 행 × 프롬프트 버전).
         Index(
             "uq_refined_text_sector_natural",
@@ -58,6 +66,12 @@ class RefinedTextSectorClass(Base):
     )
     confidence: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 3), nullable=True, comment="0~1 분류 신뢰도"
+    )
+    sentiment: Mapped[str | None] = mapped_column(
+        String(10), nullable=True, comment="LLM 감성 판정 '긍정'/'중립'/'부정'. 무판정이면 NULL"
+    )
+    sentiment_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(3, 2), nullable=True, comment="감성 점수 -1.0(부정)~1.0(긍정). Pulse 점수 가산 이동 입력"
     )
     model_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     prompt_version: Mapped[str] = mapped_column(

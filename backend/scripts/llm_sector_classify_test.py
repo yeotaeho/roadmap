@@ -56,10 +56,40 @@ def test_malformed() -> None:
     check("None 입력 → None", _parse_classification(None, SECTORS)["sector_slug"] is None)
     check("비-객체 JSON(배열) → None", _parse_classification("[1,2]", SECTORS)["sector_slug"] is None)
     check("비-객체 JSON(숫자) → None", _parse_classification("5", SECTORS)["sector_slug"] is None)
+    r = _parse_classification("not json", SECTORS)
+    check("파싱 실패 감성 None·점수 0", r["sentiment"] is None and r["sentiment_score"] == 0.0)
+
+
+def test_sentiment() -> None:
+    r1 = _parse_classification(
+        '{"sector_slug": "ai-data", "confidence": 0.9, "sentiment": "긍정", "sentiment_score": 0.8}', SECTORS
+    )
+    check("감성 긍정 파싱", r1["sentiment"] == "긍정")
+    check("감성 점수 파싱", abs(r1["sentiment_score"] - 0.8) < 1e-9)
+    r2 = _parse_classification(
+        '{"sector_slug": "fintech", "confidence": 0.7, "sentiment": "부정", "sentiment_score": -0.9}', SECTORS
+    )
+    check("감성 부정 음수 점수", abs(r2["sentiment_score"] + 0.9) < 1e-9)
+    r3 = _parse_classification(
+        '{"sector_slug": "fintech", "confidence": 0.7, "sentiment": "불명", "sentiment_score": 0.5}', SECTORS
+    )
+    check("감성 닫힌집합 외 → None", r3["sentiment"] is None)
+    check("감성 None 이면 점수 0", r3["sentiment_score"] == 0.0)
+    r4 = _parse_classification(
+        '{"sector_slug": "fintech", "confidence": 0.7, "sentiment": "긍정", "sentiment_score": 5}', SECTORS
+    )
+    check("감성 점수 상한 클램프 1.0", r4["sentiment_score"] == 1.0)
+    r5 = _parse_classification(
+        '{"sector_slug": "fintech", "confidence": 0.7, "sentiment": "부정", "sentiment_score": -5}', SECTORS
+    )
+    check("감성 점수 하한 클램프 -1.0", r5["sentiment_score"] == -1.0)
+    r6 = _parse_classification('{"sector_slug": "ai-data", "confidence": 0.9}', SECTORS)
+    check("감성 누락 → None", r6["sentiment"] is None)
+    check("감성 누락 점수 0", r6["sentiment_score"] == 0.0)
 
 
 def main() -> int:
-    for fn in (test_valid, test_unknown_and_out_of_list, test_confidence_edge, test_malformed):
+    for fn in (test_valid, test_unknown_and_out_of_list, test_confidence_edge, test_malformed, test_sentiment):
         fn()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

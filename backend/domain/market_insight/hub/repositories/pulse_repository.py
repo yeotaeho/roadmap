@@ -261,10 +261,79 @@ _FETCH_UNCLASSIFIED_BY_TABLE = {
 _UPSERT_TEXT_SECTOR = text(
     """
     INSERT INTO refined_text_sector_class
-        (raw_table_ref, raw_id, sector_slug, confidence, model_name, prompt_version, input_hash)
+        (raw_table_ref, raw_id, sector_slug, confidence, sentiment, sentiment_score,
+         model_name, prompt_version, input_hash)
     VALUES
-        (:raw_table_ref, :raw_id, :sector_slug, :confidence, :model_name, :prompt_version, :input_hash)
+        (:raw_table_ref, :raw_id, :sector_slug, :confidence, :sentiment, :sentiment_score,
+         :model_name, :prompt_version, :input_hash)
     ON CONFLICT (raw_table_ref, raw_id, prompt_version) DO NOTHING
+    """
+)
+
+# 방향성 modifier(텍스트 감성) — refined_text_sector_class 의 LLM 감성을 (섹터×발생일) 평균으로 집계.
+# _TEXT_SECTOR_AXIS_SQL 과 동일 조인(economic·discourse·innovation)·필터를 쓰되 sentiment_score 평균을 낸다.
+# sentiment_score NULL(구버전 분류분)은 제외 — 감성 없는 행은 tilt 에 기여하지 않는다.
+_TEXT_SENTIMENT_SQL = text(
+    """
+    SELECT sector_slug, ref_date, AVG(sentiment_score) AS avg_sent, COUNT(*) AS n
+    FROM (
+        SELECT c.sector_slug AS sector_slug,
+               COALESCE(e.published_at::date, e.collected_at::date) AS ref_date,
+               c.sentiment_score AS sentiment_score
+        FROM refined_text_sector_class c
+        JOIN raw_economic_data e ON e.id = c.raw_id
+        WHERE c.raw_table_ref = 'raw_economic_data'
+          AND c.prompt_version = :pv
+          AND c.sector_slug IS NOT NULL
+          AND c.confidence >= :conf_min
+          AND c.sentiment_score IS NOT NULL
+        UNION ALL
+        SELECT c.sector_slug,
+               COALESCE(d.published_at::date, d.collected_at::date),
+               c.sentiment_score
+        FROM refined_text_sector_class c
+        JOIN raw_discourse_data d ON d.id = c.raw_id
+        WHERE c.raw_table_ref = 'raw_discourse_data'
+          AND c.prompt_version = :pv
+          AND c.sector_slug IS NOT NULL
+          AND c.confidence >= :conf_min
+          AND c.sentiment_score IS NOT NULL
+        UNION ALL
+        SELECT c.sector_slug,
+               COALESCE(r.published_at::date, r.collected_at::date),
+               c.sentiment_score
+        FROM refined_text_sector_class c
+        JOIN raw_innovation_data r ON r.id = c.raw_id
+        WHERE c.raw_table_ref = 'raw_innovation_data'
+          AND c.prompt_version = :pv
+          AND c.sector_slug IS NOT NULL
+          AND c.confidence >= :conf_min
+          AND c.sentiment_score IS NOT NULL
+    ) s
+    GROUP BY sector_slug, ref_date
+    """
+)
+
+# 방향성 modifier(시장 방향) — 전일 종가 대비 등락 부호. LAG 로 직전 거래일 종가를 끌어온다.
+# 0.2% 데드밴드(보합)로 미세 변동 노이즈를 제거. source_type→섹터 매핑·turnover 가중은 호출측에서.
+_MARKET_DIRECTION_SQL = text(
+    """
+    WITH d AS (
+        SELECT source_type,
+               trade_date,
+               close_price,
+               LAG(close_price) OVER (PARTITION BY source_type ORDER BY trade_date) AS prev_close,
+               COALESCE(turnover_amount, volume * close_price) AS tv
+        FROM raw_market_timeseries
+    )
+    SELECT source_type,
+           trade_date AS ref_date,
+           CASE WHEN close_price > prev_close * 1.002 THEN 1
+                WHEN close_price < prev_close * 0.998 THEN -1
+                ELSE 0 END AS dir,
+           tv
+    FROM d
+    WHERE prev_close IS NOT NULL AND prev_close > 0
     """
 )
 
@@ -458,6 +527,49 @@ class PulseRepository(BaseRepository):
 
         raw = [AxisSignal(k[0], k[1], k[2], v) for k, v in agg.items()]
         return _normalize_axes(raw)
+
+    async def fetch_directional_modifiers(
+        self,
+        text_confidence_min: float = 0.0,
+        text_prompt_version: str | None = None,
+        min_text_rows: int = 1,
+    ) -> dict[tuple[str, object], float]:
+        """(섹터, 발생일) → 방향성 modifier(-1~1) 를 반환한다. Pulse 점수 가산 이동 입력.
+
+        텍스트 감성(LLM)과 시장 방향(전일 대비 등락)을 결합한다. 둘 다 있으면 평균,
+        한쪽만 있으면 그 값. 신호 없는 (섹터, 일자)는 키 부재 → tilt 0(현 동작 유지).
+        text_prompt_version 이 None 이면 텍스트 감성은 합류시키지 않는다.
+        """
+        text_mod: dict[tuple[str, object], float] = {}
+        if text_prompt_version is not None:
+            for r in (
+                await self.session.execute(
+                    _TEXT_SENTIMENT_SQL,
+                    {"pv": text_prompt_version, "conf_min": text_confidence_min},
+                )
+            ).all():
+                if r.avg_sent is not None and r.n >= min_text_rows:
+                    text_mod[(r.sector_slug, r.ref_date)] = float(r.avg_sent)
+
+        # 시장 방향 — turnover 가중으로 (섹터×거래일) 등락 부호 평균.
+        mkt_num: dict[tuple[str, object], float] = {}
+        mkt_den: dict[tuple[str, object], float] = {}
+        for r in (await self.session.execute(_MARKET_DIRECTION_SQL)).all():
+            slug = _MARKET_SOURCE_MAP.get(r.source_type)
+            if not slug or r.tv is None:
+                continue
+            key = (slug, r.ref_date)
+            w = float(r.tv)
+            mkt_num[key] = mkt_num.get(key, 0.0) + w * float(r.dir)
+            mkt_den[key] = mkt_den.get(key, 0.0) + w
+        mkt_mod = {k: mkt_num[k] / mkt_den[k] for k in mkt_num if mkt_den[k] > 0}
+
+        out: dict[tuple[str, object], float] = {}
+        for key in set(text_mod) | set(mkt_mod):
+            vals = [m[key] for m in (text_mod, mkt_mod) if key in m]
+            net = sum(vals) / len(vals)
+            out[key] = max(-1.0, min(1.0, net))
+        return out
 
     async def fetch_unclassified_text_rows(
         self, table_ref: str, prompt_version: str, window_days: int, limit: int

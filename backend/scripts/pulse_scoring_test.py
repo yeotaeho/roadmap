@@ -180,6 +180,36 @@ def test_tech_demand_axis_weight() -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# 감성·방향 가산 이동(modifier) — 활동 점수 위에 -1~1 modifier × K 를 얹는다
+# ---------------------------------------------------------------------------
+def test_modifier_tilt() -> None:
+    flat = _series("ai-data", [5, 5, 5, 5])  # 평탄 → 전부 score 50
+    d_last = date(2026, 6, 4)
+    up = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): 0.4})
+    check("modifier +0.4 → score 50+6=56", up[-1].normalized_score == 56)
+    dn = compute_silver(flat, baseline_method="zscore", modifiers={("ai-data", d_last): -0.4})
+    check("modifier -0.4 → score 50-6=44", dn[-1].normalized_score == 44)
+    miss = compute_silver(flat, baseline_method="zscore", modifiers={("fintech", d_last): 0.9})
+    check("modifier 키 부재 → 불변(50)", all(r.normalized_score == 50 for r in miss))
+    check("modifiers None → 불변(50)", all(r.normalized_score == 50 for r in compute_silver(flat)))
+    # 상한 클램프 — zscore 급등(95)에 +1.0 → 95+15=110 → 100.
+    jump = _series("ai-data", [10, 10, 10, 10, 12])
+    hi = compute_silver(jump, baseline_method="zscore", modifiers={("ai-data", date(2026, 6, 5)): 1.0})
+    check("modifier 상한 클램프 100", hi[-1].normalized_score == 100)
+    # 하한 클램프 — pct_change 급락(5)에 -1.0 → 5-15=-10 → 0.
+    drop = _series("fintech", [100, 50])
+    lo = compute_silver(drop, baseline_method="pct_change", modifiers={("fintech", date(2026, 6, 2)): -1.0})
+    check("modifier 하한 클램프 0", lo[-1].normalized_score == 0)
+    # 배지 재계산 — tilt 가 점수를 85 이상으로 올리면 태풍급(momentum 은 활동 기반 그대로).
+    ma = _series("ai-data", [30, 30, 30, 46])  # ma_ratio score 77·momentum 40 → 급상승
+    plain = compute_silver(ma, baseline_method="ma_ratio")[-1]
+    check("tilt 전 score 77·급상승", plain.normalized_score == 77 and plain.status_badge == "급상승")
+    tilted = compute_silver(ma, baseline_method="ma_ratio", modifiers={("ai-data", date(2026, 6, 4)): 0.7})[-1]
+    check("tilt 후 score>=85 → 태풍급", tilted.normalized_score >= 85 and tilted.status_badge == "태풍급")
+    check("tilt 후에도 momentum 활동 기반 유지", tilted.momentum_pct == plain.momentum_pct)
+
+
 def main() -> int:
     test_zscore_jump()
     test_other_methods()
@@ -192,6 +222,7 @@ def main() -> int:
     test_project_gold()
     test_fuse()
     test_tech_demand_axis_weight()
+    test_modifier_tilt()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

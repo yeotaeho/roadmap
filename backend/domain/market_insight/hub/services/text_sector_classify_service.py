@@ -70,6 +70,8 @@ class TextSectorClassifyService:
                         "raw_id": raw_id,
                         "sector_slug": result["sector_slug"],
                         "confidence": result["confidence"],
+                        "sentiment": result.get("sentiment"),
+                        "sentiment_score": result.get("sentiment_score"),
                         "model_name": self._model,
                         "prompt_version": PROMPT_VERSION,
                         "input_hash": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),

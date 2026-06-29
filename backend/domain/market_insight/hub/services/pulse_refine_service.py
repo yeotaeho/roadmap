@@ -36,9 +36,17 @@ class PulseRefineService:
             text_confidence_min=settings.llm_classify_confidence_min,
             text_prompt_version=PROMPT_VERSION,
         )
+        modifiers = await self.repo.fetch_directional_modifiers(
+            text_confidence_min=settings.llm_classify_confidence_min,
+            text_prompt_version=PROMPT_VERSION,
+        )
         signals = fuse_signals(axis, weights)
         silver = compute_silver(
-            signals, window_days=window_days, baseline_method=baseline_method, min_history=min_history
+            signals,
+            window_days=window_days,
+            baseline_method=baseline_method,
+            min_history=min_history,
+            modifiers=modifiers,
         )
         silver_n = await self.repo.replace_silver(silver, baseline_method)
         gold = project_to_gold(silver)
@@ -47,6 +55,7 @@ class PulseRefineService:
         return {
             "axis_signals": len(axis),
             "fused": len(signals),
+            "modifiers": len(modifiers),
             "silver": silver_n,
             "gold": gold_n,
         }

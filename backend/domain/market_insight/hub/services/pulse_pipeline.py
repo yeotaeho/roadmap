@@ -130,11 +130,18 @@ def compute_silver(
     window_days: int = 20,
     baseline_method: BaselineMethod = "zscore",
     min_history: int = 0,
+    modifiers: dict[tuple[str, date], float] | None = None,
+    sentiment_k: float = 15.0,
 ) -> list[PulseSilverRow]:
     """섹터별 시계열을 정규화해 Silver 행 목록을 산출한다. 결정론적·멱등이다.
 
     min_history: 모멘텀 산출에 필요한 최소 직전 유효(비영) 관측 수. 미만이면 중립(score 50, 보합).
     이력이 희소한 섹터가 거짓 급등(태풍급)을 내는 것을 막는다(운영은 5, 테스트 기본 0).
+
+    modifiers: (섹터, 발생일) → 방향성 지표(-1~1). 활동 점수 위에 sentiment_k 배로 가산 이동해
+    감성·시장 방향을 점수에 반영한다(곱셈은 z-score 가 균일 스케일을 상쇄해 정상상태 심리를
+    못 반영하므로 가산을 쓴다). 키 부재면 tilt 0(감성 데이터 없는 섹터는 현 동작 유지). 배지는
+    tilt 된 점수로 재계산되고, momentum_pct 는 활동 기반 그대로 둔다(차트의 '활동 변화율' 의미 유지).
     """
     by_sector: dict[str, list[SignalInput]] = {}
     for sig in signals:
@@ -152,6 +159,11 @@ def compute_silver(
                 score, momentum_pct = 50, 0.0  # 유효 이력 부족 → 중립
             else:
                 score, momentum_pct = _normalize(cur.raw_signal_value, window, baseline_method)
+            # 감성·방향 가산 이동 — 활동 점수에 modifier(-1~1)×K 를 얹어 점수를 위/아래로 옮긴다.
+            if modifiers:
+                tilt = modifiers.get((sector, cur.reference_date), 0.0)
+                if tilt:
+                    score = _clamp(score + sentiment_k * tilt)
             rows.append(
                 PulseSilverRow(
                     sector_slug=sector,
