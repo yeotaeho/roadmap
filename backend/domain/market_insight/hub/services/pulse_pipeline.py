@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from statistics import mean, pstdev
 from typing import Literal
 
@@ -125,6 +126,20 @@ def _normalize(value: float, window: list[float], method: str) -> tuple[int, flo
     return score, round(momentum_pct, 2)
 
 
+def _trailing_modifier(
+    dates: list[date], vals: list[float], ref_date: date, window_days: int
+) -> float:
+    """ref_date 기준 직전 window_days 내 modifier 의 평균(없으면 0.0). dates 는 오름차순.
+
+    정확-일자 매칭 대신 트레일링 평균을 써, 최신 활동일이 직전 며칠치 방향을 carry-forward 로
+    물려받게 하고(주말·장마감 시차로 같은 날 신호가 없어도 반영), 단일 관측의 ±1 노이즈를 평활한다.
+    """
+    lo = bisect.bisect_right(dates, ref_date - timedelta(days=window_days))
+    hi = bisect.bisect_right(dates, ref_date)
+    window = vals[lo:hi]
+    return sum(window) / len(window) if window else 0.0
+
+
 def compute_silver(
     signals: list[SignalInput],
     window_days: int = 20,
@@ -132,6 +147,7 @@ def compute_silver(
     min_history: int = 0,
     modifiers: dict[tuple[str, date], float] | None = None,
     sentiment_k: float = 15.0,
+    modifier_window_days: int = 7,
 ) -> list[PulseSilverRow]:
     """섹터별 시계열을 정규화해 Silver 행 목록을 산출한다. 결정론적·멱등이다.
 
@@ -140,16 +156,29 @@ def compute_silver(
 
     modifiers: (섹터, 발생일) → 방향성 지표(-1~1). 활동 점수 위에 sentiment_k 배로 가산 이동해
     감성·시장 방향을 점수에 반영한다(곱셈은 z-score 가 균일 스케일을 상쇄해 정상상태 심리를
-    못 반영하므로 가산을 쓴다). 키 부재면 tilt 0(감성 데이터 없는 섹터는 현 동작 유지). 배지는
-    tilt 된 점수로 재계산되고, momentum_pct 는 활동 기반 그대로 둔다(차트의 '활동 변화율' 의미 유지).
+    못 반영하므로 가산을 쓴다). 적용은 정확-일자가 아니라 직전 modifier_window_days 일의 평균
+    (carry-forward)이라, 최신 활동일이 같은 날 modifier 가 없어도 직전 방향을 물려받고 단일 관측
+    노이즈가 평활된다. 윈도우에 modifier 가 없으면 tilt 0(감성 데이터 없는 섹터는 현 동작 유지).
+    배지는 tilt 된 점수로 재계산되고, momentum_pct 는 활동 기반 그대로 둔다(차트 '활동 변화율' 유지).
     """
     by_sector: dict[str, list[SignalInput]] = {}
     for sig in signals:
         by_sector.setdefault(sig.sector_slug, []).append(sig)
 
+    # 섹터별 modifier 타임라인(오름차순) — 트레일링 윈도우 평균 조회용.
+    mod_timeline: dict[str, tuple[list[date], list[float]]] = {}
+    if modifiers:
+        tmp: dict[str, list[tuple[date, float]]] = {}
+        for (slug, d), v in modifiers.items():
+            tmp.setdefault(slug, []).append((d, v))
+        for slug, pairs in tmp.items():
+            pairs.sort()
+            mod_timeline[slug] = ([d for d, _ in pairs], [v for _, v in pairs])
+
     rows: list[PulseSilverRow] = []
     for sector, items in by_sector.items():
         ordered = sorted(items, key=lambda x: x.reference_date)
+        timeline = mod_timeline.get(sector)
         for i, cur in enumerate(ordered):
             window = [p.raw_signal_value for p in ordered[max(0, i - window_days):i]]
             # 유효(비영) 관측 기준 게이트 — min-max 정규화가 흔한 최소값을 0으로 보내
@@ -159,9 +188,9 @@ def compute_silver(
                 score, momentum_pct = 50, 0.0  # 유효 이력 부족 → 중립
             else:
                 score, momentum_pct = _normalize(cur.raw_signal_value, window, baseline_method)
-            # 감성·방향 가산 이동 — 활동 점수에 modifier(-1~1)×K 를 얹어 점수를 위/아래로 옮긴다.
-            if modifiers:
-                tilt = modifiers.get((sector, cur.reference_date), 0.0)
+            # 감성·방향 가산 이동 — 직전 윈도우 modifier 평균(-1~1)×K 를 점수에 얹는다.
+            if timeline is not None:
+                tilt = _trailing_modifier(timeline[0], timeline[1], cur.reference_date, modifier_window_days)
                 if tilt:
                     score = _clamp(score + sentiment_k * tilt)
             rows.append(

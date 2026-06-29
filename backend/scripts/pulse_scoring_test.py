@@ -181,7 +181,7 @@ def test_tech_demand_axis_weight() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 감성·방향 가산 이동(modifier) — 활동 점수 위에 -1~1 modifier × K 를 얹는다
+# 감성·방향 가산 이동(modifier) — 활동 점수 위에 직전 윈도우 평균(-1~1) × K 를 얹는다
 # ---------------------------------------------------------------------------
 def test_modifier_tilt() -> None:
     flat = _series("ai-data", [5, 5, 5, 5])  # 평탄 → 전부 score 50
@@ -210,6 +210,33 @@ def test_modifier_tilt() -> None:
     check("tilt 후에도 momentum 활동 기반 유지", tilted.momentum_pct == plain.momentum_pct)
 
 
+# ---------------------------------------------------------------------------
+# modifier 트레일링 윈도우 — carry-forward·평균·윈도우 이탈
+# ---------------------------------------------------------------------------
+def test_modifier_trailing_window() -> None:
+    flat5 = _series("ai-data", [5, 5, 5, 5, 5])  # 6/1~6/5, 전부 score 50
+    # carry-forward — 6/3 modifier 가 같은 날 신호 없는 6/5 에도 직전 윈도우로 반영.
+    cf = compute_silver(flat5, baseline_method="zscore", modifiers={("ai-data", date(2026, 6, 3)): 0.4})
+    by_date = {r.reference_date: r.normalized_score for r in cf}
+    check("carry-forward: 6/5 = 50+6=56", by_date[date(2026, 6, 5)] == 56)
+    check("carry-forward: modifier 이전일 6/2 = 불변 50", by_date[date(2026, 6, 2)] == 50)
+    # 트레일링 평균 — 같은 윈도우의 +1.0·-1.0 이 상쇄되어 tilt 0.
+    avg = compute_silver(
+        flat5, baseline_method="zscore",
+        modifiers={("ai-data", date(2026, 6, 4)): 1.0, ("ai-data", date(2026, 6, 5)): -1.0},
+    )
+    check("트레일링 평균: 6/5 = (+1-1)/2=0 → 50", avg[-1].normalized_score == 50)
+    # 윈도우 이탈 — 7일 밖 modifier 는 미반영.
+    flat10 = _series("ai-data", [5] * 10)  # 6/1~6/10
+    fall = compute_silver(
+        flat10, baseline_method="zscore",
+        modifiers={("ai-data", date(2026, 6, 1)): 0.6}, modifier_window_days=7,
+    )
+    fd = {r.reference_date: r.normalized_score for r in fall}
+    check("윈도우 내(6/7) = 50+9=59", fd[date(2026, 6, 7)] == 59)
+    check("윈도우 밖(6/8) = 불변 50", fd[date(2026, 6, 8)] == 50)
+
+
 def main() -> int:
     test_zscore_jump()
     test_other_methods()
@@ -223,6 +250,7 @@ def main() -> int:
     test_fuse()
     test_tech_demand_axis_weight()
     test_modifier_tilt()
+    test_modifier_trailing_window()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 
