@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-30 — Pulse 방향성 융합 3차: 감성 중심화·파라미터 설정값화·전기간 백필
+- **무엇** — ① 텍스트 감성을 전체 관측수-가중 평균(baseline) 대비로 **중심화**(`center_text_sentiment` 순수함수) — 산업 뉴스 LLM 감성의 양수 쏠림을 제거하고 '평균보다 긍정/부정인가'의 상대 변별로 전환(시장 방향은 이미 ±대칭이라 미중심화). ② `sentiment_k`·`shrink_k`·`window`·축 가중·중심화 토글을 `settings.PULSE_*` env 로 노출. ③ 감성 백필 윈도우 30→365일로 확대(전 분류행 감성 완비).
+- **왜** — 2차 후 prod 검증에서 텍스트 볼륨↑로 전 섹터 양수 쏠림(상대 변별 약화)이 관측됨 → 중심화로 해소. 실사용 데이터 축적 후 코드 변경 없이 재조정하려면 파라미터를 .env 로 빼야 함. 30일 밖 행은 sentiment NULL 이라 히스토리 차트가 감성 미반영 → 전기간 백필.
+- **어디** — [pulse_pipeline.py](../hub/services/pulse_pipeline.py)(`center_text_sentiment`), [pulse_repository.py](../hub/repositories/pulse_repository.py)(`fetch_directional_modifiers(center_text)`), [settings.py](../../../core/config/settings.py)(`pulse_*` 6필드), [pulse_refine_service.py](../hub/services/pulse_refine_service.py)(설정 주입), [sentiment_backfill.py](../../../scripts/sentiment_backfill.py).
+- **검증** — [pulse_scoring_test.py](../../../scripts/pulse_scoring_test.py) 62 PASS(중심화 7건 추가). 전기간 백필 +293행(전부 economic, 60~365일 NULL 0 = 완비). refine 재실행(modifiers 2816·gold 2997). 라이브 `GET /api/insight/pulse` 틸트 0 중심 균형 확인(food-agri 90·edutech 73·ai-data 42·energy 43·반도체 35, 상대 변별). reload=True 라 코드 자동 반영.
+- **후속** — 중심화는 전기간 단일 baseline(시간 드리프트 미보정) — 필요 시 per-기간 baseline. 축 가중 1:1·`sentiment_k`15·`shrink_k`8·윈도우7은 실사용 후 `PULSE_*` env 로 재조정. 공개 prod 별도 서버면 동일 반영 필요.
+
 ## 2026-06-28 — Pulse 방향성 융합 2차: shrinkage·축 가중·30일 감성 백필·배포
 - **무엇** — 1차(가산 이동) 후 prod 읽기전용 검증에서 드러난 문제들을 보정하고 데이터·원격을 정렬. ① modifier에 관측수(weight)를 실어 트레일링을 관측수 가중으로 내고 `W/(W+8)` shrinkage로 단일 관측 ±1 노이즈 억제. ② 텍스트·시장을 축별로 트레일링·shrinkage 후 고정 축 가중(1:1)으로 결합 — 텍스트 행수(수천)가 시장 티커수를 압도해 시장이 묻히던 것을 해소. ③ 기존 분류행 30일치 감성 백필(`sentiment_backfill.py`). ④ 브랜치 main 머지 + `origin/main` push.
 - **왜** — 1차 검증 결과 (a) 정확-일자 매칭이라 최신일 tilt 미반영(시장 06-26·활동 06-28 시차) → carry-forward, (b) modifier 60%가 ±1.0 극단(단일 관측일) → shrinkage, (c) 백필 후 텍스트 볼륨이 시장 방향을 압도하고 점수가 전 섹터 양수 쏠림 → 축 가중. 단위 테스트(합성 정렬 데이터)로는 안 잡히고 prod 실데이터 읽기전용 시뮬레이션으로만 드러난 문제들.
