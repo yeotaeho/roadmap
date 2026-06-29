@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-06-29 — NCS 역량 온톨로지 수집기 완성 + 기술채택 수집기 패키지명 수정
+
+- **무엇** — `ncs_standard_collector` 전면 재작성(잘못된 BASE_URL·오퍼레이션명 → 실증된 값으로 교체), npm/PyPI 수집기 패키지명·scoped 패키지 처리 수정.
+- **왜** — 이전 구현의 BASE_URL(`HRD4U`)·오퍼레이션명(`getNcsLargeCategoryList` 등)이 모두 추측값이어서 HTTP 500. Jina Reader로 Swagger UI를 크롤링해 실제 오퍼레이션명 확인. npm scoped 패키지(`@`-prefix)가 bulk URL에서 HTTP 400 반환, PyPI `llamaindex`·`terraform` 패키지명이 존재하지 않아 404 발생.
+- **어디**
+  - [`ncs_standard_collector.py`](../hub/services/collectors/people/ncs/ncs_standard_collector.py) — BASE_URL `hrdkapi`, NCS001~006 오퍼레이션, 계층별 파라미터 완전 매핑
+  - [`npm_downloads_collector.py`](../hub/services/collectors/innovation/tech_adoption/npm_downloads_collector.py) — non-scoped 벌크 + scoped 개별 요청 분리
+  - [`pypi_downloads_collector.py`](../hub/services/collectors/innovation/tech_adoption/pypi_downloads_collector.py) — `llamaindex`→`llama-index`, `terraform`→`python-terraform`
+  - [`ncs_competency_master.py`](../models/bases/ncs_competency_master.py) ORM, [`ncs_master_dto.py`](../models/transfer/ncs_master_dto.py) DTO, [`ncs_master_repository.py`](../hub/repositories/ncs_master_repository.py), [`bronze_ncs_ingest_service.py`](../hub/services/bronze_ncs_ingest_service.py), [`8ada7f5586d9_create_ncs_competency_master.py`](../../alembic/versions/8ada7f5586d9_create_ncs_competency_master.py) 마이그레이션
+- **검증** — live BFS: L1 24·L2 84·L3 286·L4 1,115 = 1,509건 수집 완료. npm 31/31·PyPI 36/38(2건 rate-limit 429) 성공. 커밋 `753bc89`.
+- **후속** — 스케줄러 등록(`_MONTHLY_JOBS: ncs_standard`), alembic upgrade head 미실행(prod 배포 시 필요). NCS006 능력단위요소(L6) max_depth=6 실 수집 검증 미완.
+
 ## 2026-06-27 — K-Startup 공고 본문 보강 (상세 페이지 fetch)
 
 - **무엇** — `raw_opportunity_data` OPP_KSTARTUP_GRANT 278건 중 88%(245건)이 `raw_content` 200자 미만(API `pbanc_ctnt` 130자 요약만 제공). 상세 페이지 HTML을 fetch해 `.information_list` 컨테이너에서 본문을 추출·교체하는 보강 로직 추가.
