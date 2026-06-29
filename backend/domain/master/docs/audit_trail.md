@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-06-29 — raw_tech_adoption_data 신설 + 기술채택 수집기 TechAdoptionCollectDto 전환
+
+- **무엇** — Bronze 기술채택 전용 테이블·DTO·Repository 신설, 3대 수집기(npm/pypi/hf) 라우팅 분리
+- **왜** — `raw_innovation_data`는 논문/특허 엔티티 grain; npm·PyPI·HF는 주간 시계열 스냅샷 grain으로 semantic 충돌 — 별도 테이블로 분리
+- **어디** — [`backend/domain/master/models/bases/raw_tech_adoption_data.py`](../models/bases/raw_tech_adoption_data.py) · [`models/transfer/tech_adoption_collect_dto.py`](../models/transfer/tech_adoption_collect_dto.py) · [`hub/repositories/tech_adoption_repository.py`](../hub/repositories/tech_adoption_repository.py) · [`alembic/versions/c7e3a9f1b5d2_add_raw_tech_adoption_data.py`](../../alembic/versions/c7e3a9f1b5d2_add_raw_tech_adoption_data.py) · [`docs/erd.md`](../../docs/erd.md) §0·§4 업데이트
+- **검증** — import 구조 수동 확인, 마이그레이션 DDL 검토, 커밋 `c0cdd77`
+- **후속** — `alembic upgrade head`(Neon 적용) 후 실수집 테스트 필요
+
+---
+
 ## 2026-06-29 — NCS 역량 온톨로지 수집기 완성 + 기술채택 수집기 패키지명 수정
 
 - **무엇** — `ncs_standard_collector` 전면 재작성(잘못된 BASE_URL·오퍼레이션명 → 실증된 값으로 교체), npm/PyPI 수집기 패키지명·scoped 패키지 처리 수정.
