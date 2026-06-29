@@ -183,6 +183,19 @@ class Settings(BaseSettings):
         default=True, validation_alias="PULSE_CENTER_TEXT_SENTIMENT"
     )
 
+    # 시장 전망(TimesFM 14일 예측) 튜닝 — 실사용 후 .env 로 재조정.
+    forecast_horizon_days: int = Field(default=14, validation_alias="FORECAST_HORIZON_DAYS")
+    forecast_score_k: float = Field(default=5.0, validation_alias="FORECAST_SCORE_K")
+    forecast_up_threshold: float = Field(default=1.5, validation_alias="FORECAST_UP_THRESHOLD")
+    forecast_up_strong_threshold: float = Field(
+        default=5.0, validation_alias="FORECAST_UP_STRONG_THRESHOLD"
+    )
+    forecast_min_history: int = Field(default=64, validation_alias="FORECAST_MIN_HISTORY")
+    forecast_band_norm: float = Field(default=0.3, validation_alias="FORECAST_BAND_NORM")
+    forecast_model_repo: str = Field(
+        default="google/timesfm-2.5-200m-pytorch", validation_alias="FORECAST_MODEL_REPO"
+    )
+
     # Open DART (Bronze — raw_economic_data 등)
     dart_api_key: Optional[str] = Field(
         default=None,
