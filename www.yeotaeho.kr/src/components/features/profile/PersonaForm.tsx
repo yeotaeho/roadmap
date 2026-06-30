@@ -1,12 +1,16 @@
-// 역량 프로필(페르소나) 수집 폼 — 스킬·경험·학력·요약을 구조화 입력해 저장
+// 역량 프로필(페르소나) 수집 폼 — 스킬·경험·학력·요약·자격증·언어·링크·프로젝트 구조화 입력
 "use client";
 
 import { Edit2, Plus, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type {
+  CertificationItem,
   EducationItem,
   ExperienceItem,
+  LanguageItem,
+  LinkItem,
   Persona,
+  ProjectItem,
   SkillItem,
   SkillLevel,
 } from "@/lib/api/persona";
@@ -14,12 +18,17 @@ import { usePersona, useUpsertPersona } from "@/hooks/usePersona";
 import { useRefreshRoadmap } from "@/hooks/useRoadmap";
 
 const LEVELS: SkillLevel[] = ["입문", "중급", "심화"];
+const LINK_TYPES = ["github", "portfolio", "blog"];
 
 type Draft = {
   skills: SkillItem[];
   experiences: ExperienceItem[];
   education: EducationItem[];
   summary: string;
+  certifications: CertificationItem[];
+  languages: LanguageItem[];
+  links: LinkItem[];
+  projects: ProjectItem[];
 };
 
 function toDraft(p?: Persona): Draft {
@@ -28,6 +37,10 @@ function toDraft(p?: Persona): Draft {
     experiences: p?.experiences ?? [],
     education: p?.education ?? [],
     summary: p?.summary ?? "",
+    certifications: p?.certifications ?? [],
+    languages: p?.languages ?? [],
+    links: p?.links ?? [],
+    projects: p?.projects ?? [],
   };
 }
 
@@ -56,7 +69,7 @@ export function PersonaForm() {
     setIsEditing(false);
   };
   const save = async () => {
-    await upsert.mutateAsync({ certifications: [], languages: [], links: [], projects: [], ...draft });
+    await upsert.mutateAsync(draft);
     setIsEditing(false);
     // 페르소나 반영해 로드맵 자동 재생성(LLM). 실패해도 저장은 유지.
     try {
@@ -107,9 +120,75 @@ export function PersonaForm() {
   const removeEdu = (i: number) =>
     setDraft((d) => ({ ...d, education: d.education.filter((_, idx) => idx !== i) }));
 
+  // ── 자격증 ──
+  const addCert = () =>
+    setDraft((d) => ({
+      ...d,
+      certifications: [...d.certifications, { name: "", issuer: "", year: "" }],
+    }));
+  const setCert = (i: number, patch: Partial<CertificationItem>) =>
+    setDraft((d) => ({
+      ...d,
+      certifications: d.certifications.map((c, idx) => (idx === i ? { ...c, ...patch } : c)),
+    }));
+  const removeCert = (i: number) =>
+    setDraft((d) => ({ ...d, certifications: d.certifications.filter((_, idx) => idx !== i) }));
+
+  // ── 어학 ──
+  const addLang = () =>
+    setDraft((d) => ({
+      ...d,
+      languages: [...d.languages, { language: "", test: "", score: "" }],
+    }));
+  const setLang = (i: number, patch: Partial<LanguageItem>) =>
+    setDraft((d) => ({
+      ...d,
+      languages: d.languages.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
+    }));
+  const removeLang = (i: number) =>
+    setDraft((d) => ({ ...d, languages: d.languages.filter((_, idx) => idx !== i) }));
+
+  // ── 링크 ──
+  const addLink = () =>
+    setDraft((d) => ({
+      ...d,
+      links: [...d.links, { type: "github", url: "" }],
+    }));
+  const setLink = (i: number, patch: Partial<LinkItem>) =>
+    setDraft((d) => ({
+      ...d,
+      links: d.links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
+    }));
+  const removeLink = (i: number) =>
+    setDraft((d) => ({ ...d, links: d.links.filter((_, idx) => idx !== i) }));
+
+  // ── 프로젝트 ──
+  const addProject = () =>
+    setDraft((d) => ({
+      ...d,
+      projects: [
+        ...d.projects,
+        { title: "", description: "", role: "", period: "", tech_stack: [] },
+      ],
+    }));
+  const setProject = (i: number, patch: Partial<Omit<ProjectItem, "tech_stack">> & { tech_stack?: string[] }) =>
+    setDraft((d) => ({
+      ...d,
+      projects: d.projects.map((p, idx) => (idx === i ? { ...p, ...patch } : p)),
+    }));
+  const removeProject = (i: number) =>
+    setDraft((d) => ({ ...d, projects: d.projects.filter((_, idx) => idx !== i) }));
+
   const view = toDraft(data);
   const isEmpty =
-    !view.skills.length && !view.experiences.length && !view.education.length && !view.summary;
+    !view.skills.length &&
+    !view.experiences.length &&
+    !view.education.length &&
+    !view.summary &&
+    !view.certifications.length &&
+    !view.languages.length &&
+    !view.links.length &&
+    !view.projects.length;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -333,6 +412,282 @@ export function PersonaForm() {
                     {e.major ? <span className="text-gray-500"> {e.major}</span> : null}
                     {e.degree ? <span className="text-gray-400"> · {e.degree}</span> : null}
                     {e.status ? <span className="text-gray-400"> ({e.status})</span> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* 자격증 */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700">자격증</p>
+              {isEditing && (
+                <button type="button" onClick={addCert} className="text-red-600 hover:text-red-700">
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                {draft.certifications.map((c, i) => (
+                  <div key={i} className="flex flex-wrap gap-2 items-center">
+                    <input
+                      className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={c.name}
+                      placeholder="자격증명"
+                      onChange={(e) => setCert(i, { name: e.target.value })}
+                    />
+                    <input
+                      className="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={c.issuer}
+                      placeholder="발급기관"
+                      onChange={(e) => setCert(i, { issuer: e.target.value })}
+                    />
+                    <input
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={c.year}
+                      placeholder="취득연도"
+                      onChange={(e) => setCert(i, { year: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCert(i)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                {!draft.certifications.length && (
+                  <p className="text-xs text-gray-400">+ 로 자격증을 추가하세요.</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {view.certifications.map((c, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                  >
+                    {c.name}
+                    {c.issuer ? <span className="text-xs text-gray-500">({c.issuer})</span> : null}
+                    {c.year ? <span className="text-xs text-red-600">{c.year}</span> : null}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 어학 */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700">어학</p>
+              {isEditing && (
+                <button type="button" onClick={addLang} className="text-red-600 hover:text-red-700">
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                {draft.languages.map((l, i) => (
+                  <div key={i} className="flex flex-wrap gap-2 items-center">
+                    <input
+                      className="flex-1 min-w-[80px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={l.language}
+                      placeholder="언어 (예: 영어)"
+                      onChange={(e) => setLang(i, { language: e.target.value })}
+                    />
+                    <input
+                      className="flex-1 min-w-[80px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={l.test}
+                      placeholder="시험 (예: TOEIC)"
+                      onChange={(e) => setLang(i, { test: e.target.value })}
+                    />
+                    <input
+                      className="w-24 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={l.score}
+                      placeholder="점수"
+                      onChange={(e) => setLang(i, { score: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLang(i)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                {!draft.languages.length && (
+                  <p className="text-xs text-gray-400">+ 로 어학 성적을 추가하세요.</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {view.languages.map((l, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                  >
+                    {l.language}
+                    {l.test ? <span className="text-xs text-gray-500">{l.test}</span> : null}
+                    {l.score ? <span className="text-xs text-red-600">{l.score}</span> : null}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 링크 */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700">링크</p>
+              {isEditing && (
+                <button type="button" onClick={addLink} className="text-red-600 hover:text-red-700">
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                {draft.links.map((l, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <select
+                      className="px-2 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={l.type}
+                      onChange={(e) => setLink(i, { type: e.target.value })}
+                    >
+                      {LINK_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={inputCls}
+                      value={l.url}
+                      placeholder="URL"
+                      onChange={(e) => setLink(i, { url: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLink(i)}
+                      className="text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                {!draft.links.length && (
+                  <p className="text-xs text-gray-400">+ 로 링크를 추가하세요.</p>
+                )}
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {view.links.map((l, i) => (
+                  <li key={i} className="text-sm text-gray-700">
+                    <span className="text-xs text-gray-500 mr-1">[{l.type}]</span>
+                    <a
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-red-600 hover:underline break-all"
+                    >
+                      {l.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* 프로젝트 */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700">프로젝트</p>
+              {isEditing && (
+                <button type="button" onClick={addProject} className="text-red-600 hover:text-red-700">
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
+            {isEditing ? (
+              <div className="space-y-3">
+                {draft.projects.map((p, i) => (
+                  <div key={i} className="rounded-md border border-gray-200 p-3 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        className={inputCls}
+                        value={p.title}
+                        placeholder="프로젝트명"
+                        onChange={(e) => setProject(i, { title: e.target.value })}
+                      />
+                      <input
+                        className="w-28 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        value={p.period}
+                        placeholder="기간"
+                        onChange={(e) => setProject(i, { period: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeProject(i)}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <input
+                      className={inputCls}
+                      value={p.role}
+                      placeholder="역할 (예: 백엔드 개발)"
+                      onChange={(e) => setProject(i, { role: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      value={p.description}
+                      placeholder="설명"
+                      onChange={(e) => setProject(i, { description: e.target.value })}
+                    />
+                    <input
+                      className={inputCls}
+                      value={p.tech_stack.join(", ")}
+                      placeholder="기술 스택 (콤마로 구분: React, Python)"
+                      onChange={(e) =>
+                        setProject(i, {
+                          tech_stack: e.target.value
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+                {!draft.projects.length && (
+                  <p className="text-xs text-gray-400">+ 로 프로젝트를 추가하세요.</p>
+                )}
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {view.projects.map((p, i) => (
+                  <li key={i} className="text-sm text-gray-700">
+                    <span className="font-medium">{p.title}</span>
+                    {p.role ? <span className="text-gray-500"> · {p.role}</span> : null}
+                    {p.period ? <span className="text-gray-400"> ({p.period})</span> : null}
+                    {p.tech_stack.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {p.tech_stack.map((t, ti) => (
+                          <span
+                            key={ti}
+                            className="px-1.5 py-0.5 rounded bg-gray-100 text-xs text-gray-600"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
