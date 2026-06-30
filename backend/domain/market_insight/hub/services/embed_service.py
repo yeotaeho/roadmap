@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.market_insight.hub.repositories.embed_repository import EmbedRepository
+from domain.market_insight.hub.services.user_embed_text import build_user_embed_text
 
 DEFAULT_LIMIT = 300
 _BATCH = 64
@@ -61,21 +62,35 @@ class UserEmbedService:
         )
 
     @staticmethod
-    def _user_text(target_job, interest_keywords) -> str:
-        kws = interest_keywords if isinstance(interest_keywords, list) else []
-        parts = ([target_job] if target_job else []) + [str(k) for k in kws]
-        return " ".join(parts).strip() or "_"
+    def _user_text(
+        target_job, interest_keywords, work_style=None, company_size_pref=None,
+        work_type_pref=None, work_values=None, skills=None, certifications=None,
+        languages=None, projects=None,
+    ) -> str:
+        return build_user_embed_text(
+            target_job, interest_keywords, work_style, company_size_pref, work_type_pref,
+            work_values, skills, certifications, languages, projects,
+        )
 
     async def embed_users(self, limit: int = DEFAULT_LIMIT) -> dict:
         rows = await self.repo.fetch_unembedded_users(self._model, limit)
+        # 텍스트·해시 산출 후, 저장된 해시와 동일하면(타임스탬프상 후보지만 내용 불변) 임베딩 생략.
+        pending = []
+        for r in rows:
+            t = self._user_text(
+                r.target_job, r.interest_keywords,
+                r.work_style, r.company_size_pref, r.work_type_pref, r.work_values,
+                r.skills, r.certifications, r.languages, r.projects,
+            )
+            version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
+            if version != r.source_version:
+                pending.append((r.user_id, t, version))
         embedded = 0
-        for i in range(0, len(rows), _BATCH):
-            chunk = rows[i : i + _BATCH]
-            texts = [self._user_text(r.target_job, r.interest_keywords) for r in chunk]
-            vectors = await self._llm.embed(texts)
-            for r, vec, t in zip(chunk, vectors, texts):
-                version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
-                await self.repo.upsert_user_embedding(r.user_id, vec, version, self._model)
+        for i in range(0, len(pending), _BATCH):
+            chunk = pending[i : i + _BATCH]
+            vectors = await self._llm.embed([t for _, t, _ in chunk])
+            for (uid, _t, version), vec in zip(chunk, vectors):
+                await self.repo.upsert_user_embedding(uid, vec, version, self._model)
                 embedded += 1
             await self.session.commit()
         return {"scanned": len(rows), "embedded": embedded}

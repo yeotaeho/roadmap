@@ -52,10 +52,20 @@ _INSERT_DOC_EMB = text(
 
 _FETCH_UNEMBEDDED_USERS = text(
     """
-    SELECT p.user_id, p.target_job, p.interest_keywords
+    SELECT p.user_id, p.target_job, p.interest_keywords,
+           pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
+           per.skills, per.certifications, per.languages, per.projects,
+           e.source_version
     FROM user_sync_profiles p
+    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
+    LEFT JOIN user_personas per ON per.user_id = p.user_id
     LEFT JOIN user_embeddings e ON e.user_id = p.user_id AND e.embedding_model = :model
     WHERE e.user_id IS NULL
+       OR GREATEST(
+            p.updated_at,
+            COALESCE(pref.updated_at, p.updated_at),
+            COALESCE(per.updated_at, p.updated_at)
+          ) > e.computed_at
     LIMIT :lim
     """
 )
