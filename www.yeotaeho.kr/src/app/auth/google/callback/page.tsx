@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useStore';
+import { onboardingTarget } from '@/lib/onboarding';
 
 function GoogleCallbackContent() {
     const searchParams = useSearchParams();
@@ -111,9 +112,9 @@ function GoogleCallbackContent() {
                     }
                     // 리프레시 토큰은 HttpOnly 쿠키로 자동 설정됨 (백엔드에서 처리)
 
-                    // 로그인 성공 후 메인 페이지나 대시보드로 리디렉션
+                    // 로그인 성공 후 온보딩 미완료 시 /onboarding, 완료 시 / 로 이동
                     setTimeout(() => {
-                        router.push('/');
+                        router.push(onboardingTarget());
                     }, 2000);
                 } else {
                     const errorData = await response.json().catch(() => ({ message: '알 수 없는 오류' }));
