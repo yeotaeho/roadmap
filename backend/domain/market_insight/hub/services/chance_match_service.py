@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.market_insight.hub.repositories.chance_repository import ChanceRepository
+from domain.market_insight.hub.services.user_embed_text import disposition_spec_terms
 
 
 # 공고×사용자 코사인 → 0~100 매핑 전역 고정 앵커(휴리스틱, 실데이터로 튜닝).
@@ -93,7 +94,14 @@ class ChanceMatchService:
         fallback = 0
         for u in users:
             keywords = u.interest_keywords if isinstance(u.interest_keywords, list) else []
-            user_terms = list(keywords) + ([u.target_job] if u.target_job else [])
+            user_terms = (
+                list(keywords)
+                + ([u.target_job] if u.target_job else [])
+                + disposition_spec_terms(
+                    u.work_style, u.company_size_pref, u.work_type_pref, u.work_values,
+                    u.skills, u.certifications, u.languages, u.projects,
+                )
+            )
             for o in opps:
                 opp_text = " ".join(
                     str(x) for x in (o.title, o.opportunity_type, o.benefit_summary, o.target_audience) if x

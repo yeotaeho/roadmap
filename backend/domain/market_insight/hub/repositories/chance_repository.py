@@ -110,7 +110,14 @@ _FETCH_ACTIVE_OPPS = text(
 )
 
 _FETCH_USERS = text(
-    "SELECT user_id, target_job, interest_keywords FROM user_sync_profiles"
+    """
+    SELECT p.user_id, p.target_job, p.interest_keywords,
+           pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
+           per.skills, per.certifications, per.languages, per.projects
+    FROM user_sync_profiles p
+    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
+    LEFT JOIN user_personas per ON per.user_id = p.user_id
+    """
 )
 
 # 의미 매칭 — (사용자 임베딩 × 활성 공고 임베딩) 코사인 적합도. 동일 모델끼리만 비교.
