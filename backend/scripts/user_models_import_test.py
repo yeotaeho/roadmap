@@ -9,23 +9,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 
 from core.database import Base  # noqa: E402
-import alembic.env  # noqa: E402,F401  (모든 ORM을 메타데이터에 로드)
 
-PASS = 0
-FAIL = 0
-
-
-def check(name: str, cond: bool, extra: str = "") -> None:
-    global PASS, FAIL
-    if cond:
-        PASS += 1
-        print(f"[PASS] {name}")
-    else:
-        FAIL += 1
-        print(f"[FAIL] {name} {extra}")
+# 모델 모듈을 직접 import 하여 Base.metadata 에 등록(alembic.env 우회 — 로컬 alembic 섀도잉 회피).
+from domain.auth.models.bases.user_profile import UserProfile  # noqa: E402,F401
+from domain.user_intelligence.models.bases.user_preference import UserPreference  # noqa: E402,F401
+from domain.user_intelligence.models.bases.user_persona import UserPersona  # noqa: E402,F401
 
 
 def run() -> int:
+    passed = 0
+    failed = 0
+
+    def check(name: str, cond: bool, extra: str = "") -> None:
+        nonlocal passed, failed
+        if cond:
+            passed += 1
+            print(f"[PASS] {name}")
+        else:
+            failed += 1
+            print(f"[FAIL] {name} {extra}")
+
     tables = Base.metadata.tables
     check("user_profiles 등록", "user_profiles" in tables)
     check("user_preferences 등록", "user_preferences" in tables)
@@ -38,8 +41,9 @@ def run() -> int:
     pref_cols = set(tables["user_preferences"].columns.keys())
     for c in ("user_id", "work_style", "company_size_pref", "work_type_pref", "work_values", "source"):
         check(f"user_preferences.{c} 컬럼", c in pref_cols)
-    print(f"\n결과: PASS={PASS} FAIL={FAIL}")
-    return 1 if FAIL else 0
+
+    print(f"\n결과: PASS={passed} FAIL={failed}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

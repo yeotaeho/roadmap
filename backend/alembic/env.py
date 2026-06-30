@@ -8,21 +8,19 @@ from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
-# alembic 런타임 밖(테스트 직접 import) 에서는 context.config 가 없으므로 방어 처리
-try:
-    config = context.config
-    # Interpret the config file for Python logging.
-    # This line sets up loggers basically.
-    if config.config_file_name is not None:
-        fileConfig(config.config_file_name)
-except AttributeError:
-    config = None
+config = context.config
+
+# Interpret the config file for Python logging.
+# This line sets up loggers basically.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 from core.database import Base
 from domain.auth.models.bases.user import User  # Import all models here
 from domain.auth.models.bases.user_sync_profile import UserSyncProfile
+from domain.auth.models.bases.user_profile import UserProfile  # 기본정보
 from domain.master.models.bases.raw_economic_data import RawEconomicData  # Bronze
 from domain.master.models.bases.raw_market_timeseries import RawMarketTimeseries  # Bronze
 from domain.master.models.bases.raw_opportunity_data import RawOpportunityData  # Bronze
@@ -74,7 +72,6 @@ from domain.market_insight.models.bases.refined_investment_flows import (  # Sil
     RefinedInvestmentFlows,
 )
 from domain.user_intelligence.models.bases.user_persona import UserPersona  # Persona
-from domain.auth.models.bases.user_profile import UserProfile  # 기본정보
 from domain.user_intelligence.models.bases.user_preference import UserPreference  # 성향·선호
 from domain.hrowth_journey.models.bases.user_roadmap import UserRoadmap  # Roadmap
 from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roadmap
@@ -175,12 +172,8 @@ def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
 
 
-# alembic 런타임 밖에서 import 할 때는 마이그레이션 실행 건너뜀
-try:
-    if context.is_offline_mode():
-        run_migrations_offline()
-    else:
-        run_migrations_online()
-except (AttributeError, NameError):
-    pass  # context 프록시 미초기화 상태(테스트 직접 import) — 스킵
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
 
