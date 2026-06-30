@@ -95,6 +95,7 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
           />
         </div>
         <button
+          type="button"
           onClick={save}
           disabled={upsert.isPending}
           className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"

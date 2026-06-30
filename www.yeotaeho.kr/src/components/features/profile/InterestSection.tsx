@@ -45,6 +45,7 @@ export default function InterestSection({ className = "" }: { className?: string
   const [customKeywords, setCustomKeywords] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState<string>("");
   const [saved, setSaved] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -76,7 +77,12 @@ export default function InterestSection({ className = "" }: { className?: string
 
   const save = async () => {
     const interestKeywords = [...selectedSectors, ...selectedJobs, ...customKeywords];
-    await upsert.mutateAsync({ targetJob: targetJob || null, interestKeywords });
+    const result = await upsert.mutateAsync({ targetJob: targetJob || null, interestKeywords });
+    if (!result) {
+      setSaveFailed(true);
+      setTimeout(() => setSaveFailed(false), 3000);
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -153,12 +159,16 @@ export default function InterestSection({ className = "" }: { className?: string
           )}
         </div>
         <button
+          type="button"
           onClick={save}
           disabled={upsert.isPending}
           className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
         >
           {upsert.isPending ? "저장 중…" : saved ? "저장됨" : "저장"}
         </button>
+        {saveFailed && (
+          <p className="text-red-600 text-xs mt-1">저장에 실패했어요. 다시 시도해 주세요.</p>
+        )}
       </div>
     </section>
   );
