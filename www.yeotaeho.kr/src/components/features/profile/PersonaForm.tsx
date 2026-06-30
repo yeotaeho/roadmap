@@ -56,7 +56,7 @@ export function PersonaForm() {
     setIsEditing(false);
   };
   const save = async () => {
-    await upsert.mutateAsync(draft);
+    await upsert.mutateAsync({ certifications: [], languages: [], links: [], projects: [], ...draft });
     setIsEditing(false);
     // 페르소나 반영해 로드맵 자동 재생성(LLM). 실패해도 저장은 유지.
     try {

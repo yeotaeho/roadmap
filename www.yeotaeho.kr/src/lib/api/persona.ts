@@ -21,15 +21,34 @@ export interface EducationItem {
   status: string;
 }
 
+export interface CertificationItem { name: string; issuer: string; year: string; }
+export interface LanguageItem { language: string; test: string; score: string; }
+export interface LinkItem { type: string; url: string; }
+export interface ProjectItem { title: string; description: string; role: string; period: string; tech_stack: string[]; }
+
 export interface Persona {
   skills: SkillItem[];
   experiences: ExperienceItem[];
   education: EducationItem[];
   summary: string;
+  certifications: CertificationItem[];
+  languages: LanguageItem[];
+  links: LinkItem[];
+  projects: ProjectItem[];
   source?: string | null;
 }
 
-const EMPTY: Persona = { skills: [], experiences: [], education: [], summary: '', source: null };
+const EMPTY: Persona = {
+  skills: [],
+  experiences: [],
+  education: [],
+  summary: '',
+  certifications: [],
+  languages: [],
+  links: [],
+  projects: [],
+  source: null,
+};
 
 export async function fetchPersona(): Promise<Persona> {
   const { data } = await apiClient.get('/api/persona');
