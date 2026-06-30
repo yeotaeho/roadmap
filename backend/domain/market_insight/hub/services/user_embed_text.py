@@ -1,0 +1,86 @@
+# 사용자 임베딩/매칭용 텍스트 직렬화 - 성향·스펙 enum->한국어 라벨 (순수, 무DB·무네트워크)
+
+from __future__ import annotations
+
+_WORK_STYLE_LABEL = {"stability": "안정 지향", "challenge": "도전 지향", "balanced": "균형 지향"}
+_COMPANY_SIZE_LABEL = {"startup": "스타트업", "sme": "중소기업", "large": "대기업", "public": "공공기관"}
+_WORK_TYPE_LABEL = {"office": "사무실 근무", "remote": "원격 근무", "hybrid": "하이브리드 근무"}
+_WORK_VALUE_LABEL = {
+    "growth": "성장",
+    "work_life_balance": "워라밸",
+    "autonomy": "자율성",
+    "impact": "사회적 임팩트",
+    "compensation": "보상",
+}
+
+
+def _names(items, key: str) -> list[str]:
+    """JSONB 리스트[{key:..}]에서 key 값 문자열만 추출(None·비dict·빈값 무시)."""
+    out: list[str] = []
+    if isinstance(items, list):
+        for it in items:
+            if isinstance(it, dict):
+                v = it.get(key)
+                if v:
+                    out.append(str(v))
+    return out
+
+
+def _tech_stack(projects) -> list[str]:
+    """projects[].tech_stack 의 모든 기술 문자열을 평탄화한다."""
+    out: list[str] = []
+    if isinstance(projects, list):
+        for p in projects:
+            if isinstance(p, dict) and isinstance(p.get("tech_stack"), list):
+                out.extend(str(t) for t in p["tech_stack"] if t)
+    return out
+
+
+def disposition_spec_terms(
+    work_style=None,
+    company_size_pref=None,
+    work_type_pref=None,
+    work_values=None,
+    skills=None,
+    certifications=None,
+    languages=None,
+    projects=None,
+) -> list[str]:
+    """성향·스펙을 임베딩/매칭용 한국어 용어 리스트로 변환한다. 순수·결정론."""
+    terms: list[str] = []
+    if work_style in _WORK_STYLE_LABEL:
+        terms.append(_WORK_STYLE_LABEL[work_style])
+    if company_size_pref in _COMPANY_SIZE_LABEL:
+        terms.append(_COMPANY_SIZE_LABEL[company_size_pref])
+    if work_type_pref in _WORK_TYPE_LABEL:
+        terms.append(_WORK_TYPE_LABEL[work_type_pref])
+    if isinstance(work_values, list):
+        terms.extend(_WORK_VALUE_LABEL[v] for v in work_values if v in _WORK_VALUE_LABEL)
+    terms += _names(skills, "name")
+    terms += _names(certifications, "name")
+    terms += _names(languages, "language")
+    terms += _names(projects, "title")
+    terms += _tech_stack(projects)
+    return terms
+
+
+def build_user_embed_text(
+    target_job=None,
+    interest_keywords=None,
+    work_style=None,
+    company_size_pref=None,
+    work_type_pref=None,
+    work_values=None,
+    skills=None,
+    certifications=None,
+    languages=None,
+    projects=None,
+) -> str:
+    """직무+관심키워드+성향+스펙을 한 줄 임베딩 텍스트로 직렬화한다. 빈 입력은 '_'."""
+    kws = interest_keywords if isinstance(interest_keywords, list) else []
+    parts = ([target_job] if target_job else []) + [str(k) for k in kws]
+    parts += disposition_spec_terms(
+        work_style, company_size_pref, work_type_pref, work_values,
+        skills, certifications, languages, projects,
+    )
+    return " ".join(p for p in parts if p).strip() or "_"
