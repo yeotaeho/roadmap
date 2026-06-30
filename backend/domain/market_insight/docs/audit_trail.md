@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-06-30 — 개인화 Phase 2: 사용자 성향·스펙 임베딩 통합 + 재임베딩 버그 수정
+- **무엇** — Phase 1에서 수집한 성향·스펙을 사용자 임베딩·Chance 매칭에 반영. (1) 순수 헬퍼 `user_embed_text.py`(`build_user_embed_text`·`disposition_spec_terms`)가 성향 enum→한국어 라벨 + 스펙(skills/cert/lang/projects) 직렬화. (2) `_FETCH_UNEMBEDDED_USERS` 가 user_preferences·user_personas LEFT JOIN + `GREATEST(updated_at들) > computed_at` 로 재임베딩 트리거 — 기존엔 `e.user_id IS NULL` 만 봐서 데이터 변경 시 재임베딩 안 되던 버그 수정. `embed_users` 는 해시 동일 시 OpenAI 호출 생략(멱등). (3) `chance_match_service` user_terms 에 같은 헬퍼로 성향·스펙 가산.
+- **왜** — Sync/Chance 개인화가 직무+키워드만 쓰던 병목 해소. 데모그래픽(나이·성별·지역)은 편향 방지 위해 임베딩·매칭에서 제외(user_profiles 미JOIN).
+- **어디** — [user_embed_text.py](../hub/services/user_embed_text.py)(신규 순수 헬퍼) · [embed_repository.py](../hub/repositories/embed_repository.py)(`_FETCH_UNEMBEDDED_USERS`) · [embed_service.py](../hub/services/embed_service.py)(`_user_text` 위임·`embed_users` 해시스킵) · [chance_repository.py](../hub/repositories/chance_repository.py)(`_FETCH_USERS`) · [chance_match_service.py](../hub/services/chance_match_service.py)(user_terms). 스키마 변경 없음.
+- **검증** — `scripts/user_embed_text_test.py` 16/16 · `scripts/user_reembed_test.py` 7/7(실 OpenAI 재임베딩 사이클 포함) · `scripts/chance_user_terms_test.py` 6/6 PASS. 회귀 `embed_helpers_test.py` 7/7 · `chance_extract_match_test.py` 21/21. 커밋 aac9972·9f53489·54d2893.
+- **후속** — 스케줄러 `_REFINE_PIPELINE` 에서 `chance_match` 가 `user_embed` 보다 먼저 실행 → 데이터 변경 당일 Chance 의미(코사인) 경로 1일 지연(키워드 경로는 즉시·멱등 보정). `user_embed` 를 앞으로 옮기면 해소(별도 결정). 프론트 입력 UI는 Phase 3.
+
 ## 2026-06-30 — 시장 전망 수직 신설: TimesFM 14일 예측 (선행 지표)
 - **무엇** — `market_insight` 에 Pulse 와 나란한 독립 '시장 전망' 수직 추가. `raw_market_timeseries` 티커별 `close_price`(약 250거래일·29티커)를 **TimesFM 2.5**(google/timesfm-2.5-200m-pytorch, torch 백엔드)로 14일 예측 → 예측 % 수익률로 변환 → 상대 turnover 가중(통화 중립)으로 섹터 집계 → `clamp(round(50 + 5×수익률), 0, 100)` 전망 점수 + 방향 배지(강세/상승/중립/하락/약세 전망) + 분위수 밴드 신뢰도. Pulse 점수는 불변. 무거운 모델(spoke/infra)과 순수 산출(hub/services) 분리 — 핵심 수학은 torch 없이 단위 테스트.
 - **왜** — Pulse 는 과거~현재의 열기(활동량)+방향(감성·등락)이고 등락 modifier 마저 전일 대비(과거)다. 제품 핵심 컨셉 "선행 행동 지표"를 강화하려 **미래를 가리키는** 지표가 필요. 건수 축들은 일회성 백필이라 실 시계열이 없고, `raw_market_timeseries` 만이 실 연속 일별 시계열이라 예측 대상. 곱셈 아닌 가산도 동일 이유로 Pulse 와 정합. Phase 0 에서 Python 3.13/torch313 end-to-end 실현가능성 검증(JAX 불필요·`timesfm[torch]==2.0.1`·로드 84s·추론 0.6s·분위수 idx0=mean·1~9=q0.1~q0.9).
