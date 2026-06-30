@@ -1,5 +1,12 @@
 # user_intelligence 작업 기록
 
+## 2026-06-30 — 성향·선호(user_preferences) 신설 + persona 스펙 4필드 확장 — 개인화 Phase 1
+- **무엇** — (1) 성향·선호(disposition) 수직 신설: `user_preferences`(작업성향·선호 기업규모·근무형태·일의 가치) + `GET/PUT /api/preferences`. (2) 기존 `user_personas`에 스펙 심화 4 JSONB 컬럼(자격증·어학·링크·프로젝트) 추가 + `/api/persona` 확장. 전부 nullable·선택 입력, `source` provenance(미래 coach 추출 재사용 대비).
+- **왜** — 개인화 병목(target_job+keywords만 사용) 해소. 성향·스펙은 의미 데이터라 Phase 2에서 임베딩 직렬화 대상 — user_intelligence 도메인에 배치해 사전 분리.
+- **어디** — 신규 ORM [user_preference.py](../models/bases/user_preference.py)(테이블 `user_preferences`) · [preference_repository.py](../hub/repositories/preference_repository.py)(work_values JSONB CAST) · [preference_service.py](../hub/services/preference_service.py) · 신규 라우터 [preferences_routor.py](../../../api/v1/preferences/preferences_routor.py)(`/api/preferences`, main.py 등록). persona 확장: [persona_repository.py](../hub/repositories/persona_repository.py)·[persona_service.py](../hub/services/persona_service.py)·[persona_routor.py](../../../api/v1/persona/persona_routor.py)·[user_persona.py](../models/bases/user_persona.py). 마이그레이션 `a3f7c1e9d2b4`(Neon 적용).
+- **검증** — `scripts/preferences_endpoint_test.py` 8/8 · `scripts/persona_endpoint_test.py` 13/13(기존 9+신규 4) PASS(Neon 실DB). 커밋 465829d·f0e1ad3·594fb00.
+- **후속** — Phase 2: `_user_text()`에 성향(한국어 라벨)·스펙(skill/cert/project) 직렬화 + embed_repository JOIN + 재임베딩 보장 + Chance 키워드 가산. 대화 추출(ai_coach) 파이프라인은 추출-레디 설계만 완료, 구현은 별도 스펙.
+
 ## 2026-06-28 — PersonaForm 저장 시 로드맵 자동 재생성 연계
 - **무엇** — 페르소나 저장 성공 후 `/api/roadmap/refine` 자동 호출 → 역량 입력 즉시 로드맵에 반영. 재생성 실패는 저장 성공을 막지 않음(try/catch).
 - **왜** — 페르소나 수집과 로드맵 생성 사이 수동 단계 제거(역량 입력→개인화 로드맵 즉시 루프).
