@@ -1,5 +1,12 @@
 # user_intelligence 작업 기록
 
+## 2026-06-30 — 개인화 Phase 3: 프론트 선택 입력 섹션·완성도 미터·온보딩 (프론트 전용)
+- **무엇** — Phase 1/2 백엔드 API(`/api/user/profile`·`/api/preferences`·확장 `/api/persona`·`/api/user/sync-profile`)에 프론트를 배선. 프로필 페이지에 자기완결 선택 섹션(기본정보·성향·스펙·관심) + 완성도 미터, 로그인 후 1회 `/onboarding`(건너뛰기), 관심키워드 풀 12섹터+직무군 재설계. 백엔드 무변경.
+- **왜** — 사용자가 부담 없이(전부 선택) 성향·스펙을 입력해 Sync/Chance 개인화 품질을 끌어올리는 입력 경로 완성. 가입 직후 토큰 없는 실제 auth 플로우 반영해 온보딩은 로그인 후 트리거.
+- **어디** — 프론트 `www.yeotaeho.kr/src/`: `lib/api/{profile,preferences}.ts`·`hooks/{useProfile,usePreferences}.ts`·`data/personalizationOptions.ts`·`components/features/profile/{ChipSelect,BasicInfoSection,PreferencesSection,InterestSection,CompletionMeter}.tsx`+`PersonaForm.tsx`(스펙 4필드)·`app/(main)/profile/page.tsx`·`app/onboarding/page.tsx`·`lib/onboarding.ts`·3 OAuth 콜백. (user_intelligence 도메인 데이터를 서빙하는 프론트라 여기 기록.)
+- **검증** — `pnpm exec tsc --noEmit` 0 에러(프론트 unit test 없음). 최종 리뷰(opus): 전체교체 데이터보존·camelCase 계약 백엔드 대비 end-to-end 검증, Critical/Important 0. 커밋 06a4c40..7b46bbf.
+- **후속** — useSyncProfile 공유훅 추출 · onboarding 인증가드 early-return · signup 페이지 기존 8 뉴스카테고리→신규 풀 통일.
+
 ## 2026-06-30 — 성향·선호(user_preferences) 신설 + persona 스펙 4필드 확장 — 개인화 Phase 1
 - **무엇** — (1) 성향·선호(disposition) 수직 신설: `user_preferences`(작업성향·선호 기업규모·근무형태·일의 가치) + `GET/PUT /api/preferences`. (2) 기존 `user_personas`에 스펙 심화 4 JSONB 컬럼(자격증·어학·링크·프로젝트) 추가 + `/api/persona` 확장. 전부 nullable·선택 입력, `source` provenance(미래 coach 추출 재사용 대비).
 - **왜** — 개인화 병목(target_job+keywords만 사용) 해소. 성향·스펙은 의미 데이터라 Phase 2에서 임베딩 직렬화 대상 — user_intelligence 도메인에 배치해 사전 분리.
