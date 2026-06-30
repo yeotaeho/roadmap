@@ -11,6 +11,7 @@ import {
   fetchBriefing,
   fetchCausalChains,
   fetchCrossover,
+  fetchForecast,
   fetchPulse,
   fetchPulseHistory,
   fetchPulseOverview,
@@ -23,6 +24,10 @@ const STALE = 5 * 60 * 1000; // 5분
 
 export function usePulse() {
   return useQuery({ queryKey: ['pulse'], queryFn: fetchPulse, staleTime: STALE, retry: 1 });
+}
+
+export function useForecast() {
+  return useQuery({ queryKey: ['forecast'], queryFn: fetchForecast, staleTime: STALE, retry: 1 });
 }
 
 export function useGapIssues() {

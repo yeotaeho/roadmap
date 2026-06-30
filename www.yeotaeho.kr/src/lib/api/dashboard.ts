@@ -16,6 +16,23 @@ export async function fetchPulse(): Promise<PulseSectorLive[]> {
   return data?.sectors ?? [];
 }
 
+export interface ForecastSectorLive {
+  sector_slug: string;
+  sector_name: string;
+  accent_color: string;
+  forecast_date: string;
+  target_date: string;
+  score: number; // 0~100 전망 점수
+  direction_badge: string; // 강세/상승/중립/하락/약세 전망
+  predicted_return_pct: number | null;
+  confidence: number | null; // 0~1
+}
+
+export async function fetchForecast(): Promise<ForecastSectorLive[]> {
+  const { data } = await apiClient.get('/api/insight/forecast');
+  return data?.sectors ?? [];
+}
+
 export interface GapIssueLive {
   id: number;
   sector_slug: string;

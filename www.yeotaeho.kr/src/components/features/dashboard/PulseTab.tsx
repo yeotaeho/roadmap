@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useDashboard";
 import type { Crossover, PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
+import { ForecastSection } from "./ForecastSection";
 import { CausalFlow, Sparkline, TrendStatusBadge } from "./PulseViz";
 
 function heatTone(score: number | null): string {
@@ -328,6 +329,9 @@ export function PulseTab() {
           })}
         </div>
       </PanelStatus>
+
+      {/* 3.5 14일 시장 전망 — 현재 트렌드의 미래(선행 지표) */}
+      <ForecastSection />
 
       {/* 4. 인과관계 체인 — 거시에서 나의 기회까지 */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
