@@ -22,12 +22,12 @@ class SyncProfileUpsertRequest(BaseModel):
 
 
 class ProfileUpsertRequest(BaseModel):
-    # 출생연도는 SMALLINT 범위·상식 범위로 제한(잘못된 입력은 422, 500 아님).
+    # 컬럼 제약(SMALLINT·VARCHAR 길이)에 맞춰 검증 — 초과 입력은 422, 500 아님.
     birthYear: Optional[int] = Field(None, ge=1900, le=2100)
-    gender: Optional[str] = None
-    region: Optional[str] = None
-    currentStatus: Optional[str] = None
-    educationLevel: Optional[str] = None
+    gender: Optional[str] = Field(None, max_length=10)
+    region: Optional[str] = Field(None, max_length=50)
+    currentStatus: Optional[str] = Field(None, max_length=20)
+    educationLevel: Optional[str] = Field(None, max_length=20)
 
 
 async def get_user_services(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:

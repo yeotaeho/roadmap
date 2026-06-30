@@ -118,6 +118,7 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
           <label className="block text-xs text-gray-600 mb-1">거주 지역</label>
           <input
             value={region}
+            maxLength={50}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="예) 서울"
             className={inputCls}

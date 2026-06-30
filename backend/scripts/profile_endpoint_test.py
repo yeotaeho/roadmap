@@ -82,6 +82,11 @@ async def run() -> int:
             "/api/user/profile", headers=headers, json={"birthYear": 20040813},
         )
         check("birthYear 범위초과 422", r.status_code == 422, str(r.status_code))
+        # region 길이초과(VARCHAR 50) → 500 아닌 422
+        r = await client.put(
+            "/api/user/profile", headers=headers, json={"region": "가" * 60},
+        )
+        check("region 길이초과 422", r.status_code == 422, str(r.status_code))
         # 유효 연도는 정상 저장(직전 값 보존 확인)
         p = (await client.get("/api/user/profile", headers=headers)).json().get("profile", {})
         check("범위초과 거부 후 기존값 유지", p.get("birthYear") == 1999, str(p.get("birthYear")))
