@@ -29,6 +29,15 @@ class UserPersona(Base):
     # [{name, level: 입문|중급|심화}]
     skills: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 스펙 심화(전부 nullable) — Phase 1 확장
+    # [{name, issuer, year}]
+    certifications: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # [{language, test, score}]
+    languages: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # [{type: github|portfolio|blog, url}]
+    links: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # [{title, description, role, period, tech_stack: [str]}]
+    projects: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     source: Mapped[str] = mapped_column(String(30), nullable=False, server_default="mock")
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
