@@ -21,6 +21,7 @@ export default function PreferencesSection({ className = "" }: { className?: str
   const [workTypePref, setWorkTypePref] = useState<string>("");
   const [workValues, setWorkValues] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -31,14 +32,20 @@ export default function PreferencesSection({ className = "" }: { className?: str
   }, [data]);
 
   const save = async () => {
-    await upsert.mutateAsync({
-      workStyle: workStyle || null,
-      companySizePref: companySizePref || null,
-      workTypePref: workTypePref || null,
-      workValues,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    try {
+      await upsert.mutateAsync({
+        workStyle: workStyle || null,
+        companySizePref: companySizePref || null,
+        workTypePref: workTypePref || null,
+        workValues,
+      });
+      setSaveFailed(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch {
+      setSaveFailed(true);
+      setTimeout(() => setSaveFailed(false), 3000);
+    }
   };
 
   return (
@@ -87,6 +94,9 @@ export default function PreferencesSection({ className = "" }: { className?: str
         >
           {upsert.isPending ? "저장 중…" : saved ? "저장됨" : "저장"}
         </button>
+        {saveFailed && (
+          <p className="text-red-600 text-xs mt-1">저장에 실패했어요. 다시 시도해 주세요.</p>
+        )}
       </div>
     </section>
   );

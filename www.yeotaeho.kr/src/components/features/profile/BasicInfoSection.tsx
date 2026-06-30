@@ -24,6 +24,7 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
   const [currentStatus, setCurrentStatus] = useState<string>("");
   const [educationLevel, setEducationLevel] = useState<string>("");
   const [saved, setSaved] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -35,15 +36,21 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
   }, [data]);
 
   const save = async () => {
-    await upsert.mutateAsync({
-      birthYear: birthYear === "" ? null : Number(birthYear),
-      gender: gender || null,
-      region: region || null,
-      currentStatus: currentStatus || null,
-      educationLevel: educationLevel || null,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    try {
+      await upsert.mutateAsync({
+        birthYear: birthYear === "" ? null : Number(birthYear),
+        gender: gender || null,
+        region: region || null,
+        currentStatus: currentStatus || null,
+        educationLevel: educationLevel || null,
+      });
+      setSaveFailed(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch {
+      setSaveFailed(true);
+      setTimeout(() => setSaveFailed(false), 3000);
+    }
   };
 
   return (
@@ -102,6 +109,9 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
         >
           {upsert.isPending ? "저장 중…" : saved ? "저장됨" : "저장"}
         </button>
+        {saveFailed && (
+          <p className="text-red-600 text-xs mt-1">저장에 실패했어요. 다시 시도해 주세요.</p>
+        )}
       </div>
     </section>
   );
