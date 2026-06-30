@@ -29,6 +29,7 @@ from api.v1.master.master_routor import router as master_v1_router
 from api.v1.news.news_routor import router as news_v1_router
 from api.v1.oauth.oauth_routor import router as oauth_v1_router
 from api.v1.persona.persona_routor import router as persona_v1_router
+from api.v1.preferences.preferences_routor import router as preferences_v1_router
 from api.v1.roadmap.roadmap_routor import router as roadmap_v1_router
 from api.v1.task.task_routor import router as task_v1_router
 from api.v1.sync.sync_routor import router as sync_v1_router
@@ -103,6 +104,7 @@ app.include_router(chance_v1_router, prefix=API_V1_PREFIX)
 app.include_router(sync_v1_router, prefix=API_V1_PREFIX)
 app.include_router(roadmap_v1_router, prefix=API_V1_PREFIX)
 app.include_router(persona_v1_router, prefix=API_V1_PREFIX)
+app.include_router(preferences_v1_router, prefix=API_V1_PREFIX)
 app.include_router(coach_v1_router, prefix=API_V1_PREFIX)
 app.include_router(task_v1_router, prefix=API_V1_PREFIX)
 logger.info(
