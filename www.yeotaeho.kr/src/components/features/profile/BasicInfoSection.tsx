@@ -25,6 +25,9 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
   const [educationLevel, setEducationLevel] = useState<string>("");
   const [saved, setSaved] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [yearError, setYearError] = useState(false);
+
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     if (!data) return;
@@ -36,9 +39,21 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
   }, [data]);
 
   const save = async () => {
+    // 출생연도 검증 — 4자리 연도만(생년월일 8자리 등 잘못된 입력 차단).
+    const trimmed = birthYear.trim();
+    let yearValue: number | null = null;
+    if (trimmed !== "") {
+      const n = Number(trimmed);
+      if (!Number.isInteger(n) || n < 1900 || n > currentYear) {
+        setYearError(true);
+        setTimeout(() => setYearError(false), 3000);
+        return;
+      }
+      yearValue = n;
+    }
     try {
       await upsert.mutateAsync({
-        birthYear: birthYear === "" ? null : Number(birthYear),
+        birthYear: yearValue,
         gender: gender || null,
         region: region || null,
         currentStatus: currentStatus || null,
@@ -63,10 +78,17 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
           <input
             type="number"
             value={birthYear}
+            min={1900}
+            max={currentYear}
             onChange={(e) => setBirthYear(e.target.value)}
             placeholder="예) 1999"
             className={inputCls}
           />
+          {yearError && (
+            <p className="text-red-600 text-xs mt-1">
+              출생연도를 4자리로 입력해 주세요 (예: 1999).
+            </p>
+          )}
         </div>
         <div>
           <label className="block text-xs text-gray-600 mb-1">성별</label>

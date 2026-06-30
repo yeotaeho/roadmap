@@ -77,6 +77,15 @@ async def run() -> int:
         p = (await client.get("/api/user/profile", headers=headers)).json().get("profile", {})
         check("gender null 허용", p.get("gender") is None, str(p.get("gender")))
 
+        # 출생연도 범위초과(생년월일 8자리 오입력) → 500 아닌 422 검증
+        r = await client.put(
+            "/api/user/profile", headers=headers, json={"birthYear": 20040813},
+        )
+        check("birthYear 범위초과 422", r.status_code == 422, str(r.status_code))
+        # 유효 연도는 정상 저장(직전 값 보존 확인)
+        p = (await client.get("/api/user/profile", headers=headers)).json().get("profile", {})
+        check("범위초과 거부 후 기존값 유지", p.get("birthYear") == 1999, str(p.get("birthYear")))
+
         r = await client.get("/api/user/profile")
         check("무토큰 401", r.status_code == 401, str(r.status_code))
 

@@ -22,7 +22,8 @@ class SyncProfileUpsertRequest(BaseModel):
 
 
 class ProfileUpsertRequest(BaseModel):
-    birthYear: Optional[int] = None
+    # 출생연도는 SMALLINT 범위·상식 범위로 제한(잘못된 입력은 422, 500 아님).
+    birthYear: Optional[int] = Field(None, ge=1900, le=2100)
     gender: Optional[str] = None
     region: Optional[str] = None
     currentStatus: Optional[str] = None
