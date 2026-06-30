@@ -36,7 +36,8 @@ export function ForecastSection() {
         </p>
       </div>
       <PanelStatus isLoading={isLoading} isError={isError} isEmpty={cards.length === 0} label="시장 전망">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {cards.map((s) => {
             const ret = s.predicted_return_pct;
             const conf = s.confidence ?? 0;
@@ -80,6 +81,10 @@ export function ForecastSection() {
               </div>
             );
           })}
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
+            ※ 시장 시계열이 있는 섹터만 표시됩니다. 사회서비스 등 시장 신호가 약한 분야는 정책·지원사업 흐름으로 별도 추적합니다.
+          </p>
         </div>
       </PanelStatus>
     </>
