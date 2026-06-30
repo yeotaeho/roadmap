@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from domain.auth.hub.security.services.jwt import JWTService
 from domain.auth.hub.services.auth_profile_service import AuthProfileService
+from domain.auth.hub.services.profile_service import ProfileService
 from domain.auth.hub.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,14 @@ router = APIRouter(prefix="/user", tags=["user"])
 class SyncProfileUpsertRequest(BaseModel):
     targetJob: Optional[str] = None
     interestKeywords: List[str] = Field(default_factory=list)
+
+
+class ProfileUpsertRequest(BaseModel):
+    birthYear: Optional[int] = None
+    gender: Optional[str] = None
+    region: Optional[str] = None
+    currentStatus: Optional[str] = None
+    educationLevel: Optional[str] = None
 
 
 async def get_user_services(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
@@ -128,3 +137,39 @@ async def upsert_sync_profile(
         "targetJob": profile.target_job,
         "interestKeywords": profile.interest_keywords or [],
     }
+
+
+@router.get("/profile")
+async def get_basic_profile(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """현재 사용자 기본정보 — 없으면 전부 null 기본값."""
+    try:
+        profile = await ProfileService(db).get_profile(user_id)
+        return {"success": True, "profile": profile}
+    except Exception as e:
+        logger.error(f"기본정보 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"기본정보 조회 실패: {str(e)}")
+
+
+@router.put("/profile")
+async def upsert_basic_profile(
+    request: ProfileUpsertRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """기본정보 upsert — 폼 저장(전부 선택)."""
+    try:
+        profile = await ProfileService(db).upsert_profile(
+            user_id,
+            birth_year=request.birthYear,
+            gender=request.gender,
+            region=request.region,
+            current_status=request.currentStatus,
+            education_level=request.educationLevel,
+        )
+        return {"success": True, "profile": profile}
+    except Exception as e:
+        logger.error(f"기본정보 저장 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"기본정보 저장 실패: {str(e)}")
