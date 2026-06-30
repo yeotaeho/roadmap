@@ -33,11 +33,40 @@ class EducationItem(BaseModel):
     status: str = ""
 
 
+class CertificationItem(BaseModel):
+    name: str
+    issuer: str = ""
+    year: str = ""
+
+
+class LanguageItem(BaseModel):
+    language: str
+    test: str = ""
+    score: str = ""
+
+
+class LinkItem(BaseModel):
+    type: str = ""  # github|portfolio|blog
+    url: str = ""
+
+
+class ProjectItem(BaseModel):
+    title: str
+    description: str = ""
+    role: str = ""
+    period: str = ""
+    tech_stack: list[str] = Field(default_factory=list)
+
+
 class PersonaUpsertRequest(BaseModel):
     skills: list[SkillItem] = Field(default_factory=list)
     experiences: list[ExperienceItem] = Field(default_factory=list)
     education: list[EducationItem] = Field(default_factory=list)
     summary: str = ""
+    certifications: list[CertificationItem] = Field(default_factory=list)
+    languages: list[LanguageItem] = Field(default_factory=list)
+    links: list[LinkItem] = Field(default_factory=list)
+    projects: list[ProjectItem] = Field(default_factory=list)
 
 
 @router.get("")
@@ -68,6 +97,10 @@ async def upsert_persona(
             experiences=[e.model_dump() for e in request.experiences],
             education=[ed.model_dump() for ed in request.education],
             summary=request.summary,
+            certifications=[c.model_dump() for c in request.certifications],
+            languages=[lg.model_dump() for lg in request.languages],
+            links=[lk.model_dump() for lk in request.links],
+            projects=[pj.model_dump() for pj in request.projects],
         )
         return {"success": True, "persona": persona}
     except Exception as e:

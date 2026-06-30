@@ -54,6 +54,10 @@ async def run(user_id: str | None) -> int:
         "experiences": [{"title": "데이터 동아리", "description": "공공데이터 시각화", "period": "2025"}],
         "education": [{"school": "OO대", "major": "컴퓨터공학", "degree": "학사", "status": "재학"}],
         "summary": "엔드포인트 테스트 페르소나",
+        "certifications": [{"name": "정보처리기사", "issuer": "큐넷", "year": "2024"}],
+        "languages": [{"language": "영어", "test": "TOEIC", "score": "900"}],
+        "links": [{"type": "github", "url": "https://github.com/test"}],
+        "projects": [{"title": "추천엔진", "description": "벡터 검색", "role": "백엔드", "period": "2025", "tech_stack": ["FastAPI", "pgvector"]}],
     }
 
     transport = httpx.ASGITransport(app=app)
@@ -73,6 +77,11 @@ async def run(user_id: str | None) -> int:
         check("스킬 레벨 보존", p.get("skills", [{}])[0].get("level") == "중급")
         check("학력 반영", (p.get("education") or [{}])[0].get("major") == "컴퓨터공학")
         check("요약 반영", p.get("summary") == "엔드포인트 테스트 페르소나")
+
+        check("자격증 반영", (p.get("certifications") or [{}])[0].get("name") == "정보처리기사", str(p.get("certifications")))
+        check("어학 반영", (p.get("languages") or [{}])[0].get("test") == "TOEIC")
+        check("링크 반영", (p.get("links") or [{}])[0].get("type") == "github")
+        check("프로젝트 tech_stack", "pgvector" in ((p.get("projects") or [{}])[0].get("tech_stack") or []))
 
         r = await client.get("/api/persona")
         check("무토큰 401", r.status_code == 401, str(r.status_code))
