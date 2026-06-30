@@ -1,4 +1,4 @@
-# 페르소나(스킬·경험·학력) HTTP 라우터 — user_intelligence 구조화 폼 수집
+# 페르소나(스킬·경험·학력·자격증·어학·링크·프로젝트) HTTP 라우터 — user_intelligence 구조화 폼 수집
 
 import logging
 
