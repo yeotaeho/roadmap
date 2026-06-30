@@ -536,13 +536,19 @@ async def _job_ncs_standard() -> dict[str, Any] | None:
 
 async def _job_youth_policy() -> dict[str, Any] | None:
     settings = get_settings()
-    key = getattr(settings, "youth_policy_service_key", None)
-    if not key:
+    policy_key = getattr(settings, "youth_policy_service_key", None)
+    if not policy_key:
         logger.warning("[scheduler] youth_policy_service_key 없음 — 온통청년 잡 스킵")
         return None
     results: dict[str, Any] = {}
     async with AsyncSessionLocal() as session:
-        svc = BronzeOpportunityIngestService(session, youth_policy_service_key=key)
+        svc = BronzeOpportunityIngestService(
+            session,
+            youth_policy_service_key=policy_key,
+            youth_center_service_key=getattr(settings, "youth_center_service_key", None),
+            youth_content_service_key=getattr(settings, "youth_content_service_key", None),
+            youth_basic_plan_service_key=getattr(settings, "youth_basic_plan_service_key", None),
+        )
         for method_name in ("ingest_youth_policy", "ingest_youth_center", "ingest_youth_content", "ingest_youth_policy_direction"):
             try:
                 r = await getattr(svc, method_name)()

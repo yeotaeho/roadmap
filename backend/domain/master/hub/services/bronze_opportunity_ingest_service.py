@@ -43,12 +43,18 @@ class BronzeOpportunityIngestService:
         kstartup_service_key: str | None = None,
         narajangteo_service_key: str | None = None,
         youth_policy_service_key: str | None = None,
+        youth_center_service_key: str | None = None,
+        youth_content_service_key: str | None = None,
+        youth_basic_plan_service_key: str | None = None,
     ):
         self._session = session
         self._smes_key = smes_service_key
         self._kstartup_key = kstartup_service_key
         self._narajangteo_key = narajangteo_service_key
         self._youth_policy_key = youth_policy_service_key
+        self._youth_center_key = youth_center_service_key or youth_policy_service_key
+        self._youth_content_key = youth_content_service_key or youth_policy_service_key
+        self._youth_basic_plan_key = youth_basic_plan_service_key or youth_policy_service_key
         self._opportunity_repo = OpportunityRepository(session)
 
     async def ingest_smes(
@@ -130,7 +136,7 @@ class BronzeOpportunityIngestService:
             raise ValueError("YOUTH_POLICY_SERVICE_KEY 가 설정되어 있지 않습니다.")
         dtos: list[OpportunityCollectDto] = []
         try:
-            dtos = await YouthPolicyCollector(self._youth_policy_key).collect(max_items=max_items)
+            dtos, _ = await YouthPolicyCollector(self._youth_policy_key).collect(max_items=max_items)
         except Exception:
             logger.exception("온통청년 청년정책 Bronze 수집 실패. 빈 결과로 진행합니다.")
         inserted = await self._opportunity_repo.insert_many_skip_duplicates(dtos)
@@ -145,11 +151,11 @@ class BronzeOpportunityIngestService:
 
     async def ingest_youth_center(self, *, max_items: int = 200) -> dict[str, Any]:
         """온통청년 청년센터(오프라인 지원기관 마스터) 수집."""
-        if not self._youth_policy_key:
-            raise ValueError("YOUTH_POLICY_SERVICE_KEY 가 설정되어 있지 않습니다.")
+        if not self._youth_center_key:
+            raise ValueError("YOUTH_CENTER_SERVICE_KEY 가 설정되어 있지 않습니다.")
         dtos: list[OpportunityCollectDto] = []
         try:
-            dtos = await YouthCenterCollector(self._youth_policy_key).collect(max_items=max_items)
+            dtos, _ = await YouthCenterCollector(self._youth_center_key).collect(max_items=max_items)
         except Exception:
             logger.exception("온통청년 청년센터 Bronze 수집 실패. 빈 결과로 진행합니다.")
         inserted = await self._opportunity_repo.insert_many_skip_duplicates(dtos)
@@ -164,11 +170,11 @@ class BronzeOpportunityIngestService:
 
     async def ingest_youth_content(self, *, max_items: int = 200) -> dict[str, Any]:
         """온통청년 청년콘텐츠(청년 대상 아티클·콘텐츠) 수집."""
-        if not self._youth_policy_key:
-            raise ValueError("YOUTH_POLICY_SERVICE_KEY 가 설정되어 있지 않습니다.")
+        if not self._youth_content_key:
+            raise ValueError("YOUTH_CONTENT_SERVICE_KEY 가 설정되어 있지 않습니다.")
         dtos: list[OpportunityCollectDto] = []
         try:
-            dtos = await YouthContentCollector(self._youth_policy_key).collect(max_items=max_items)
+            dtos, _ = await YouthContentCollector(self._youth_content_key).collect(max_items=max_items)
         except Exception:
             logger.exception("온통청년 청년콘텐츠 Bronze 수집 실패. 빈 결과로 진행합니다.")
         inserted = await self._opportunity_repo.insert_many_skip_duplicates(dtos)
@@ -183,11 +189,11 @@ class BronzeOpportunityIngestService:
 
     async def ingest_youth_policy_direction(self, *, max_items: int = 100) -> dict[str, Any]:
         """온통청년 기본계획정책방향(거시 신호) 수집."""
-        if not self._youth_policy_key:
-            raise ValueError("YOUTH_POLICY_SERVICE_KEY 가 설정되어 있지 않습니다.")
+        if not self._youth_basic_plan_key:
+            raise ValueError("YOUTH_BASIC_PLAN_SERVICE_KEY 가 설정되어 있지 않습니다.")
         dtos: list[OpportunityCollectDto] = []
         try:
-            dtos = await YouthPolicyDirectionCollector(self._youth_policy_key).collect(
+            dtos, _ = await YouthPolicyDirectionCollector(self._youth_basic_plan_key).collect(
                 max_items=max_items
             )
         except Exception:

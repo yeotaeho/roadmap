@@ -323,10 +323,24 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("NCS_INFO_SERVICE_KEY", "DATA_GO_KR_SERVICE_KEY"),
     )
 
-    # 온통청년 청년정책 API (youthcenter.go.kr, Chance 탭 청년 기회 인벤토리)
+    # 온통청년 OpenAPI (youthcenter.go.kr, Chance 탭 청년 기회 인벤토리)
+    # 인증 파라미터: openApiVlak (UUID 36자), 응답: XML
+    # BASE_URL: https://www.youthcenter.go.kr/opi/
     youth_policy_service_key: Optional[str] = Field(
         default=None,
         validation_alias="YOUTH_POLICY_SERVICE_KEY",
+    )
+    youth_center_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias="YOUTH_CENTER_SERVICE_KEY",
+    )
+    youth_content_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias="YOUTH_CONTENT_SERVICE_KEY",
+    )
+    youth_basic_plan_service_key: Optional[str] = Field(
+        default=None,
+        validation_alias="YOUTH_BASIC_PLAN_SERVICE_KEY",
     )
 
     # Bronze 자동 수집 스케줄러 (APScheduler 기반)

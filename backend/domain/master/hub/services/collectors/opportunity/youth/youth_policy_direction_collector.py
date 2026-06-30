@@ -1,8 +1,9 @@
-# 온통청년 기본계획정책방향 OpenAPI 기반 Bronze 수집 (정부 청년정책 방향·거시 신호)
+# 온통청년 기본계획정책방향 OpenAPI Bronze 수집 — 거시 정책 방향 시그널
 
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -13,86 +14,52 @@ from domain.master.models.transfer.opportunity_collect_dto import OpportunityCol
 logger = logging.getLogger(__name__)
 
 _SOURCE_TYPE = "OPP_YOUTH_POLICY_DIRECTION"
-
-# TODO: 실제 API 엔드포인트 확인 필요 — 온통청년 OpenAPI 승인 후 재검증
-_BASE_URL = "https://www.youthcenter.go.kr/openApi/youth/policyDirection"  # TODO: 검증 필요
+_BASE_URL = "https://www.youthcenter.go.kr/opi/youthBplnPlcyDrctnList.do"
 
 
-def _parse_item(item: dict) -> Optional[OpportunityCollectDto]:
-    """온통청년 기본계획정책방향 API 응답 item → OpportunityCollectDto.
+def _parse_date(raw: str | None) -> Optional[datetime]:
+    if not raw:
+        return None
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%Y.%m.%d"):
+        try:
+            return datetime.strptime(raw.strip(), fmt).replace(tzinfo=timezone.utc)
+        except (ValueError, AttributeError):
+            continue
+    return None
 
-    TODO: API 승인 후 실제 응답 필드명으로 매핑 교체.
-    아래 필드명은 온통청년 OpenAPI 문서 기준 추정값.
-    거시 정책 방향 신호원으로 활용 — 섹터별 투자 시그널 보강 목적.
-    """
-    # TODO: 실제 정책방향 제목 필드명 확인 (예: plcyDrctnTtl, directionTitle, title 등)
-    raw_title = (
-        item.get("plcyDrctnTtl")
-        or item.get("directionTitle")
-        or item.get("title")
-        or ""
-    )
-    raw_title = str(raw_title).strip()
+
+def _parse_item(elem: ET.Element) -> Optional[OpportunityCollectDto]:
+    def t(tag: str) -> str:
+        node = elem.find(tag)
+        return (node.text or "").strip() if node is not None else ""
+
+    # 정책방향 제목 — 공식 필드: plcyDrctnTtl
+    raw_title = t("plcyDrctnTtl") or t("directionTitle") or t("title")
     if not raw_title:
         return None
 
-    # TODO: 실제 정책방향 ID 필드명 확인 (예: plcyDrctnNo, directionId, id 등)
-    direction_id = (
-        item.get("plcyDrctnNo")
-        or item.get("directionId")
-        or item.get("id")
-        or ""
-    )
-    direction_id = str(direction_id).strip()
-
-    # TODO: source_url 패턴 검증 필요
-    if direction_id:
-        source_url = f"https://www.youthcenter.go.kr/policyDirection/{direction_id}"
-    else:
-        source_url = _BASE_URL
-
-    # TODO: 실제 발표기관 필드명 확인 (예: pubInstNm, publisher, hostOrg 등)
-    host_name = (
-        item.get("pubInstNm")
-        or item.get("publisher")
-        or item.get("hostOrg")
-        or "온통청년"
+    direction_id = t("plcyDrctnId") or t("id") or ""
+    source_url = (
+        f"https://www.youthcenter.go.kr/youngPlcy/bplnPlcyDrctn/detail/{direction_id}"
+        if direction_id
+        else _BASE_URL
     )
 
-    # TODO: 실제 본문 필드명 확인 (예: plcyDrctnCn, directionContent, content 등)
-    raw_content = (
-        item.get("plcyDrctnCn")
-        or item.get("directionContent")
-        or item.get("content")
-    )
-
-    # TODO: 실제 공표일 필드명 확인 (예: pubDt, publishDate, announceDt 등)
-    published_at: Optional[datetime] = None
-    for field in ("pubDt", "publishDate", "announceDt", "rgsttDt"):
-        raw_date = item.get(field)
-        if raw_date:
-            try:
-                published_at = datetime.fromisoformat(str(raw_date)).replace(
-                    tzinfo=timezone.utc
-                )
-                break
-            except Exception:
-                pass
+    raw_content = t("plcyDrctnCn") or t("content") or None
+    published_at = _parse_date(t("registDt") or t("pubDate"))
 
     raw_metadata: dict[str, Any] = {
         "direction_id": direction_id,
-        # TODO: 실제 계획 연도 필드명 확인 (예: plcyYear, planYear 등)
-        "plan_year": item.get("plcyYear") or item.get("planYear"),
-        # TODO: 실제 정책 분야 필드명 확인 (예: plcyFldNm, policyField 등)
-        "policy_field": item.get("plcyFldNm") or item.get("policyField"),
-        "original_item": item,
+        "plan_year": t("bplnYear") or t("year"),    # 기본계획 연도
+        "sector": t("taskClsfNm") or t("sector"),   # 과제 분류
+        "ministry": t("chrgInstNm") or t("ministry"),  # 담당 부처
     }
 
     return OpportunityCollectDto(
         source_type=_SOURCE_TYPE,
         source_url=source_url,
         raw_title=raw_title[:500],
-        host_name=str(host_name)[:150],
+        host_name=t("chrgInstNm") or "온통청년",
         raw_content=raw_content,
         raw_metadata=raw_metadata,
         published_at=published_at,
@@ -101,26 +68,19 @@ def _parse_item(item: dict) -> Optional[OpportunityCollectDto]:
 
 
 class YouthPolicyDirectionCollector:
-    """온통청년 기본계획정책방향 OpenAPI Collector — 정부 청년정책 거시 방향 수집.
+    """온통청년 기본계획정책방향 OpenAPI Collector — 거시 정책 방향 수집.
 
-    거시 정책 방향 신호원으로 Silver Gap·Pulse 분석에 활용.
-
-    TODO: 온통청년 OpenAPI 승인 후 아래 항목 재검증 필요.
-      1. _BASE_URL — 실제 엔드포인트 확인
-      2. 페이지네이션 파라미터명
-      3. 응답 래퍼 구조
-      4. _parse_item 내 모든 TODO 필드명
+    BASE_URL: https://www.youthcenter.go.kr/opi/youthBplnPlcyDrctnList.do
+    인증: openApiVlak (UUID 36자)  /  응답: XML
+    Gap 섹터별 투자 시그널 보강 목적으로 활용.
     """
 
-    def __init__(self, service_key: str):
+    def __init__(self, service_key: str) -> None:
         if not service_key or not service_key.strip():
-            raise ValueError(
-                "온통청년 API 키가 비어 있습니다. YOUTH_POLICY_SERVICE_KEY 를 설정하세요."
-            )
+            raise ValueError("YOUTH_BASIC_PLAN_SERVICE_KEY 가 비어 있습니다.")
         self._service_key = service_key.strip()
 
-    async def collect(self, *, max_items: int = 100) -> list[OpportunityCollectDto]:
-        """온통청년 기본계획정책방향 API를 페이지 순회하며 OpportunityCollectDto 리스트 반환."""
+    async def collect(self, *, max_items: int = 200) -> tuple[list[OpportunityCollectDto], dict[str, int | str]]:
         page_no = 1
         per_page = min(max_items, 100)
         collected: list[OpportunityCollectDto] = []
@@ -129,52 +89,36 @@ class YouthPolicyDirectionCollector:
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             while len(collected) < max_items:
-                # TODO: 실제 파라미터명·값 포맷 확인 후 교체
-                params: dict[str, str] = {
-                    "serviceKey": self._service_key,
-                    "pageIndex": str(page_no),   # TODO: 파라미터명 검증
-                    "numOfRows": str(per_page),   # TODO: 파라미터명 검증
-                    "returnType": "json",          # TODO: 필요 여부 확인
+                params = {
+                    "openApiVlak": self._service_key,
+                    "pageIndex": str(page_no),
+                    "display": str(per_page),
                 }
                 try:
                     async with session.get(_BASE_URL, params=params) as resp:
                         if resp.status != 200:
-                            raise RuntimeError(
-                                f"온통청년 기본계획정책방향 API HTTP {resp.status} (page={page_no})"
-                            )
-                        data = await resp.json(content_type=None)
-                except aiohttp.ClientError as e:
-                    raise RuntimeError(
-                        f"온통청년 기본계획정책방향 API 네트워크 오류: {e}"
-                    ) from e
+                            logger.error("온통청년 기본계획 HTTP %d", resp.status)
+                            break
+                        xml_text = await resp.text(encoding="utf-8")
+                except Exception:
+                    logger.exception("온통청년 기본계획 네트워크 오류 (page=%d)", page_no)
+                    break
 
-                # TODO: 실제 응답 래퍼 구조에 맞게 items 추출 경로 교체
-                items: list[dict] = []
-                if isinstance(data, list):
-                    items = data
-                elif isinstance(data, dict):
-                    body = data.get("response", data)
-                    if isinstance(body, dict):
-                        body = body.get("body", body)
-                    items_raw = body.get("items") if isinstance(body, dict) else None
-                    if isinstance(items_raw, list):
-                        items = items_raw
-                    elif isinstance(items_raw, dict):
-                        item = items_raw.get("item")
-                        items = item if isinstance(item, list) else ([item] if item else [])
-                    elif isinstance(data.get("data"), list):
-                        items = data["data"]
+                try:
+                    root = ET.fromstring(xml_text)
+                except ET.ParseError:
+                    logger.error("온통청년 기본계획 XML 파싱 실패")
+                    break
 
+                items = root.findall(".//policyDirection") or root.findall(".//item") or list(root)
                 if not items:
                     break
 
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
+                for elem in items:
                     try:
-                        dto = _parse_item(item)
+                        dto = _parse_item(elem)
                     except Exception:
-                        logger.warning("온통청년 기본계획정책방향 아이템 파싱 실패, 스킵")
+                        logger.warning("온통청년 기본계획 아이템 파싱 오류, 스킵")
                         continue
                     if dto is None or dto.source_url in seen:
                         continue
@@ -187,10 +131,12 @@ class YouthPolicyDirectionCollector:
                     break
                 page_no += 1
 
-        logger.info(
-            "온통청년 기본계획정책방향 수집 완료: %s건 (page=%s까지)", len(collected), page_no
-        )
-        return collected
+        stats: dict[str, int | str] = {
+            "pages_fetched": page_no,
+            "items_collected": len(collected),
+        }
+        logger.info("온통청년 기본계획 수집 완료: %s", stats)
+        return collected, stats
 
 
 __all__ = ["YouthPolicyDirectionCollector"]
