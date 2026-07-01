@@ -12,6 +12,7 @@
 7. **Semantic commits** — 논리적 단위 완성 시 즉시 커밋. 무관한 변경 묶지 않기.
 8. **Read errors** — 실제 에러/스택 트레이스 읽고 수정. 패턴 매칭 추측 금지.
 9. **Work log** — 작업 단위 완료(커밋 직후)마다 변경 내용을 관련 md 에 기록. 형식·위치는 아래 [작업 기록 규칙](#작업-기록-규칙-audit-trail) 참고. **md 를 수정·생성하기 전 반드시 대상 경로를 제시하고 허락받기.**
+10. **Codex 최종 리뷰** — 계획·구현·수정 작업을 논리적 단위로 마치고 커밋한 뒤, **마지막에 Codex 리뷰를 거친다**. 형식·절차는 아래 [Codex 리뷰 규칙](#codex-리뷰-규칙) 참고.
 
 ---
 
@@ -187,6 +188,18 @@ raw_opportunity_data                          user_roadmaps / coach_sessions
 - **검증** — 실행한 테스트·결과 (`pytest` / `pnpm test`)
 - **후속** — 남은 TODO (없으면 생략)
 ```
+
+## Codex 리뷰 규칙
+
+계획·구현·수정 작업을 논리적 단위로 마치고 **커밋한 뒤**, 턴을 끝내기 전에 Codex 리뷰를 최종 게이트로 실행한다.
+
+- **언제** — 각 작업 단위(기능·수정·리팩터) 커밋 직후, 완료를 선언하기 전. 여러 커밋이 쌓였으면 마지막에 한 번 범위 리뷰.
+- **어떻게** — `/codex:review` 슬래시 커맨드로 실행한다(내부적으로 codex-companion `review`).
+  - 미커밋 변경 = working-tree 기본. **이미 커밋한 분** = `--base <직전 ref> --scope branch` 로 커밋 범위 리뷰.
+  - 규모: 1~2파일 소규모 → foreground(`--wait`). 그 이상·불확실 → background.
+  - 커스텀·적대적 관점이 필요하면 `/codex:adversarial-review`.
+- **원칙** — 리뷰는 **read-only**. 지적사항을 무비판 수용하지 말고 실제 결함인지 별도 판단 후 반영한다([receiving-code-review 태도]). **Critical/Important** 는 조치 후 **재리뷰**, **Minor** 는 트리아지(즉시 vs 후속).
+- **자동화(선택)** — `/codex:setup --enable-review-gate` 로 stop-time 리뷰 게이트를 켜면 턴 종료 전 자동으로 직전 변경을 리뷰한다.
 
 ## MSA 분리 후보
 
