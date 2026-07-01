@@ -60,6 +60,8 @@ export function CoachView() {
   const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
 
   const scrollBottom = useCallback(() => {
@@ -79,9 +81,14 @@ export function CoachView() {
       return;
     }
     let cancelled = false;
+    setSessionError(false);
     (async () => {
       const id = await createCoachSession();
-      if (cancelled || !id) return;
+      if (cancelled) return;
+      if (!id) {
+        setSessionError(true);
+        return;
+      }
       const history = await fetchCoachMessages(id);
       if (cancelled) return;
       if (history.length > 0) {
@@ -95,7 +102,7 @@ export function CoachView() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, retryKey]);
 
   const addToWallet = useCallback((msg: CoachMessage) => {
     const body = [msg.text, msg.code ? `\n\n\`\`\`python\n${msg.code}\n\`\`\`` : ""]
@@ -293,6 +300,15 @@ export function CoachView() {
                 <SendHorizonal className="h-4 w-4" />
               </button>
             </form>
+            {isAuthenticated && !sessionId && sessionError ? (
+              <button
+                type="button"
+                onClick={() => setRetryKey((k) => k + 1)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                대화 세션 연결 실패 · 다시 시도
+              </button>
+            ) : null}
           </div>
         </section>
 
