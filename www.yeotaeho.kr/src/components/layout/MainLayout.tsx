@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { getCurrentUser } from "@/lib/api/user";
 import { getUserName } from "@/utils/tokenStorage";
-import { useAuth, useUserActions } from "@/hooks/useStore";
+import { useAuth } from "@/hooks/useStore";
+import { useStore } from "@/store";
 import { Header } from "./Header";
 import { MainTabBar } from "./MainTabBar";
 import { Footer } from "./Footer";
@@ -11,7 +12,9 @@ import { Footer } from "./Footer";
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null);
   const { token, isAuthenticated } = useAuth();
-  const { setProfile, clearProfile } = useUserActions();
+  // 개별 액션 셀렉트 — zustand 액션은 고정 참조. 객체 셀렉터(useUserActions)는 매 렌더 새 객체라 무한 루프.
+  const setProfile = useStore((s) => s.setProfile);
+  const clearProfile = useStore((s) => s.clearProfile);
 
   useEffect(() => {
     const fetchUserInfo = async () => {
