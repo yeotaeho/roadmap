@@ -893,39 +893,34 @@ CREATE INDEX idx_growth_logs_user_date ON growth_daily_logs(user_id, log_date DE
 ### 6.6 Coach(AI 코치) 탭
 
 ```sql
--- 코치 세션 (활성 컨텍스트 포함)
+-- 코치 대화 세션 (SP-2a 구현 — 명시적 세션·재개·롤링 요약. 마이그 26149c601ff7·20542b62b650)
 CREATE TABLE coach_sessions (
-    id BIGSERIAL PRIMARY KEY,                 -- 코치 세션 PK
+    id UUID PRIMARY KEY,                       -- 앱 생성 uuid4
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- 사용자 FK
-
-    context_type VARCHAR(20) NOT NULL,        -- ROADMAP / CHANCE / GENERAL
-    context_id BIGINT,                         -- 연결 대상 ID(퀘스트/찬스 등)
-
-    context_title VARCHAR(255),               -- ACTIVE CONTEXT 제목
-    context_description TEXT,                 -- ACTIVE CONTEXT 설명
-    context_tags JSONB,                       -- ACTIVE CONTEXT 태그 배열
-
-    is_active BOOLEAN DEFAULT TRUE,           -- 활성 세션 여부
-    created_at TIMESTAMPTZ DEFAULT now(),     -- 생성 시각
-    updated_at TIMESTAMPTZ DEFAULT now()      -- 갱신 시각
+    status VARCHAR(10) NOT NULL DEFAULT 'active', -- active / ended
+    started_at TIMESTAMPTZ DEFAULT now(),     -- 세션 시작
+    ended_at TIMESTAMPTZ,                      -- 종료 시각(명시/비활동 마감)
+    title VARCHAR(120),                        -- 세션 제목(후속 자동 요약)
+    context_summary TEXT,                      -- 오래된 턴 롤링 구조화 요약
+    summarized_until INTEGER NOT NULL DEFAULT 0, -- 이미 요약한 메시지 수(증분)
+    extracted_at TIMESTAMPTZ,                  -- 자기모델 추출 완료 시각(SP-2b)
+    created_at TIMESTAMPTZ DEFAULT now()       -- 생성 시각
 );
-CREATE INDEX idx_coach_sessions_user ON coach_sessions(user_id) WHERE is_active = true;
+CREATE INDEX ix_coach_sessions_user ON coach_sessions(user_id);
 
--- 코치 대화 메시지 (좌측 인터랙티브 캔버스)
+-- 코치 대화 메시지 (턴 append-only)
 CREATE TABLE coach_messages (
     id BIGSERIAL PRIMARY KEY,                 -- 메시지 PK
-    session_id BIGINT NOT NULL REFERENCES coach_sessions(id) ON DELETE CASCADE, -- 세션 FK
-
-    role VARCHAR(20) NOT NULL,                -- user / assistant / system
-    content TEXT NOT NULL,                    -- 마크다운 본문
-
-    badge_label VARCHAR(50),                  -- 배지 라벨(예: 로드맵 연계 질문)
-    code_snippet TEXT,                        -- 코드 블록 분리 저장
-    attached_context JSONB,                   -- 입력 시 동봉된 맥락 정보
-
+    session_id UUID NOT NULL REFERENCES coach_sessions(id) ON DELETE CASCADE, -- 세션 FK
+    role VARCHAR(10) NOT NULL,                -- user / assistant
+    content TEXT NOT NULL,                    -- 본문
     created_at TIMESTAMPTZ DEFAULT now()      -- 생성 시각
 );
-CREATE INDEX idx_coach_messages_session ON coach_messages(session_id, created_at ASC);
+CREATE INDEX ix_coach_messages_session ON coach_messages(session_id, created_at);
+
+-- (원설계 아이디어·미구현) context_type/context_id/context_title 등 ACTIVE CONTEXT 스냅샷,
+-- 메시지 badge_label/code_snippet/attached_context, insight_wallets(지갑)는 코치 에이전트화
+-- 로드맵(AGENT_ROADMAP.md)에서 재검토. SP-2b 는 extracted_until(INT) 컬럼을 추가 예정.
 
 -- 인사이트 지갑 (우측 Wallet 패널)
 CREATE TABLE insight_wallets (
@@ -944,11 +939,12 @@ CREATE TABLE insight_wallets (
 CREATE INDEX idx_insight_wallets_user ON insight_wallets(user_id, created_at DESC);
 ```
 
-코치 워크플로우(요약):
-1. 로드맵/찬스에서 코치 진입 시 `coach_sessions`를 열고 `context_*` 스냅샷 저장  
-2. 대화 턴은 `coach_messages`에 누적(배지/코드/첨부 컨텍스트 포함)  
-3. 지갑 저장 액션 시 `insight_wallets`에 upsert/insert  
-4. 이후 로드맵 아카이브 반영 시 `is_used_in_archive`로 사용 여부 추적
+코치 워크플로우(SP-2a as-built):
+1. 코치 진입 시 `coach_sessions`를 get-or-create(최근 active 세션 재개, 방문 간 이어감)  
+2. 대화 턴은 `coach_messages`에 append(사용자/어시스턴트) — 멀티턴 기억  
+3. 오래된 턴은 `context_summary`로 증분 롤링 요약(`summarized_until` 추적)  
+4. SP-2b: active 세션에서 자기모델 증분 추출(`extracted_until`) → `SelfModelService`  
+5. (미구현) `insight_wallets`(지갑)은 코치 에이전트화 로드맵에서 재검토
 
 ---
 
