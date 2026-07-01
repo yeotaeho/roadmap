@@ -1,5 +1,12 @@
 # ai_coach 작업 기록
 
+## 2026-07-02 — SP-2a: 코치 대화 영속화(세션·멀티턴·재개·롤링 요약)
+- **무엇** — 무상태 코치를 **명시적 세션 기반 영속 대화**로 전환. 신규 테이블 `coach_sessions`(상태·롤링 요약·`summarized_until`·`extracted_at`)+`coach_messages`(role·content append-only). `CoachSessionRepository`(CRUD·최근 active 조회·요약 갱신), 순수 헬퍼 `coach_context.py`(윈도우 분할·주입 조립)+`LlmClient.summarize_conversation`, `CoachService`(스트리밍 중 영속화·**증분 롤링 요약**·소유권), 세션 API 4개(`POST /sessions` get-or-create·`POST /stream`{sessionId,message}·`POST /sessions/{id}/end`·`GET /sessions/{id}/messages`), 프론트 `CoachView` **재개 라이프사이클**. 코치가 멀티턴을 기억하고 방문 간 대화를 이어감.
+- **왜** — "AI 상담실=개인화 본가"의 토대이자 SP-2b(세션 종료 후 자기모델 추출)의 전제. 현 코치는 무상태·무기억이라 세션 개념이 없었음. 컨텍스트 관리는 deepagents 미도입(오버킬·DDD 경계)·LangGraph create_agent 는 향후 에이전트화 로드맵([AGENT_ROADMAP.md](./AGENT_ROADMAP.md))으로 분리, 긴 대화는 네이티브 롤링 요약으로 해결(Codex 상담 반영).
+- **어디** — ORM [coach_session.py](../models/bases/coach_session.py)·[coach_message.py](../models/bases/coach_message.py), 마이그 `26149c601ff7`·`20542b62b650`(Neon). [coach_session_repository.py](../hub/repositories/coach_session_repository.py)·[coach_context.py](../hub/services/coach_context.py)·[coach_service.py](../hub/services/coach_service.py)·[core/llm/client.py](../../../core/llm/client.py)(`summarize_conversation`)·[coach_routor.py](../../../api/v1/coach/coach_routor.py). 프론트 `www.yeotaeho.kr/src/lib/api/coach.ts`·`components/features/coach/CoachView.tsx`. 스펙 [design](../../../docs/superpowers/specs/2026-07-01-coach-session-persistence-design.md)·플랜 [plan](../../../docs/superpowers/plans/2026-07-01-coach-session-persistence.md).
+- **검증** — SDD 6태스크 각 리뷰 Approved + opus whole-branch(Important 1건: 스트리밍 중 맥락이 닫힌 요청세션 사용 → 독립세션 수정). **Codex 8라운드 수렴**: 세션수명·orphan·malformed uuid→422·재요약낭비→증분·재개모델·로그아웃 프라이버시·히스토리 로드 레이스·ended_at 멱등·재시도스턱·무키 요약스킵·요약실패 복원력·stale 스모크. 테스트 백엔드 65(import9·context10·repo11·service13·endpoint11·stream11) + tsc 0. 커밋 a0f5e14..(this).
+- **후속** — **SP-2b(다음)**: `status='ended'`+`extracted_at IS NULL` 세션 → LLM 추출 → `SelfModelService.upsert_structured`/`append_evidence(source='coach_extraction')`. **⚠️ ERD** [erd.md](../../../docs/erd.md) §6.6 coach 스키마가 실제 구현과 drift(BIGSERIAL/context_type/is_active vs UUID/context_summary/summarized_until) — SP-2b 전 SSOT 정합 필요. 세션 자동마감(비활동)·명시 '새 대화' 버튼·coach 라우터 광범위 except 로깅·무관 기존 model drift(sectors 등)는 후속.
+
 ## 2026-06-28 — 최소 SSE 멘토 슬라이스(도메인 첫 구현)
 - **무엇** — 빈 스텁이던 ai_coach 도메인에 SSE 스트리밍 멘토링 가동. 사용자 페르소나·활성 로드맵·상위 Pulse 섹터를 맥락으로 주입해 OpenAI 응답을 토큰 단위 스트리밍.
 - **왜** — Roadmap·페르소나 루프 완성 후 대화형 코치 첫 슬라이스. RAG·FastMCP·인사이트 지갑은 범위에서 분리(다음 슬라이스).
