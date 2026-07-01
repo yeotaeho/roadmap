@@ -26,6 +26,7 @@ SP-2a는 명시적 세션으로 대화를 영속화해 이 둘을 해소한다. 
 | `started_at` | timestamptz NOT NULL default now() | |
 | `ended_at` | timestamptz nullable | 종료 시각(추출 트리거) |
 | `title` | VARCHAR(120) nullable | 첫 메시지 요약(후속, SP-2a는 미채움) |
+| `context_summary` | TEXT nullable | 오래된 턴의 롤링 구조화 요약(§5) |
 | `extracted_at` | timestamptz nullable | SP-2b가 추출 완료 표시 |
 | `created_at` | timestamptz default now() | |
 
@@ -49,10 +50,13 @@ SP-2a는 명시적 세션으로 대화를 영속화해 이 둘을 해소한다. 
 - **`POST /api/coach/sessions/{id}/end`** — 소유권 검증 후 `status='ended'`·`ended_at=now()`. 이미 ended면 멱등. 응답 `{"success": true}`. (SP-2b 추출 트리거 지점.)
 - **`GET /api/coach/sessions/{id}/messages`** — 소유권 검증 후 세션 메시지 `created_at ASC`. 응답 `{"success": true, "messages": [{"role","content","createdAt"}]}`.
 
-## 5. 멀티턴 기억 (`coach_service.stream_sse` 변경)
+## 5. 멀티턴 기억 + 롤링 요약 (`coach_service.stream_sse` 변경)
 - 시그니처를 `stream_sse(user_id, session_id, message)`로 확장.
-- 스트림 시작 시 세션 최근 N(기본 20)개 메시지를 `created_at ASC`로 로드해 LLM `messages` 배열에 순서대로 넣고, 그 뒤 현재 user 메시지를 붙인다. system(맥락 포함)은 그대로 앞에.
-- `build_coach_context`(맥락 주입)는 불변.
+- **최근 윈도우** — 세션 최근 N(기본 20)개 메시지를 `created_at ASC`로 로드.
+- **롤링 요약(긴 대화 컨텍스트)** — 세션 총 메시지 수가 임계 T(기본 24) 초과면, **윈도우 밖(오래된) 메시지**를 구조화 요약(대화 의도·사용자 핵심 사실·합의된 것·다음 스텝)으로 LLM 압축해 `context_summary`에 **롤링 갱신**(재트리거 시 `[기존 요약 + 새로 밀려난 메시지]`를 다시 요약). 원본 메시지는 DB에 그대로 보존(삭제 안 함).
+- **LLM 주입 순서** — `[system(build_coach_context 맥락) + (있으면) context_summary 블록 + 최근 N개 + 현재 user 메시지]`. 요약이 없으면(짧은 대화) 전체 메시지. 이로써 대화가 아무리 길어도 초기 핵심이 압축돼 유지된다(고정 윈도우의 맥락 소실 해소).
+- **근거** — deepagents 미도입. LangChain `SummarizationMiddleware` 전략을 커스텀 `LlmClient`로 경량 이식(새 의존성 없음). 향후 코치 에이전트화(별도 로드맵) 시 `SummarizationMiddleware`로 대체 가능.
+- **지연 트레이드오프** — 요약은 임계 초과 턴에서만 동기 1회 LLM 호출(첫 토큰 지연 증가). 매 턴 아님. `build_coach_context`(맥락 주입)는 불변.
 
 ## 6. 스트리밍 중 영속화 — DB 세션 수명 함정 (핵심)
 FastAPI `Depends(get_db)`로 열린 요청 스코프 세션은 **응답 반환 후 닫히는데**, `StreamingResponse` 제너레이터는 그 **후에** 실행된다. 따라서 제너레이터 안에서 요청 세션으로 쓰기를 하면 "세션 닫힘/이벤트루프" 오류가 날 수 있다.
@@ -68,12 +72,14 @@ FastAPI `Depends(get_db)`로 열린 요청 스코프 세션은 **응답 반환 �
 2. 세션 생성 → 메시지 저장 → 히스토리 조회가 순서대로 동작. 스트림 후 어시스턴트 메시지가 실제로 저장됨.
 3. 타 사용자 세션 접근은 403, 미존재 404, 무토큰 401.
 4. 코치가 같은 세션의 이전 발화를 참조(멀티턴 기억) — 히스토리가 LLM 컨텍스트에 포함됨(테스트로 주입 확인).
-5. 프론트 `tsc` 0.
+5. 긴 대화(메시지 수 > 임계 T)에서 `context_summary`가 생성·롤링 갱신되고, LLM 주입에 요약 블록이 포함돼 윈도우 밖 초기 맥락이 유지됨.
+6. 프론트 `tsc` 0.
 
 ## 9. 테스트 전략
 - `scripts/coach_session_models_import_test.py` — ORM import·메타.
 - `scripts/coach_session_repository_test.py` — 세션 생성·메시지 append·히스토리 순서·독립 세션 쓰기(Neon).
 - `scripts/coach_session_endpoint_test.py` — 생성/스트림(ASGI, LLM 키 없을 때 비활성 경로로 어시스턴트 저장 스킵 확인 또는 fake)·end·messages·소유권 403/404·무토큰 401. LLM 호출은 API 키 미설정 경로(기존 "비활성" 분기)로 결정적 테스트.
+- 롤링 요약은 순수 로직(주입 조립 `build_llm_messages(summary, window, message)` + "임계 초과 시 요약 대상 슬라이스" 선택)을 LLM 무관 순수 함수로 분리해 단위 테스트. 실제 요약 LLM 호출은 주입 가능한 summarizer(fake)로 결정적 검증.
 
 ## 10. 범위 밖 / 후속
 - **SP-2b(다음)** — 종료 세션 → LLM 추출 → `SelfModelService.upsert_structured`/`append_evidence(source='coach_extraction')`. `extracted_at`로 멱등. 비활동 자동 마감 스케줄러 잡도 SP-2b(추출 트리거).
