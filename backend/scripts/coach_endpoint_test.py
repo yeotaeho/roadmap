@@ -79,6 +79,10 @@ async def run() -> int:
         r = await c.get("/api/coach/sessions/11111111-1111-1111-1111-111111111111/messages", headers=h)
         check("미존재 404", r.status_code == 404, str(r.status_code))
 
+        # 잘못된 형식 sessionId → 422(500 아님)
+        r = await c.get("/api/coach/sessions/not-a-uuid/messages", headers=h)
+        check("malformed uuid 422", r.status_code == 422, str(r.status_code))
+
         # 종료
         r = await c.post(f"/api/coach/sessions/{sid}/end", headers=h)
         check("end 200", r.status_code == 200)

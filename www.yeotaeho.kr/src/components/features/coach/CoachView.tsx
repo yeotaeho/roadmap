@@ -82,7 +82,11 @@ export function CoachView() {
     let cancelled = false;
     (async () => {
       const id = await createCoachSession();
-      if (cancelled || !id) return;
+      if (cancelled) {
+        if (id) void endCoachSession(id);
+        return;
+      }
+      if (!id) return;
       sessionIdRef.current = id;
       setSessionId(id);
       const history = await fetchCoachMessages(id);
