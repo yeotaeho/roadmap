@@ -1,0 +1,65 @@
+# 코치 세션 리포지토리 — 세션·메시지 CRUD·롤링 요약·종료
+
+from __future__ import annotations
+
+import uuid
+
+from sqlalchemy import text
+
+from domain.auth.hub.repositories.base_repository import BaseRepository
+
+_CREATE = text(
+    "INSERT INTO coach_sessions (id, user_id, status, started_at, created_at) "
+    "VALUES (CAST(:id AS UUID), CAST(:uid AS UUID), 'active', now(), now())"
+)
+_GET = text(
+    "SELECT user_id, status, context_summary FROM coach_sessions WHERE id = CAST(:id AS UUID)"
+)
+_ADD_MSG = text(
+    "INSERT INTO coach_messages (session_id, role, content, created_at) "
+    "VALUES (CAST(:sid AS UUID), :role, :content, now())"
+)
+_FETCH_MSGS = text(
+    "SELECT role, content FROM coach_messages WHERE session_id = CAST(:sid AS UUID) "
+    "ORDER BY created_at ASC, id ASC"
+)
+_COUNT = text("SELECT count(*) AS c FROM coach_messages WHERE session_id = CAST(:sid AS UUID)")
+_END = text(
+    "UPDATE coach_sessions SET status='ended', ended_at=now() WHERE id = CAST(:id AS UUID)"
+)
+_UPDATE_SUMMARY = text(
+    "UPDATE coach_sessions SET context_summary = :s WHERE id = CAST(:id AS UUID)"
+)
+
+
+class CoachSessionRepository(BaseRepository):
+    async def create_session(self, user_id: str) -> str:
+        sid = str(uuid.uuid4())
+        await self.session.execute(_CREATE, {"id": sid, "uid": user_id})
+        await self.session.commit()
+        return sid
+
+    async def get_session(self, session_id: str) -> dict | None:
+        r = (await self.session.execute(_GET, {"id": session_id})).first()
+        if r is None:
+            return None
+        return {"user_id": str(r.user_id), "status": r.status, "context_summary": r.context_summary}
+
+    async def add_message(self, session_id: str, role: str, content: str) -> None:
+        await self.session.execute(_ADD_MSG, {"sid": session_id, "role": role, "content": content})
+        await self.session.commit()
+
+    async def fetch_messages(self, session_id: str) -> list[dict]:
+        rows = (await self.session.execute(_FETCH_MSGS, {"sid": session_id})).all()
+        return [{"role": r.role, "content": r.content} for r in rows]
+
+    async def count_messages(self, session_id: str) -> int:
+        return int((await self.session.execute(_COUNT, {"sid": session_id})).first().c)
+
+    async def end_session(self, session_id: str) -> None:
+        await self.session.execute(_END, {"id": session_id})
+        await self.session.commit()
+
+    async def update_summary(self, session_id: str, summary: str) -> None:
+        await self.session.execute(_UPDATE_SUMMARY, {"id": session_id, "s": summary})
+        await self.session.commit()
