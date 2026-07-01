@@ -729,9 +729,11 @@ _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("gap_project",       _job_gap_project),
     ("causal_refine",     _job_causal_refine),
     ("chance_refine",     _job_chance_refine),
-    ("chance_match",      _job_chance_match),
+    # 임베딩을 chance_match 앞에 둬 같은 회차에서 사용자·공고 벡터를 먼저 갱신 —
+    # 데이터 변경이 당일 Chance 의미 매칭에 반영된다(기존엔 하루 더 지연).
     ("document_embed",    _job_document_embed),
     ("user_embed",        _job_user_embed),
+    ("chance_match",      _job_chance_match),
     ("pulse_refine",      _job_pulse_refine),
     ("market_forecast",   _job_market_forecast),
     ("briefing_refine",   _job_briefing_refine),
