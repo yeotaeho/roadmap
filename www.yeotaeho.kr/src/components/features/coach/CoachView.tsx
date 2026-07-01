@@ -71,7 +71,14 @@ export function CoachView() {
 
   // 로그인 상태에서 마운트 시 세션 생성 + 기존 히스토리 로드
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      if (sessionIdRef.current) {
+        void endCoachSession(sessionIdRef.current);
+        sessionIdRef.current = null;
+        setSessionId(null);
+      }
+      return;
+    }
     let cancelled = false;
     (async () => {
       const id = await createCoachSession();
