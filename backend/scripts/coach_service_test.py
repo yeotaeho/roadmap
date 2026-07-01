@@ -143,6 +143,32 @@ async def run() -> int:
 
         await svc2.end_session(uid, sid2)
 
+        # 요약 실패 — 롱세션(>24)에서 summarizer 가 raise 해도 스트림은 끝까지 완료되고
+        # 어시스턴트 응답은 정상 저장된다(best-effort 요약, Codex P2).
+        svc3 = CoachService(s)
+
+        async def raises(prior, older):
+            raise RuntimeError("summary down")
+
+        async def fake_streamer3(messages):
+            for tok in ["오", "케"]:
+                yield tok
+
+        svc3._summarizer = raises
+        svc3._streamer = fake_streamer3
+        sid3 = await svc3.create_session(uid)
+        async with AsyncSessionLocal() as s8:
+            repo8 = CoachSessionRepository(s8)
+            for i in range(26):
+                await repo8.add_message(sid3, "user" if i % 2 == 0 else "assistant", f"r{i}")
+        out3 = await _drain(svc3.stream_sse(uid, sid3, "질문"))
+        check("요약 실패해도 스트림 완료(done 프레임)", '"type": "done"' in out3, out3[:200])
+        async with AsyncSessionLocal() as s9:
+            msgs3 = await CoachSessionRepository(s9).fetch_messages(sid3)
+        check("요약 실패해도 어시스턴트 응답 저장", bool(msgs3) and msgs3[-1]["role"] == "assistant", str(msgs3[-3:]))
+
+        await svc3.end_session(uid, sid3)
+
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

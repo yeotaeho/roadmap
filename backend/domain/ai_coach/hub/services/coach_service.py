@@ -110,7 +110,11 @@ class CoachService:
             new_older = msgs[summarized_until:cutoff]  # 아직 미요약분만
             if not new_older:
                 return prior
-            summary = await self._summarizer(prior, new_older)
+            try:
+                summary = await self._summarizer(prior, new_older)
+            except Exception as e:  # 요약 실패는 치명적이지 않음 — 기존 요약 유지하고 대화는 계속.
+                logger.warning(f"롤링 요약 실패(기존 요약 유지): {e}")
+                return prior
             if summary:
                 await repo.update_summary(session_id, summary, cutoff)
                 return summary
