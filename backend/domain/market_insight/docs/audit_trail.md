@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-07-01 — SP-0: 다이렉트 찬스 탭을 개인화 매칭(/matches)에 연결
+- **무엇** — 프론트 Chance 탭이 인증 없는 제네릭 `/api/chance/opportunities`(전 사용자 동일 목록)만 호출해, 매시간 배치로 계산·저장되던 사용자별 적합도 매칭(`user_chance_matches`)이 화면에 전혀 노출되지 않던 배선 누락을 수정. 로그인+매칭 존재 시 적합도 순 매칭 우선, 신규·배치 전·비로그인은 제네릭 공고로 폴백. 개인화 상태 안내 문구 추가.
+- **왜** — "Sync/Chance에 개인화가 안 보인다"는 사용자 진단의 직접 원인. Phase 2에서 구현·가동되던 Chance 의미 매칭이 백엔드에만 존재하고 UI가 무시하던 상태(설계 의도 아님).
+- **어디** — [dashboard.ts](../../../../www.yeotaeho.kr/src/lib/api/dashboard.ts)(`fetchMatches`·`ChanceMatchLive` opportunity_id→id 정규화) · [useDashboard.ts](../../../../www.yeotaeho.kr/src/hooks/useDashboard.ts)(`useChanceMatches`) · [DashboardView.tsx](../../../../www.yeotaeho.kr/src/components/features/dashboard/DashboardView.tsx)(`ChancePanel` 매칭 우선+폴백+가시화). 백엔드 무변경(기존 `/api/chance/matches`·`ChanceRepository.fetch_matches` 재사용).
+- **검증** — `tsc --noEmit` 0 에러. 완전한 시각 검증은 백엔드+로그인+매칭 데이터 필요 → SyncPanel 인증 패턴(`useStore(profile?.id)`) 재사용으로 런타임 리스크 최소화. 커밋 b374f15.
+- **후속** — 매칭 카드에 적합도 점수(`match_score`)·근거(`match_reason`) 노출은 SP-3(설명 레이어)에서. Sync 신호 희석(코사인 60% vs 공통 트렌드 40%)은 자기모델(SP-1~3) 도입으로 차별화 강화.
+
 ## 2026-06-30 — 개인화 Phase 2: 사용자 성향·스펙 임베딩 통합 + 재임베딩 버그 수정
 - **무엇** — Phase 1에서 수집한 성향·스펙을 사용자 임베딩·Chance 매칭에 반영. (1) 순수 헬퍼 `user_embed_text.py`(`build_user_embed_text`·`disposition_spec_terms`)가 성향 enum→한국어 라벨 + 스펙(skills/cert/lang/projects) 직렬화. (2) `_FETCH_UNEMBEDDED_USERS` 가 user_preferences·user_personas LEFT JOIN + `GREATEST(updated_at들) > computed_at` 로 재임베딩 트리거 — 기존엔 `e.user_id IS NULL` 만 봐서 데이터 변경 시 재임베딩 안 되던 버그 수정. `embed_users` 는 해시 동일 시 OpenAI 호출 생략(멱등). (3) `chance_match_service` user_terms 에 같은 헬퍼로 성향·스펙 가산.
 - **왜** — Sync/Chance 개인화가 직무+키워드만 쓰던 병목 해소. 데모그래픽(나이·성별·지역)은 편향 방지 위해 임베딩·매칭에서 제외(user_profiles 미JOIN).
