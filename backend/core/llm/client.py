@@ -118,6 +118,12 @@ _COACH_SYSTEM_PROMPT = (
     "근거 없는 단정·과장은 피하고, 모르면 모른다고 말하라. 답변은 간결하게(보통 3~6문장)."
 )
 
+_COACH_SUMMARY_SYSTEM_PROMPT = (
+    "너는 코치와 사용자의 대화를 압축하는 요약기다. 이전 요약과 새 대화를 받아, "
+    "사용자에 대한 핵심 사실(관심·성향·상황·목표), 대화의 의도, 합의된 것, 다음 스텝을 "
+    "한국어로 간결히 통합 요약하라. 새 정보로 기존 요약을 갱신하되 중요한 과거 맥락은 유지하라. "
+    "8문장 이내 평문으로만 출력하라(JSON·머리말 없이)."
+)
 
 _SENTIMENT_LABELS = ("긍정", "중립", "부정")
 
@@ -646,6 +652,23 @@ class LlmClient:
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 yield delta.content
+
+    async def summarize_conversation(self, prior_summary: str | None, older: list[dict]) -> str:
+        """이전 요약 + 오래된 대화를 통합 롤링 요약(평문)으로 압축한다."""
+        convo = "\n".join(
+            f"{m.get('role')}: {m.get('content')}" for m in older
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        )
+        user = (f"[기존 요약]\n{prior_summary}\n\n" if prior_summary else "") + f"[새 대화]\n{convo}"
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": _COACH_SUMMARY_SYSTEM_PROMPT},
+                {"role": "user", "content": user},
+            ],
+        )
+        return (resp.choices[0].message.content or "").strip()
 
     async def generate_roadmap(self, context: str) -> dict:
         """페르소나·목표·트렌드 맥락에서 개인화 로드맵(퀘스트 트리)을 생성한다. 무효/실패 시 {}."""

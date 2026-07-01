@@ -70,11 +70,14 @@ async def run(user_id: str | None) -> int:
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=60.0) as client:
+        sr = await client.post("/api/coach/sessions", headers=headers)
+        check("세션 생성 200", sr.status_code == 200, str(sr.status_code))
+        sid = sr.json().get("sessionId")
         deltas: list[str] = []
         done = False
         async with client.stream(
             "POST", "/api/coach/stream", headers=headers,
-            json={"message": "내 로드맵 다음 한 걸음을 한 문장으로 알려줘."},
+            json={"sessionId": sid, "message": "내 로드맵 다음 한 걸음을 한 문장으로 알려줘."},
         ) as resp:
             check("stream 200", resp.status_code == 200, str(resp.status_code))
             ctype = resp.headers.get("content-type", "")
@@ -95,9 +98,24 @@ async def run(user_id: str | None) -> int:
         check("응답 텍스트 비어있지 않음", len(text_out.strip()) > 0)
         print(f"   → deltas={len(deltas)}, 응답 길이={len(text_out)}자")
 
-        # 무토큰 401
-        r = await client.post("/api/coach/stream", json={"message": "hi"})
+        # 무토큰 401 (본문은 유효하게 — 인증 실패가 검증보다 먼저 나는지 확인)
+        r = await client.post(
+            "/api/coach/stream",
+            json={"sessionId": "11111111-1111-1111-1111-111111111111", "message": "hi"},
+        )
         check("무토큰 401", r.status_code == 401, str(r.status_code))
+
+    # 정리 — 이 사용자 세션·메시지 삭제(스모크가 남긴 데이터 제거).
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            text(
+                "DELETE FROM coach_messages WHERE session_id IN "
+                "(SELECT id FROM coach_sessions WHERE user_id = CAST(:u AS UUID))"
+            ),
+            {"u": uid},
+        )
+        await s.execute(text("DELETE FROM coach_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        await s.commit()
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

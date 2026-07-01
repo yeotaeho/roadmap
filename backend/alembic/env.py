@@ -77,6 +77,8 @@ from domain.user_intelligence.models.bases.user_self_model import UserSelfModel 
 from domain.user_intelligence.models.bases.user_self_model_evidence import (  # 자기모델 근거
     UserSelfModelEvidence,
 )
+from domain.ai_coach.models.bases.coach_session import CoachSession  # 코치 세션
+from domain.ai_coach.models.bases.coach_message import CoachMessage  # 코치 메시지
 from domain.hrowth_journey.models.bases.user_roadmap import UserRoadmap  # Roadmap
 from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roadmap
 from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
