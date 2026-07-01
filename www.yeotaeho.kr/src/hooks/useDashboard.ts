@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchGapIssueDetail,
   fetchGapIssues,
+  fetchMatches,
   fetchOpportunities,
   fetchOpportunityDetail,
   fetchBriefing,
@@ -38,6 +39,16 @@ export function useOpportunities() {
   return useQuery({
     queryKey: ['chance-opportunities'],
     queryFn: fetchOpportunities,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function useChanceMatches(userId?: string) {
+  return useQuery({
+    queryKey: ['chance-matches', userId],
+    queryFn: fetchMatches,
+    enabled: !!userId,
     staleTime: STALE,
     retry: 1,
   });

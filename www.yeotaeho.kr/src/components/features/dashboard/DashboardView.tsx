@@ -12,7 +12,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { useStore } from "@/store";
-import { useGapIssues, useOpportunities, useSyncHistory, useSyncScores } from "@/hooks/useDashboard";
+import { useChanceMatches, useGapIssues, useOpportunities, useSyncHistory, useSyncScores } from "@/hooks/useDashboard";
 import { ddayLabel } from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -211,12 +211,35 @@ function SyncPanel() {
   );
 }
 
+type ChanceCard = {
+  id: number;
+  title: string;
+  opportunity_type: string | null;
+  host_name: string | null;
+  d_day_date: string | null;
+};
+
 function ChancePanel() {
-  const { data, isLoading, isError } = useOpportunities();
-  const items = data ?? [];
+  const profile = useStore((s) => s.profile);
+  const matchesQ = useChanceMatches(profile?.id);
+  const genericQ = useOpportunities();
+  // 로그인 + 개인화 매칭이 있으면 매칭(적합도 순) 우선, 없으면(신규·배치 전·비로그인) 제네릭 공고로 폴백.
+  const hasMatches = !!profile?.id && (matchesQ.data?.length ?? 0) > 0;
+  const items: ChanceCard[] = hasMatches ? matchesQ.data! : (genericQ.data ?? []);
+  const waitingMatches = !!profile?.id && matchesQ.isLoading;
+  const isLoading = waitingMatches || (!hasMatches && genericQ.isLoading);
+  const isError = !hasMatches && !waitingMatches && genericQ.isError;
+  const subtitle = hasMatches
+    ? "나의 프로필·관심 기반 적합도 순으로 정렬했어요."
+    : profile?.id
+      ? "프로필을 채우면 나에게 맞춘 순서로 정렬돼요."
+      : "로그인하면 나에게 맞춘 기회를 볼 수 있어요.";
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">다이렉트 찬스</h2>
+      <div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">다이렉트 찬스</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
       <PanelStatus isLoading={isLoading} isError={isError} isEmpty={items.length === 0} label="다이렉트 찬스">
         <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
           {items.map((item, idx) => (

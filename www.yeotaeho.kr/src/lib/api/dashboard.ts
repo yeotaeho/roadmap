@@ -61,6 +61,33 @@ export async function fetchOpportunities(): Promise<ChanceOpportunityLive[]> {
   return data?.opportunities ?? [];
 }
 
+export interface ChanceMatchLive {
+  id: number; // opportunity_id 를 카드 계약(id)에 맞춰 정규화
+  sector_slug: string | null;
+  title: string;
+  opportunity_type: string | null;
+  host_name: string | null;
+  d_day_date: string | null;
+  match_score: number | null;
+  match_reason: string | null;
+}
+
+export async function fetchMatches(): Promise<ChanceMatchLive[]> {
+  // user_id 는 서버가 Bearer 토큰에서 도출한다(IDOR 차단). 쿼리 파라미터로 보내지 않는다.
+  const { data } = await apiClient.get('/api/chance/matches');
+  const matches = (data?.matches ?? []) as Array<Record<string, unknown>>;
+  return matches.map((m) => ({
+    id: m.opportunity_id as number,
+    sector_slug: (m.sector_slug ?? null) as string | null,
+    title: m.title as string,
+    opportunity_type: (m.opportunity_type ?? null) as string | null,
+    host_name: (m.host_name ?? null) as string | null,
+    d_day_date: (m.d_day_date ?? null) as string | null,
+    match_score: (m.match_score ?? null) as number | null,
+    match_reason: (m.match_reason ?? null) as string | null,
+  }));
+}
+
 export interface GapIssueDetail {
   id: number;
   sector_slug: string;
