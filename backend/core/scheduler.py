@@ -752,6 +752,23 @@ async def _job_insight_refine_pipeline() -> dict[str, int]:
     return {"steps": len(_REFINE_PIPELINE)}
 
 
+# 경량 추천 새로고침 — 매시간. 사용자 데이터 변경을 일일 배치(09:00)까지 기다리지 않고
+# ~1시간 내 반영한다. user_embed 는 해시 스킵으로 변경된 사용자만 재임베딩(저비용),
+# 이어서 최신 사용자 벡터로 chance_match·sync_refine 재점수. 무거운 Silver 정제는 일일 유지.
+_HOURLY_REFRESH: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
+    ("user_embed",   _job_user_embed),
+    ("chance_match", _job_chance_match),
+    ("sync_refine",  _job_sync_refine),
+)
+
+
+async def _job_hourly_refresh() -> dict[str, int]:
+    """경량 추천 새로고침 체인을 순차 실행 — 사용자 벡터·Sync·Chance 점수만 갱신한다."""
+    for name, factory in _HOURLY_REFRESH:
+        await _run_job(name, factory)
+    return {"steps": len(_HOURLY_REFRESH)}
+
+
 _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("dart",              _job_dart),
     ("techblog_kr",       _job_techblog_kr),
@@ -893,6 +910,20 @@ def start_scheduler() -> AsyncIOScheduler | None:
             max_instances=1,
             misfire_grace_time=3600,
         )
+
+    # 경량 추천 새로고침 — 매시간 HH:30 (일일 09:00 배치와 시각 분리). 사용자 데이터
+    # 변경을 ~1시간 내 Sync/Chance 에 반영. user_embed 해시 스킵으로 저비용.
+    hourly_trigger = CronTrigger(minute=30, timezone=settings.scheduler_timezone)
+    sched.add_job(
+        _wrap("hourly_refresh", _job_hourly_refresh),
+        trigger=hourly_trigger,
+        id="hourly_refresh",
+        name="hourly_refresh",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=600,
+    )
 
     sched.start()
     _scheduler = sched
