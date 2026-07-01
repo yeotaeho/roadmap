@@ -17,7 +17,6 @@ import {
 } from "@/data/coachContext";
 import {
   createCoachSession,
-  endCoachSession,
   fetchCoachMessages,
   streamCoach,
 } from "@/lib/api/coach";
@@ -69,23 +68,17 @@ export function CoachView() {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
 
-  // 로그인 상태에서 마운트 시 세션 생성 + 기존 히스토리 로드
+  // 로그인 상태에서 마운트 시 세션 재개(get-or-create) + 기존 히스토리 로드
   useEffect(() => {
     if (!isAuthenticated) {
-      if (sessionIdRef.current) {
-        void endCoachSession(sessionIdRef.current);
-        sessionIdRef.current = null;
-        setSessionId(null);
-      }
+      sessionIdRef.current = null;
+      setSessionId(null);
       return;
     }
     let cancelled = false;
     (async () => {
       const id = await createCoachSession();
-      if (cancelled) {
-        if (id) void endCoachSession(id);
-        return;
-      }
+      if (cancelled) return;
       if (!id) return;
       sessionIdRef.current = id;
       setSessionId(id);
@@ -101,15 +94,6 @@ export function CoachView() {
       cancelled = true;
     };
   }, [isAuthenticated]);
-
-  // 언마운트 시 세션 종료
-  useEffect(() => {
-    return () => {
-      if (sessionIdRef.current) {
-        void endCoachSession(sessionIdRef.current);
-      }
-    };
-  }, []);
 
   const addToWallet = useCallback((msg: CoachMessage) => {
     const body = [msg.text, msg.code ? `\n\n\`\`\`python\n${msg.code}\n\`\`\`` : ""]
