@@ -15,7 +15,13 @@ import {
   type CoachAttachedContext,
   type CoachWalletItem,
 } from "@/data/coachContext";
-import { streamCoach } from "@/lib/api/coach";
+import {
+  createCoachSession,
+  endCoachSession,
+  fetchCoachMessages,
+  streamCoach,
+} from "@/lib/api/coach";
+import { useStore } from "@/store";
 import { InsightWalletPanel } from "./InsightWalletPanel";
 
 type CoachMessage = {
@@ -43,6 +49,7 @@ function buildProactiveGreeting(): CoachMessage {
 export function CoachView() {
   const formId = useId();
   const endRef = useRef<HTMLDivElement>(null);
+  const isAuthenticated = useStore((s) => s.isAuthenticated);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [attached, setAttached] = useState<CoachAttachedContext | null>(
@@ -51,6 +58,8 @@ export function CoachView() {
   const [messages, setMessages] = useState<CoachMessage[]>(() => [buildProactiveGreeting()]);
   const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
   const scrollBottom = useCallback(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,6 +68,37 @@ export function CoachView() {
   useEffect(() => {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
+
+  // 로그인 상태에서 마운트 시 세션 생성 + 기존 히스토리 로드
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      const id = await createCoachSession();
+      if (cancelled || !id) return;
+      sessionIdRef.current = id;
+      setSessionId(id);
+      const history = await fetchCoachMessages(id);
+      if (cancelled) return;
+      if (history.length > 0) {
+        setMessages(
+          history.map((h) => ({ id: uid(), role: h.role, text: h.content })),
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  // 언마운트 시 세션 종료
+  useEffect(() => {
+    return () => {
+      if (sessionIdRef.current) {
+        void endCoachSession(sessionIdRef.current);
+      }
+    };
+  }, []);
 
   const addToWallet = useCallback((msg: CoachMessage) => {
     const body = [msg.text, msg.code ? `\n\n\`\`\`python\n${msg.code}\n\`\`\`` : ""]
@@ -84,14 +124,14 @@ export function CoachView() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || !sessionId) return;
     setInput("");
     setMessages((m) => [...m, { id: uid(), role: "user", text }]);
     const assistantId = uid();
     setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }]);
     setIsLoading(true);
     try {
-      await streamCoach(text, (delta) => {
+      await streamCoach(sessionId, text, (delta) => {
         setMessages((m) =>
           m.map((msg) =>
             msg.id === assistantId ? { ...msg, text: msg.text + delta } : msg,
@@ -239,13 +279,17 @@ export function CoachView() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="예: 룰 기반으로 점수 합산 구조를 깔끔하게 잡고 싶어요"
-                disabled={isLoading}
+                placeholder={
+                  isAuthenticated
+                    ? "예: 룰 기반으로 점수 합산 구조를 깔끔하게 잡고 싶어요"
+                    : "로그인 후 AI 코치와 대화할 수 있어요"
+                }
+                disabled={isLoading || !sessionId}
                 className="min-h-[44px] flex-1 rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
               <button
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !input.trim() || !sessionId}
                 className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-3 text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
                 aria-label="전송"
               >
@@ -331,7 +375,9 @@ export function CoachView() {
       </AnimatePresence>
 
       <p className="pb-16 text-center text-[11px] text-slate-500 lg:pb-0 dark:text-slate-500">
-        목업 응답입니다. 키워드 예: 「지원·강점」→ 찬스 시나리오 / 「룰·합산·계산」→ 기술 스니펫
+        {isAuthenticated
+          ? "AI 코치와의 대화는 세션 단위로 저장됩니다."
+          : "로그인 후 AI 코치와 대화하고 세션 히스토리를 이어갈 수 있어요."}
       </p>
     </div>
   );
