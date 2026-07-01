@@ -68,6 +68,12 @@ class CoachService:
     async def create_session(self, user_id: str) -> str:
         return await CoachSessionRepository(self.session).create_session(user_id)
 
+    async def get_or_create_session(self, user_id: str) -> str:
+        """가장 최근 active 세션이 있으면 이어가고, 없으면 새로 만든다(방문 간 재개)."""
+        repo = CoachSessionRepository(self.session)
+        existing = await repo.get_latest_active_session(user_id)
+        return existing or await repo.create_session(user_id)
+
     async def verify_owner(self, user_id: str, session_id: str) -> str:
         """세션 소유·존재 검증. 반환 status. 미존재 LookupError, 타인 PermissionError."""
         sess = await CoachSessionRepository(self.session).get_session(session_id)
@@ -86,22 +92,29 @@ class CoachService:
         await CoachSessionRepository(self.session).end_session(session_id)
 
     async def _maybe_summarize(self, session_id: str) -> str | None:
-        """임계 초과면 오래된 메시지를 롤링 요약해 저장하고, 현재 요약을 반환한다. 독립 세션 사용."""
+        """새로 밀려난(아직 미요약) 오래된 메시지만 증분 롤링 요약. 독립 세션."""
         async with AsyncSessionLocal() as db:
             repo = CoachSessionRepository(db)
             sess = await repo.get_session(session_id)
-            prior = sess["context_summary"] if sess else None
+            if sess is None:
+                return None
+            prior = sess["context_summary"]
+            summarized_until = sess["summarized_until"]
             total = await repo.count_messages(session_id)
-            if not coach_context.select_to_summarize(total, _WINDOW_N, _THRESHOLD_T):
+            if total <= _THRESHOLD_T:
                 return prior
+            cutoff = total - _WINDOW_N  # messages[:cutoff] 가 오래된 것, [cutoff:] 가 최근 윈도우
+            if cutoff <= summarized_until:
+                return prior  # 새로 요약할 오래된 메시지 없음
             msgs = await repo.fetch_messages(session_id)
-            older, _recent = coach_context.split_history(msgs, _WINDOW_N)
-            if not older:
+            new_older = msgs[summarized_until:cutoff]  # 아직 미요약분만
+            if not new_older:
                 return prior
-            summary = await self._summarizer(prior, older)
+            summary = await self._summarizer(prior, new_older)
             if summary:
-                await repo.update_summary(session_id, summary)
-            return summary or prior
+                await repo.update_summary(session_id, summary, cutoff)
+                return summary
+            return prior
 
     async def stream_sse(self, user_id: str, session_id: str, message: str):
         """사용자 메시지 저장 → 히스토리+요약+맥락 주입 스트리밍 → 어시스턴트 응답 저장(독립 세션)."""

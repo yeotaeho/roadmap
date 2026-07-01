@@ -30,6 +30,7 @@ def run() -> int:
     check("sessions 테이블", s.name == "coach_sessions")
     check("status not null", s.columns["status"].nullable is False)
     check("context_summary nullable", s.columns["context_summary"].nullable is True)
+    check("summarized_until not null", s.columns["summarized_until"].nullable is False)
     check("ended_at nullable", s.columns["ended_at"].nullable is True)
     m = CoachMessage.__table__
     check("messages 테이블", m.name == "coach_messages")

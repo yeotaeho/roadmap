@@ -27,8 +27,8 @@ async def create_session(
     user_id: str = Depends(get_authenticated_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """새 코치 대화 세션 생성."""
-    session_id = await CoachService(db).create_session(user_id)
+    """코치 대화 세션 생성 또는 재개(방문 간 최근 active 세션 이어가기)."""
+    session_id = await CoachService(db).get_or_create_session(user_id)
     return {"success": True, "sessionId": session_id}
 
 

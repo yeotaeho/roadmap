@@ -13,7 +13,8 @@ _CREATE = text(
     "VALUES (CAST(:id AS UUID), CAST(:uid AS UUID), 'active', now(), now())"
 )
 _GET = text(
-    "SELECT user_id, status, context_summary FROM coach_sessions WHERE id = CAST(:id AS UUID)"
+    "SELECT user_id, status, context_summary, summarized_until FROM coach_sessions "
+    "WHERE id = CAST(:id AS UUID)"
 )
 _ADD_MSG = text(
     "INSERT INTO coach_messages (session_id, role, content, created_at) "
@@ -28,7 +29,11 @@ _END = text(
     "UPDATE coach_sessions SET status='ended', ended_at=now() WHERE id = CAST(:id AS UUID)"
 )
 _UPDATE_SUMMARY = text(
-    "UPDATE coach_sessions SET context_summary = :s WHERE id = CAST(:id AS UUID)"
+    "UPDATE coach_sessions SET context_summary = :s, summarized_until = :su WHERE id = CAST(:id AS UUID)"
+)
+_LATEST_ACTIVE = text(
+    "SELECT id FROM coach_sessions WHERE user_id = CAST(:uid AS UUID) AND status = 'active' "
+    "ORDER BY created_at DESC LIMIT 1"
 )
 
 
@@ -43,7 +48,12 @@ class CoachSessionRepository(BaseRepository):
         r = (await self.session.execute(_GET, {"id": session_id})).first()
         if r is None:
             return None
-        return {"user_id": str(r.user_id), "status": r.status, "context_summary": r.context_summary}
+        return {
+            "user_id": str(r.user_id),
+            "status": r.status,
+            "context_summary": r.context_summary,
+            "summarized_until": r.summarized_until,
+        }
 
     async def add_message(self, session_id: str, role: str, content: str) -> None:
         await self.session.execute(_ADD_MSG, {"sid": session_id, "role": role, "content": content})
@@ -60,6 +70,10 @@ class CoachSessionRepository(BaseRepository):
         await self.session.execute(_END, {"id": session_id})
         await self.session.commit()
 
-    async def update_summary(self, session_id: str, summary: str) -> None:
-        await self.session.execute(_UPDATE_SUMMARY, {"id": session_id, "s": summary})
+    async def update_summary(self, session_id: str, summary: str, summarized_until: int) -> None:
+        await self.session.execute(_UPDATE_SUMMARY, {"id": session_id, "s": summary, "su": summarized_until})
         await self.session.commit()
+
+    async def get_latest_active_session(self, user_id: str) -> str | None:
+        r = (await self.session.execute(_LATEST_ACTIVE, {"uid": user_id})).first()
+        return str(r.id) if r else None

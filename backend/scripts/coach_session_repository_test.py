@@ -62,11 +62,20 @@ async def run() -> int:
         check("히스토리 3건 순서", [m["role"] for m in msgs] == ["user", "assistant", "user"], str(msgs))
         check("count 3", await repo.count_messages(sid) == 3)
 
-        await repo.update_summary(sid, "사용자는 진로를 고민 중")
-        check("요약 저장", (await repo.get_session(sid))["context_summary"] == "사용자는 진로를 고민 중")
+        await repo.update_summary(sid, "사용자는 진로를 고민 중", 0)
+        sess_after_summary = await repo.get_session(sid)
+        check("요약 저장", sess_after_summary["context_summary"] == "사용자는 진로를 고민 중")
+        check("summarized_until 초기 0", sess_after_summary["summarized_until"] == 0, str(sess_after_summary))
+
+        await repo.update_summary(sid, "사용자는 진로를 고민 중(갱신)", 12)
+        sess_after_update = await repo.get_session(sid)
+        check("summarized_until 갱신", sess_after_update["summarized_until"] == 12, str(sess_after_update))
+
+        check("최근 active 세션 = 생성분", await repo.get_latest_active_session(uid) == sid)
 
         await repo.end_session(sid)
         check("종료 status ended", (await repo.get_session(sid))["status"] == "ended")
+        check("종료 후 active 없음", await repo.get_latest_active_session(uid) is None)
 
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")

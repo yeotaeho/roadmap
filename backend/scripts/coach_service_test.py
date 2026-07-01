@@ -64,7 +64,10 @@ async def run() -> int:
             for tok in ["안", "녕", "하세요"]:
                 yield tok
 
+        older_calls = []
+
         async def fake_summarizer(prior, older):
+            older_calls.append(older)
             return f"요약({len(older)}건)"
 
         svc._streamer = fake_streamer
@@ -97,6 +100,26 @@ async def run() -> int:
         async with AsyncSessionLocal() as s4:
             sess = await CoachSessionRepository(s4).get_session(sid)
         check("롤링 요약 생성", bool(sess["context_summary"]) and sess["context_summary"].startswith("요약("), str(sess["context_summary"]))
+        check("요약 최초 1회 호출", len(older_calls) == 1, str(len(older_calls)))
+        first_older_len = len(older_calls[0])
+
+        # 증분 요약 — 메시지 3건 추가 후 재스트리밍하면 새로 밀려난 소수 메시지만 재요약된다.
+        async with AsyncSessionLocal() as s6:
+            repo6 = CoachSessionRepository(s6)
+            for i in range(3):
+                await repo6.add_message(sid, "user" if i % 2 == 0 else "assistant", f"n{i}")
+        await _drain(svc.stream_sse(uid, sid, "증분 트리거"))
+        check("요약 2회째 호출", len(older_calls) == 2, str(len(older_calls)))
+        second_older_len = len(older_calls[1]) if len(older_calls) > 1 else -1
+        check(
+            "증분 요약은 소수 메시지만 재요약",
+            0 < second_older_len < first_older_len,
+            f"first={first_older_len} second={second_older_len}",
+        )
+
+        # 재개 — 최근 active 세션이 있으면 새로 만들지 않고 이어간다.
+        sid2 = await svc.get_or_create_session(uid)
+        check("세션 재개(get-or-create)", sid2 == sid, f"sid={sid} sid2={sid2}")
 
         await svc.end_session(uid, sid)
         async with AsyncSessionLocal() as s5:
