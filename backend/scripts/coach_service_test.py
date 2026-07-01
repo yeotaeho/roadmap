@@ -125,6 +125,24 @@ async def run() -> int:
         async with AsyncSessionLocal() as s5:
             check("종료 반영", (await CoachSessionRepository(s5).get_session(sid))["status"] == "ended")
 
+        # 무키 — API 키 미설정이면 메시지 24개 초과라도 요약 없이 즉시 비활성 폴백.
+        svc2 = CoachService(s)
+        svc2._api_key = ""
+
+        async def boom(prior, older):
+            raise AssertionError("summarizer must not run without key")
+
+        svc2._summarizer = boom
+        sid2 = await svc2.create_session(uid)
+        async with AsyncSessionLocal() as s7:
+            repo7 = CoachSessionRepository(s7)
+            for i in range(26):
+                await repo7.add_message(sid2, "user" if i % 2 == 0 else "assistant", f"k{i}")
+        out2 = await _drain(svc2.stream_sse(uid, sid2, "질문"))
+        check("무키 시 비활성화 폴백 노출", "비활성화" in out2, out2[:200])
+
+        await svc2.end_session(uid, sid2)
+
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

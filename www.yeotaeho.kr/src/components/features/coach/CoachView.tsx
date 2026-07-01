@@ -83,21 +83,25 @@ export function CoachView() {
     let cancelled = false;
     setSessionError(false);
     (async () => {
-      const id = await createCoachSession();
-      if (cancelled) return;
-      if (!id) {
-        setSessionError(true);
-        return;
+      try {
+        const id = await createCoachSession();
+        if (cancelled) return;
+        if (!id) {
+          setSessionError(true);
+          return;
+        }
+        const history = await fetchCoachMessages(id);
+        if (cancelled) return;
+        if (history.length > 0) {
+          setMessages(
+            history.map((h) => ({ id: uid(), role: h.role, text: h.content })),
+          );
+        }
+        sessionIdRef.current = id;
+        setSessionId(id);
+      } catch {
+        if (!cancelled) setSessionError(true);
       }
-      const history = await fetchCoachMessages(id);
-      if (cancelled) return;
-      if (history.length > 0) {
-        setMessages(
-          history.map((h) => ({ id: uid(), role: h.role, text: h.content })),
-        );
-      }
-      sessionIdRef.current = id;
-      setSessionId(id);
     })();
     return () => {
       cancelled = true;

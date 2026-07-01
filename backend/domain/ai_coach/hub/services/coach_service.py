@@ -122,7 +122,13 @@ class CoachService:
         async with AsyncSessionLocal() as db:
             await CoachSessionRepository(db).add_message(session_id, "user", message)
 
-        # 2) 롤링 요약(임계 초과 시) + 최근 윈도우 로드.
+        # 2) API 키 미설정 시 요약/히스토리/맥락 로드 없이 즉시 비활성 폴백.
+        if not self._api_key:
+            yield _sse({"type": "delta", "content": "현재 AI 코치가 비활성화되어 있습니다(API 키 미설정)."})
+            yield _sse({"type": "done"})
+            return
+
+        # 3) 롤링 요약(임계 초과 시) + 최근 윈도우 로드.
         summary = await self._maybe_summarize(session_id)
         async with AsyncSessionLocal() as db:
             all_msgs = await CoachSessionRepository(db).fetch_messages(session_id)
@@ -130,7 +136,7 @@ class CoachService:
         history = all_msgs[:-1] if all_msgs and all_msgs[-1]["role"] == "user" else all_msgs
         _older, recent = coach_context.split_history(history, _WINDOW_N)
 
-        # 3) 맥락.
+        # 4) 맥락.
         try:
             async with AsyncSessionLocal() as db:
                 ctx = await CoachRepository(db).fetch_context(user_id)
@@ -140,14 +146,9 @@ class CoachService:
             context_str = ""
         system_content = _COACH_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
 
-        if not self._api_key:
-            yield _sse({"type": "delta", "content": "현재 AI 코치가 비활성화되어 있습니다(API 키 미설정)."})
-            yield _sse({"type": "done"})
-            return
-
         messages = coach_context.build_llm_messages(system_content, summary, recent, message)
 
-        # 4) 스트리밍 + 누적.
+        # 5) 스트리밍 + 누적.
         acc = ""
         try:
             async for delta in self._streamer(messages):
@@ -156,7 +157,7 @@ class CoachService:
         except Exception as e:  # 스트림 도중 실패 — 에러 이벤트로 알린다.
             yield _sse({"type": "error", "message": str(e)})
 
-        # 5) 어시스턴트 응답 저장(내용 있으면).
+        # 6) 어시스턴트 응답 저장(내용 있으면).
         if acc:
             async with AsyncSessionLocal() as db:
                 await CoachSessionRepository(db).add_message(session_id, "assistant", acc)
