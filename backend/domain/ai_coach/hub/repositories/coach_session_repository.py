@@ -26,7 +26,8 @@ _FETCH_MSGS = text(
 )
 _COUNT = text("SELECT count(*) AS c FROM coach_messages WHERE session_id = CAST(:sid AS UUID)")
 _END = text(
-    "UPDATE coach_sessions SET status='ended', ended_at=now() WHERE id = CAST(:id AS UUID)"
+    "UPDATE coach_sessions SET status='ended', ended_at = COALESCE(ended_at, now()) "
+    "WHERE id = CAST(:id AS UUID)"
 )
 _UPDATE_SUMMARY = text(
     "UPDATE coach_sessions SET context_summary = :s, summarized_until = :su WHERE id = CAST(:id AS UUID)"

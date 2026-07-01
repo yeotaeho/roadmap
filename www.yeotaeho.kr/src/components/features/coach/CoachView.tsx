@@ -45,6 +45,8 @@ function buildProactiveGreeting(): CoachMessage {
   };
 }
 
+const INITIAL_MESSAGES: CoachMessage[] = [buildProactiveGreeting()];
+
 export function CoachView() {
   const formId = useId();
   const endRef = useRef<HTMLDivElement>(null);
@@ -54,7 +56,7 @@ export function CoachView() {
   const [attached, setAttached] = useState<CoachAttachedContext | null>(
     DEMO_ATTACHED_CONTEXTS.roadmap
   );
-  const [messages, setMessages] = useState<CoachMessage[]>(() => [buildProactiveGreeting()]);
+  const [messages, setMessages] = useState<CoachMessage[]>(() => INITIAL_MESSAGES);
   const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -73,15 +75,13 @@ export function CoachView() {
     if (!isAuthenticated) {
       sessionIdRef.current = null;
       setSessionId(null);
+      setMessages(INITIAL_MESSAGES);
       return;
     }
     let cancelled = false;
     (async () => {
       const id = await createCoachSession();
-      if (cancelled) return;
-      if (!id) return;
-      sessionIdRef.current = id;
-      setSessionId(id);
+      if (cancelled || !id) return;
       const history = await fetchCoachMessages(id);
       if (cancelled) return;
       if (history.length > 0) {
@@ -89,6 +89,8 @@ export function CoachView() {
           history.map((h) => ({ id: uid(), role: h.role, text: h.content })),
         );
       }
+      sessionIdRef.current = id;
+      setSessionId(id);
     })();
     return () => {
       cancelled = true;
