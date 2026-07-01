@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/user", tags=["user"])
 
+# 출생연도 상한 — 미래 연도 금지(웹 외 클라이언트도 API 경계에서 차단). 서버 기동 시 확정.
+_CURRENT_YEAR = datetime.now().year
+
 
 class SyncProfileUpsertRequest(BaseModel):
     targetJob: Optional[str] = None
@@ -22,8 +26,8 @@ class SyncProfileUpsertRequest(BaseModel):
 
 
 class ProfileUpsertRequest(BaseModel):
-    # 컬럼 제약(SMALLINT·VARCHAR 길이)에 맞춰 검증 — 초과 입력은 422, 500 아님.
-    birthYear: Optional[int] = Field(None, ge=1900, le=2100)
+    # 컬럼 제약(SMALLINT·VARCHAR 길이) + 상식 범위 검증 — 초과/미래연도는 422, 500 아님.
+    birthYear: Optional[int] = Field(None, ge=1900, le=_CURRENT_YEAR)
     gender: Optional[str] = Field(None, max_length=10)
     region: Optional[str] = Field(None, max_length=50)
     currentStatus: Optional[str] = Field(None, max_length=20)

@@ -82,6 +82,11 @@ async def run() -> int:
             "/api/user/profile", headers=headers, json={"birthYear": 20040813},
         )
         check("birthYear 범위초과 422", r.status_code == 422, str(r.status_code))
+        # 미래 연도(SMALLINT 범위 내지만 현재연도 초과) → 422 (웹 외 클라이언트 방어)
+        r = await client.put(
+            "/api/user/profile", headers=headers, json={"birthYear": 3000},
+        )
+        check("birthYear 미래연도 422", r.status_code == 422, str(r.status_code))
         # region 길이초과(VARCHAR 50) → 500 아닌 422
         r = await client.put(
             "/api/user/profile", headers=headers, json={"region": "가" * 60},
