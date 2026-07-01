@@ -73,6 +73,10 @@ from domain.market_insight.models.bases.refined_investment_flows import (  # Sil
 )
 from domain.user_intelligence.models.bases.user_persona import UserPersona  # Persona
 from domain.user_intelligence.models.bases.user_preference import UserPreference  # 성향·선호
+from domain.user_intelligence.models.bases.user_self_model import UserSelfModel  # 자기모델
+from domain.user_intelligence.models.bases.user_self_model_evidence import (  # 자기모델 근거
+    UserSelfModelEvidence,
+)
 from domain.hrowth_journey.models.bases.user_roadmap import UserRoadmap  # Roadmap
 from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roadmap
 from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
