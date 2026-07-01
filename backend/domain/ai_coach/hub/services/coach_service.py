@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,8 @@ from core.llm.client import _COACH_SYSTEM_PROMPT, LlmClient
 from domain.ai_coach.hub.repositories.coach_repository import CoachRepository
 from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
 from domain.ai_coach.hub.services import coach_context
+
+logger = logging.getLogger(__name__)
 
 _WINDOW_N = 20
 _THRESHOLD_T = 24
@@ -116,9 +119,11 @@ class CoachService:
 
         # 3) 맥락.
         try:
-            ctx = await self.repo.fetch_context(user_id)
+            async with AsyncSessionLocal() as db:
+                ctx = await CoachRepository(db).fetch_context(user_id)
             context_str = build_coach_context(ctx)
-        except Exception:
+        except Exception as e:  # 맥락 로드 실패 시 맥락 없이 진행하되 조용히 삼키지 않는다.
+            logger.warning(f"코치 맥락 로드 실패(맥락 없이 진행): {e}")
             context_str = ""
         system_content = _COACH_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
 

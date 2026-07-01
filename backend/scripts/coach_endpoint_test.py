@@ -63,6 +63,7 @@ async def run() -> int:
         # 스트림(무키 경로면 비활성 메시지 — 사용자 메시지는 저장됨)
         r = await c.post("/api/coach/stream", headers=h, json={"sessionId": sid, "message": "안녕"})
         check("스트림 200", r.status_code == 200, str(r.status_code))
+        check("SSE 프레임", "data:" in r.text, r.text[:80])
 
         r = await c.get(f"/api/coach/sessions/{sid}/messages", headers=h)
         check("messages 200", r.status_code == 200)

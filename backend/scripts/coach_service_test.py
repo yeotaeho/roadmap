@@ -58,7 +58,9 @@ async def run() -> int:
         svc = CoachService(s)
 
         # fake 주입 — 스트림은 고정 토큰, 요약은 고정 문자열
+        captured = {}
         async def fake_streamer(messages):
+            captured["messages"] = messages
             for tok in ["안", "녕", "하세요"]:
                 yield tok
 
@@ -75,6 +77,8 @@ async def run() -> int:
             msgs = await CoachSessionRepository(s2).fetch_messages(sid)
         check("user+assistant 저장", [m["role"] for m in msgs] == ["user", "assistant"], str(msgs))
         check("assistant 누적 저장", msgs[1]["content"] == "안녕하세요", msgs[1]["content"])
+        sys_msgs = [m for m in captured.get("messages", []) if m["role"] == "system"]
+        check("맥락 주입됨", any("[사용자 맥락]" in m["content"] for m in sys_msgs), str(sys_msgs)[:200])
 
         # 소유권 — 타인 uuid
         import uuid as _u
