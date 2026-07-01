@@ -11,6 +11,7 @@ from domain.auth.hub.security.services.jwt import JWTService
 from domain.auth.hub.services.auth_profile_service import AuthProfileService
 from domain.auth.hub.services.profile_service import ProfileService
 from domain.auth.hub.services.user_service import UserService
+from domain.user_intelligence.hub.services.self_model_service import SelfModelService
 
 logger = logging.getLogger(__name__)
 
@@ -178,3 +179,17 @@ async def upsert_basic_profile(
     except Exception as e:
         logger.error(f"기본정보 저장 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"기본정보 저장 실패: {str(e)}")
+
+
+@router.get("/self-model")
+async def get_self_model(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """현재 사용자 자기모델(구조 척추 + 비민감 근거) — 없으면 null 기본값."""
+    try:
+        model = await SelfModelService(db).get_self_model(user_id, include_sensitive=False)
+        return {"success": True, "selfModel": model}
+    except Exception as e:
+        logger.error(f"자기모델 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"자기모델 조회 실패: {str(e)}")
