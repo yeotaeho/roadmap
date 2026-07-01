@@ -62,7 +62,9 @@ _INSERT_EVIDENCE = text(
          content_hash, coach_session_ref, source, created_at)
     VALUES (CAST(:uid AS UUID), :dimension, :polarity, :content, :confidence, :is_sensitive,
             :content_hash, :coach_session_ref, :source, now())
-    ON CONFLICT (user_id, content_hash) DO NOTHING
+    ON CONFLICT (user_id, content_hash) DO UPDATE SET
+        is_sensitive = user_self_model_evidence.is_sensitive OR EXCLUDED.is_sensitive
+    RETURNING (xmax = 0) AS inserted
     """
 )
 
@@ -134,6 +136,7 @@ class SelfModelRepository(BaseRepository):
                     "source": source,
                 },
             )
-            inserted += 1 if (res.rowcount or 0) > 0 else 0
+            row = res.first()
+            inserted += 1 if (row is not None and row.inserted) else 0
         await self.session.commit()
         return inserted

@@ -71,6 +71,16 @@ async def run() -> int:
         allev = await repo.fetch_evidence(uid, include_sensitive=True)
         check("include_sensitive 는 constraint 포함", any(e["dimension"] == "constraint" for e in allev))
 
+        # 민감 재분류 escalation — 비민감으로 저장된 근거를 동일 content 로 민감 재삽입 시 기존 행이 민감으로 승격(누출 방지).
+        await repo.append_evidence(uid, [{"dimension": "value", "content": "성장 지향"}], "coach_extraction")
+        before = await repo.fetch_evidence(uid, include_sensitive=False)
+        check("재분류 전 비민감 노출", any(e["content"] == "성장 지향" for e in before))
+        await repo.append_evidence(uid, [{"dimension": "value", "content": "성장 지향", "is_sensitive": True}], "coach_extraction")
+        after = await repo.fetch_evidence(uid, include_sensitive=False)
+        check("재분류 후 비민감에서 제외(승격)", all(e["content"] != "성장 지향" for e in after), str(after))
+        all_ev = await repo.fetch_evidence(uid, include_sensitive=True)
+        check("재분류 후 민감 조회엔 존재", any(e["content"] == "성장 지향" and e["is_sensitive"] for e in all_ev))
+
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
