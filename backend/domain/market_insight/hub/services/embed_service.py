@@ -65,15 +65,19 @@ class UserEmbedService:
     def _user_text(
         target_job, interest_keywords, work_style=None, company_size_pref=None,
         work_type_pref=None, work_values=None, skills=None, certifications=None,
-        languages=None, projects=None,
+        languages=None, projects=None, riasec=None, narrative_summary=None,
+        evidence_contents=None,
     ) -> str:
         return build_user_embed_text(
             target_job, interest_keywords, work_style, company_size_pref, work_type_pref,
             work_values, skills, certifications, languages, projects,
+            riasec=riasec, narrative_summary=narrative_summary,
+            evidence_contents=evidence_contents,
         )
 
     async def embed_users(self, limit: int = DEFAULT_LIMIT) -> dict:
         rows = await self.repo.fetch_unembedded_users(self._model, limit)
+        evidence_map = await self.repo.fetch_positive_evidence([r.user_id for r in rows])
         # 텍스트·해시 산출 후, 저장된 해시와 동일하면(타임스탬프상 후보지만 내용 불변) 임베딩 생략.
         pending = []
         for r in rows:
@@ -81,6 +85,8 @@ class UserEmbedService:
                 r.target_job, r.interest_keywords,
                 r.work_style, r.company_size_pref, r.work_type_pref, r.work_values,
                 r.skills, r.certifications, r.languages, r.projects,
+                riasec=r.riasec, narrative_summary=r.narrative_summary,
+                evidence_contents=evidence_map.get(str(r.user_id)),
             )
             version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
             if version != r.source_version:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
@@ -50,25 +50,61 @@ _INSERT_DOC_EMB = text(
     """
 )
 
+# 임베딩 후보 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 후보(코치-only 포함).
+# 타임스탬프 비교에 자기모델 갱신·근거 추가를 포함해 코치 대화가 재임베딩을 트리거한다.
 _FETCH_UNEMBEDDED_USERS = text(
     """
-    SELECT p.user_id, p.target_job, p.interest_keywords,
+    SELECT u.id AS user_id, p.target_job, p.interest_keywords,
            pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
            per.skills, per.certifications, per.languages, per.projects,
+           sm.riasec, sm.narrative_summary,
            e.source_version
-    FROM user_sync_profiles p
-    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
-    LEFT JOIN user_personas per ON per.user_id = p.user_id
-    LEFT JOIN user_embeddings e ON e.user_id = p.user_id AND e.embedding_model = :model
-    WHERE e.user_id IS NULL
-       OR GREATEST(
-            p.updated_at,
-            COALESCE(pref.updated_at, p.updated_at),
-            COALESCE(per.updated_at, p.updated_at)
-          ) > e.computed_at
+    FROM users u
+    LEFT JOIN user_sync_profiles p ON p.user_id = u.id
+    LEFT JOIN user_preferences pref ON pref.user_id = u.id
+    LEFT JOIN user_personas per ON per.user_id = u.id
+    LEFT JOIN user_self_model sm ON sm.user_id = u.id
+    LEFT JOIN (
+        SELECT user_id, max(created_at) AS last_evidence_at
+        FROM user_self_model_evidence
+        WHERE is_sensitive = false
+        GROUP BY user_id
+    ) ev ON ev.user_id = u.id
+    LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
+    WHERE (p.user_id IS NOT NULL OR sm.user_id IS NOT NULL OR ev.user_id IS NOT NULL)
+      AND (
+        e.user_id IS NULL
+        OR GREATEST(
+             COALESCE(p.updated_at, to_timestamp(0)),
+             COALESCE(pref.updated_at, to_timestamp(0)),
+             COALESCE(per.updated_at, to_timestamp(0)),
+             COALESCE(sm.updated_at, to_timestamp(0)),
+             COALESCE(ev.last_evidence_at, to_timestamp(0))
+           ) > e.computed_at
+      )
     LIMIT :lim
     """
 )
+
+# 임베딩용 비민감·긍정 근거 — 사용자별 confidence·최신순 상위 N. dislike/constraint/민감 제외.
+_FETCH_POSITIVE_EVIDENCE = text(
+    """
+    SELECT user_id, content FROM (
+        SELECT user_id, content,
+               ROW_NUMBER() OVER (
+                   PARTITION BY user_id
+                   ORDER BY confidence DESC NULLS LAST, created_at DESC, id DESC
+               ) AS rn
+        FROM user_self_model_evidence
+        WHERE user_id IN :uids
+          AND is_sensitive = false
+          AND dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+          AND (polarity IS NULL OR polarity <> 'dislike')
+    ) t
+    WHERE rn <= :per_user
+    ORDER BY user_id, rn
+    """
+).bindparams(bindparam("uids", expanding=True))
 
 _UPSERT_USER_EMB = text(
     """
@@ -121,3 +157,18 @@ class EmbedRepository(BaseRepository):
                 "model": model,
             },
         )
+
+    async def fetch_positive_evidence(self, user_ids: list, per_user: int = 10) -> dict[str, list[str]]:
+        """사용자별 임베딩용 비민감·긍정 근거 content 목록. {str(user_id): [content...]}."""
+        if not user_ids:
+            return {}
+        rows = (
+            await self.session.execute(
+                _FETCH_POSITIVE_EVIDENCE,
+                {"uids": [str(u) for u in user_ids], "per_user": per_user},
+            )
+        ).all()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(str(r.user_id), []).append(r.content)
+        return out

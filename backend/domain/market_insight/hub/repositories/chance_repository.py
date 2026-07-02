@@ -109,14 +109,22 @@ _FETCH_ACTIVE_OPPS = text(
     """
 )
 
+# 매칭용 사용자 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 포함(코치-only).
 _FETCH_USERS = text(
     """
-    SELECT p.user_id, p.target_job, p.interest_keywords,
+    SELECT u.id AS user_id, p.target_job, p.interest_keywords,
            pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
            per.skills, per.certifications, per.languages, per.projects
-    FROM user_sync_profiles p
-    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
-    LEFT JOIN user_personas per ON per.user_id = p.user_id
+    FROM users u
+    LEFT JOIN user_sync_profiles p ON p.user_id = u.id
+    LEFT JOIN user_preferences pref ON pref.user_id = u.id
+    LEFT JOIN user_personas per ON per.user_id = u.id
+    LEFT JOIN user_self_model sm ON sm.user_id = u.id
+    WHERE p.user_id IS NOT NULL OR sm.user_id IS NOT NULL
+       OR EXISTS (
+            SELECT 1 FROM user_self_model_evidence ev
+            WHERE ev.user_id = u.id AND ev.is_sensitive = false
+          )
     """
 )
 
