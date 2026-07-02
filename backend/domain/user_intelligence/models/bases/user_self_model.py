@@ -32,7 +32,7 @@ class UserSelfModel(Base):
     # 축별 신뢰도 {"riasec":0.0-1.0, "big_five":..}
     axis_confidence: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     source: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="coach_extraction"
+        String(30), nullable=False, server_default="consult_extraction"
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True

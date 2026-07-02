@@ -28,9 +28,13 @@ def upgrade() -> None:
     op.alter_column("user_self_model_evidence", "coach_session_ref", new_column_name="consult_session_ref")
     op.execute("UPDATE user_self_model SET source = 'consult_extraction' WHERE source = 'coach_extraction'")
     op.execute("UPDATE user_self_model_evidence SET source = 'consult_extraction' WHERE source = 'coach_extraction'")
+    op.execute("ALTER TABLE user_self_model ALTER COLUMN source SET DEFAULT 'consult_extraction'")
+    op.execute("ALTER TABLE user_self_model_evidence ALTER COLUMN source SET DEFAULT 'consult_extraction'")
 
 
 def downgrade() -> None:
+    op.execute("ALTER TABLE user_self_model_evidence ALTER COLUMN source SET DEFAULT 'coach_extraction'")
+    op.execute("ALTER TABLE user_self_model ALTER COLUMN source SET DEFAULT 'coach_extraction'")
     op.execute("UPDATE user_self_model_evidence SET source = 'coach_extraction' WHERE source = 'consult_extraction'")
     op.execute("UPDATE user_self_model SET source = 'coach_extraction' WHERE source = 'consult_extraction'")
     op.alter_column("user_self_model_evidence", "consult_session_ref", new_column_name="coach_session_ref")

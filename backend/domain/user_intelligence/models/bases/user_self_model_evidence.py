@@ -45,7 +45,7 @@ class UserSelfModelEvidence(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     consult_session_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="coach_extraction"
+        String(30), nullable=False, server_default="consult_extraction"
     )
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
