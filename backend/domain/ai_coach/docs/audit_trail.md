@@ -1,5 +1,11 @@
 # ai_coach 작업 기록
 
+## 2026-07-03 — 대화 엔진 상담실(user_intelligence)로 이전 — 스캐폴딩만 잔존
+- **무엇** — SP-2a/2b에서 이 도메인에 구현했던 코치 대화·세션·자기모델 추출 엔진을 **`user_intelligence` 도메인으로 이전**하고 coach→consult 전수 개명했다(상세는 [user_intelligence/docs/audit_trail.md](../../user_intelligence/docs/audit_trail.md) 2026-07-03 항목). `ai_coach`에는 이동한 `.py`를 제거하고 `__init__.py`·빈 hub/models/spokes 스캐폴딩 + `docs/`(AGENT_ROADMAP·audit_trail)만 남겼다. `api/v1/coach/`는 완전 삭제.
+- **왜** — 상담실=자기이해(대화·자기모델), 코치=로드맵 구성으로 분리(사용자 확정). `ai_coach`는 **향후 로드맵 코치**용으로 보존한다([AGENT_ROADMAP.md](./AGENT_ROADMAP.md) 방향 유효).
+- **후속** — 로드맵 코치 백엔드를 이 도메인에 신설(현재 `/coach` 프론트는 "로드맵 코치 준비 중" 플레이스홀더). 상담(자기모델) → 로드맵 생성 핸드오프 설계.
+
+
 ## 2026-07-02 — SP-2b: 대화→자기모델 증분 추출
 - **무엇** — 코치 대화에서 사용자의 성향·가치관·호불호·제약을 **비동기 증분 추출**해 SP-1 자기모델에 축적. "AI 상담실=개인화 본가"의 마지막 고리. `coach_sessions.extracted_until`(이미 추출한 메시지 수, `summarized_until` 패턴 재사용) + 추출대상 조회(`fetch_extractable_sessions`). `LlmClient.extract_self_model`(+순수 파서 `_parse_self_model_extract`) — RIASEC top_codes·서사·근거(호불호·가치·제약·**민감**·포부)를 뽑되 numeric big_five/6점수 정밀추정은 보류(chat 노이즈), 민감정보는 **사용자가 스스로 드러낸 것만** 플래그(능동 캐묻기 없음). `SelfModelExtractionService`(`extract_session`·`extract_pending`)가 SP-1 `SelfModelService.upsert_structured`/`append_evidence(source='coach_extraction')`을 그대로 재사용(게이팅·dedup·민감격리 재구현 안 함). 일일 스케줄러 잡(`_job_self_model_extract`, 10:00).
 - **왜** — **재개 모델**(SP-2a)로 세션이 거의 안 끝나 "세션 종료 후 추출" 전제가 깨져, **active 세션 증분 추출**(living 자기모델)로 설계 전환. 폼을 안 채워도 코치와 대화하는 것만으로 Sync/Chance 추천 신호가 두꺼워짐.
