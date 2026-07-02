@@ -125,7 +125,7 @@ class ConsultService:
 
         # 2) API 키 미설정 시 요약/히스토리/맥락 로드 없이 즉시 비활성 폴백.
         if not self._api_key:
-            yield _sse({"type": "delta", "content": "현재 AI 코치가 비활성화되어 있습니다(API 키 미설정)."})
+            yield _sse({"type": "delta", "content": "현재 AI 상담이 비활성화되어 있습니다(API 키 미설정)."})
             yield _sse({"type": "done"})
             return
 
@@ -143,7 +143,7 @@ class ConsultService:
                 ctx = await ConsultContextRepository(db).fetch_context(user_id)
             context_str = build_consult_context(ctx)
         except Exception as e:  # 맥락 로드 실패 시 맥락 없이 진행하되 조용히 삼키지 않는다.
-            logger.warning(f"코치 맥락 로드 실패(맥락 없이 진행): {e}")
+            logger.warning(f"상담 맥락 로드 실패(맥락 없이 진행): {e}")
             context_str = ""
         system_content = _CONSULT_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
 

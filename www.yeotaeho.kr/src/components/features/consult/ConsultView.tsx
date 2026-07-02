@@ -39,9 +39,9 @@ function buildProactiveGreeting(): ConsultMessage {
   return {
     id: "m0",
     role: "assistant",
-    badge: "로드맵 연계 질문",
+    badge: "자기이해 탐색",
     text:
-      "안녕하세요, Daily Mentor입니다. 지금 로드맵에서는 **탄소 배출 룰 기반 계산**과 **IFRS S1/S2 데이터 맵핑**이 한 묶로 보이고 있어요. \"어떤 엔티티까지 공시 스키마에 넣을지\"를 먼저 고정하면, 이후 파이프라인·감사 추적까지 덜 흔들립니다. 오늘은 그 경계부터 같이 짚어볼까요?",
+      "안녕하세요, AI 상담사입니다. 오늘은 성격·성향·가치관을 함께 들여다보며, 스스로 아직 알아차리지 못한 강점을 찾아보려고 해요. 최근 유독 몰입했던 순간이나 마음에 걸렸던 선택이 있다면, 그 이야기부터 들려주실래요?",
   };
 }
 
@@ -53,9 +53,7 @@ export function ConsultView() {
   const isAuthenticated = useStore((s) => s.isAuthenticated);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [attached, setAttached] = useState<CoachAttachedContext | null>(
-    DEMO_ATTACHED_CONTEXTS.roadmap
-  );
+  const [attached, setAttached] = useState<CoachAttachedContext | null>(null);
   const [messages, setMessages] = useState<ConsultMessage[]>(() => INITIAL_MESSAGES);
   const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -172,8 +170,8 @@ export function ConsultView() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AI 상담</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-            Daily Mentor — 로드맵·찬스에서 가져온 맥락을 공유하고, 오른쪽 지갑에 스니펫을 쌓아
-            실행로 이어갑니다.
+            AI 상담사 — 대화를 통해 나의 성향과 강점을 함께 발견해요. 마음에 남는 답변은 오른쪽
+            지갑에 저장할 수 있습니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
