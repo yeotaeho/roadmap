@@ -86,6 +86,9 @@ from domain.master.hub.services.bronze_company_ingest_service import (
 from domain.master.hub.services.bronze_ncs_ingest_service import (
     BronzeNcsIngestService,
 )
+from domain.ai_coach.hub.services.self_model_extraction_service import (
+    SelfModelExtractionService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -573,6 +576,12 @@ async def _job_hf_trending() -> dict[str, Any]:
         return await BronzeInnovationIngestService(session).ingest_hf_trending()
 
 
+async def _job_self_model_extract() -> dict[str, Any]:
+    """코치 대화에서 자기모델 증분 추출(멱등, 일일)."""
+    async with AsyncSessionLocal() as session:
+        return await SelfModelExtractionService(session).extract_pending(limit=50)
+
+
 # ---------------------------------------------------------------------------
 # 등록 & 라이프사이클
 # ---------------------------------------------------------------------------
@@ -923,6 +932,19 @@ def start_scheduler() -> AsyncIOScheduler | None:
         coalesce=True,
         max_instances=1,
         misfire_grace_time=600,
+    )
+
+    # 자기모델 추출 — 매일 10:00 (09:00 정제 파이프라인 이후, 코치 대화가 반영된 뒤 실행).
+    self_model_trigger = CronTrigger(hour=10, minute=0, timezone=settings.scheduler_timezone)
+    sched.add_job(
+        _wrap("self_model_extract", _job_self_model_extract),
+        trigger=self_model_trigger,
+        id="self_model_extract",
+        name="self_model_extract",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
     )
 
     sched.start()

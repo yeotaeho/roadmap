@@ -34,6 +34,7 @@ class CoachSession(Base):
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     context_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     summarized_until: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    extracted_until: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
