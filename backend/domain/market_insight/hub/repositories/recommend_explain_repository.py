@@ -7,7 +7,31 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
-# 오늘 설명 없는 Sync 상위 행 — 사용자별 점수순 상위 N, '데이터 부족' 배지는 설명할 신호가 없어 제외.
+# 이번 실행이 처리할 사용자 집합 — 두 소스(Sync·Chance) 합집합을 SQL 에서 캡.
+# 사용자 수가 커져도 후속 페치가 캡된 집합만 스캔하고, sync-먼저 그룹핑에 의한 chance-only 기아도 없다.
+_FETCH_PENDING_USER_IDS = text(
+    """
+    SELECT DISTINCT user_id FROM (
+        SELECT d.user_id
+        FROM sync_scores_daily d
+        WHERE d.recorded_date = CURRENT_DATE
+          AND d.explanation IS NULL
+          AND d.badge IS DISTINCT FROM :insufficient
+        UNION
+        SELECT m.user_id
+        FROM user_chance_matches m
+        JOIN chance_opportunities o ON o.id = m.opportunity_id
+        WHERE m.match_explanation IS NULL
+          AND o.is_active = true
+          AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+    ) u
+    ORDER BY user_id
+    LIMIT :max_users
+    """
+)
+
+# 오늘 설명 없는 Sync 상위 행 — 캡된 사용자 집합 한정, 사용자별 점수순 상위 N,
+# '데이터 부족' 배지는 설명할 신호가 없어 제외.
 _FETCH_UNEXPLAINED_SYNC = text(
     """
     SELECT user_id, sector_slug, sector_name, score, badge, affinity_score, trend_score FROM (
@@ -24,12 +48,13 @@ _FETCH_UNEXPLAINED_SYNC = text(
         WHERE d.recorded_date = CURRENT_DATE
           AND d.explanation IS NULL
           AND d.badge IS DISTINCT FROM :insufficient
+          AND d.user_id IN :uids
     ) t
     WHERE rn <= :per_user
     """
-)
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
-# 설명 없는 Chance 매치 — 사용자별 점수순 상위 N, 활성·미마감 공고만.
+# 설명 없는 Chance 매치 — 캡된 사용자 집합 한정, 사용자별 점수순 상위 N, 활성·미마감 공고만.
 _FETCH_UNEXPLAINED_MATCHES = text(
     """
     SELECT user_id, opportunity_id, match_score, match_reason, title, opportunity_type FROM (
@@ -43,10 +68,11 @@ _FETCH_UNEXPLAINED_MATCHES = text(
         WHERE m.match_explanation IS NULL
           AND o.is_active = true
           AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+          AND m.user_id IN :uids
     ) t
     WHERE rn <= :per_user
     """
-)
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
 _FETCH_USER_CONTEXT = text(
     """
@@ -88,19 +114,39 @@ _UPDATE_MATCH_EXPLANATION = text(
 
 
 class RecommendExplainRepository(BaseRepository):
-    async def fetch_unexplained_sync(self, per_user: int, insufficient_badge: str) -> list:
+    async def fetch_pending_user_ids(self, insufficient_badge: str, max_users: int) -> list[str]:
+        """설명 대상(둘 중 한 소스라도 미설명) 사용자 id 를 SQL 캡으로 상위 max_users 만 반환한다."""
+        rows = (
+            await self.session.execute(
+                _FETCH_PENDING_USER_IDS,
+                {"insufficient": insufficient_badge, "max_users": max_users},
+            )
+        ).all()
+        return [str(r.user_id) for r in rows]
+
+    async def fetch_unexplained_sync(
+        self, user_ids: list[str], per_user: int, insufficient_badge: str
+    ) -> list:
+        if not user_ids:
+            return []
         return list(
             (
                 await self.session.execute(
                     _FETCH_UNEXPLAINED_SYNC,
-                    {"per_user": per_user, "insufficient": insufficient_badge},
+                    {"uids": user_ids, "per_user": per_user, "insufficient": insufficient_badge},
                 )
             ).all()
         )
 
-    async def fetch_unexplained_matches(self, per_user: int) -> list:
+    async def fetch_unexplained_matches(self, user_ids: list[str], per_user: int) -> list:
+        if not user_ids:
+            return []
         return list(
-            (await self.session.execute(_FETCH_UNEXPLAINED_MATCHES, {"per_user": per_user})).all()
+            (
+                await self.session.execute(
+                    _FETCH_UNEXPLAINED_MATCHES, {"uids": user_ids, "per_user": per_user}
+                )
+            ).all()
         )
 
     async def fetch_user_context(self, user_ids: list[str]) -> dict[str, dict]:

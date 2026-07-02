@@ -66,8 +66,12 @@ class RecommendExplainService:
         """설명 대상 사용자를 스캔해 사용자당 1회 생성한다. 건별 실패 격리·멱등."""
         if not self._api_key:
             return {"skipped": True, "reason": "no_api_key"}
-        sync_rows = await self.repo.fetch_unexplained_sync(TOP_SYNC, INSUFFICIENT_BADGE)
-        match_rows = await self.repo.fetch_unexplained_matches(TOP_CHANCE)
+        # 사용자 캡을 SQL 에서 먼저 적용 — 대상이 많아도 페치가 캡된 집합만 스캔한다.
+        uids = await self.repo.fetch_pending_user_ids(INSUFFICIENT_BADGE, limit)
+        if not uids:
+            return {"users": 0, "processed": 0, "failed": 0, "written": 0}
+        sync_rows = await self.repo.fetch_unexplained_sync(uids, TOP_SYNC, INSUFFICIENT_BADGE)
+        match_rows = await self.repo.fetch_unexplained_matches(uids, TOP_CHANCE)
 
         by_user: dict[str, dict] = {}
         for r in sync_rows:
@@ -92,13 +96,15 @@ class RecommendExplainService:
                 }
             )
 
-        uids = list(by_user)[:limit]
         ctx_map = await self.repo.fetch_user_context(uids)
         ev_map = await self.repo.fetch_context_evidence(uids)
 
         processed = failed = written = 0
         for uid in uids:
-            items = by_user[uid]
+            # 선별과 페치 사이의 경합(설명이 그새 채워짐 등)으로 항목이 비면 건너뛴다.
+            items = by_user.get(uid)
+            if items is None:
+                continue
             try:
                 user_context = _build_user_context(ctx_map.get(uid), ev_map.get(uid, []))
                 result = await self._explainer(user_context, items["sync"], items["chance"])
