@@ -125,6 +125,88 @@ _COACH_SUMMARY_SYSTEM_PROMPT = (
     "8문장 이내 평문으로만 출력하라(JSON·머리말 없이)."
 )
 
+_SELF_MODEL_EXTRACT_SYSTEM_PROMPT = (
+    "너는 청년 진로 코치와 사용자의 대화에서 사용자의 '자기모델' 신호를 추출하는 분석기다. "
+    "대화에서 드러난 (1) 직업 흥미(RIASEC: R현실·I탐구·A예술·S사회·E기업·C관습 중 두드러진 1~3개), "
+    "(2) 한 줄 자기서사, (3) 근거(호불호·가치관·제약·포부·스킬 신호)를 뽑아라. "
+    "확실하지 않으면 riasec_top_codes 를 빈 배열로, narrative 를 null 로 두라(억지 추정 금지). "
+    "각 신호에 confidence(0~1)를 정직하게 매겨라. "
+    "민감정보(트라우마·개인적 아픔·건강·가정사 등)는 사용자가 스스로 드러낸 것만 is_sensitive=true 로 표시하고, "
+    "능동적으로 캐묻거나 추론하지 마라. "
+    'JSON 객체만 출력하라. 형식: {"riasec_top_codes": [<"R"|"I"|"A"|"S"|"E"|"C">...], '
+    '"riasec_confidence": <0~1>, "narrative": <문자열 또는 null>, '
+    '"evidence": [{"dimension": <"like"|"dislike"|"value"|"constraint"|"sensitive"|"aspiration"|"skill_signal"|"other">, '
+    '"polarity": <"like"|"dislike"|"neutral"|null>, "content": <근거 문장>, '
+    '"confidence": <0~1>, "is_sensitive": <bool>}...]}.'
+)
+
+_RIASEC_CODES = ("R", "I", "A", "S", "E", "C")
+_EVIDENCE_DIMS = ("like", "dislike", "value", "constraint", "sensitive", "aspiration", "skill_signal", "other")
+_EVIDENCE_POLARITIES = ("like", "dislike", "neutral")
+
+
+def _parse_self_model_extract(raw: str | None) -> dict:
+    """자기모델 추출 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
+
+    riasec_top_codes 는 유효 코드만·최대 6개(없으면 confidence 0). evidence 는 content 있는 항목만·최대 20개,
+    dimension 닫힌집합 외는 'other', polarity 닫힌집합 외는 None, confidence 0~1 클램프.
+    """
+    empty = {"riasec_top_codes": [], "riasec_confidence": 0.0, "narrative": None, "evidence": []}
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return dict(empty)
+    if not isinstance(obj, dict):
+        return dict(empty)
+
+    codes_raw = obj.get("riasec_top_codes")
+    codes = [c for c in codes_raw if c in _RIASEC_CODES][:6] if isinstance(codes_raw, list) else []
+    try:
+        rconf = float(obj.get("riasec_confidence"))
+    except (TypeError, ValueError):
+        rconf = 0.0
+    rconf = max(0.0, min(1.0, rconf))
+    if not codes:
+        rconf = 0.0
+
+    narrative = obj.get("narrative")
+    narrative = narrative.strip()[:500] if isinstance(narrative, str) and narrative.strip() else None
+
+    evidence: list[dict] = []
+    ev_raw = obj.get("evidence")
+    if isinstance(ev_raw, list):
+        for it in ev_raw:
+            if not isinstance(it, dict):
+                continue
+            content = it.get("content")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            dim = it.get("dimension")
+            dim = dim if dim in _EVIDENCE_DIMS else "other"
+            pol = it.get("polarity")
+            pol = pol if pol in _EVIDENCE_POLARITIES else None
+            try:
+                conf = float(it.get("confidence"))
+            except (TypeError, ValueError):
+                conf = 0.0
+            conf = max(0.0, min(1.0, conf))
+            evidence.append({
+                "dimension": dim,
+                "polarity": pol,
+                "content": content.strip()[:500],
+                "confidence": conf,
+                "is_sensitive": bool(it.get("is_sensitive", False)),
+            })
+            if len(evidence) >= 20:
+                break
+
+    return {
+        "riasec_top_codes": codes,
+        "riasec_confidence": rconf,
+        "narrative": narrative,
+        "evidence": evidence,
+    }
+
 _SENTIMENT_LABELS = ("긍정", "중립", "부정")
 
 
@@ -669,6 +751,23 @@ class LlmClient:
             ],
         )
         return (resp.choices[0].message.content or "").strip()
+
+    async def extract_self_model(self, messages: list[dict]) -> dict:
+        """코치 대화(최근 미추출분)에서 자기모델 신호(RIASEC·서사·근거)를 추출한다."""
+        convo = "\n".join(
+            f"{m.get('role')}: {m.get('content')}" for m in messages
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        )
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _SELF_MODEL_EXTRACT_SYSTEM_PROMPT},
+                {"role": "user", "content": convo},
+            ],
+        )
+        return _parse_self_model_extract(resp.choices[0].message.content)
 
     async def generate_roadmap(self, context: str) -> dict:
         """페르소나·목표·트렌드 맥락에서 개인화 로드맵(퀘스트 트리)을 생성한다. 무효/실패 시 {}."""
