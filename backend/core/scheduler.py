@@ -87,7 +87,7 @@ from domain.master.hub.services.bronze_company_ingest_service import (
 from domain.master.hub.services.bronze_ncs_ingest_service import (
     BronzeNcsIngestService,
 )
-from domain.ai_coach.hub.services.self_model_extraction_service import (
+from domain.user_intelligence.hub.services.self_model_extraction_service import (
     SelfModelExtractionService,
 )
 

@@ -8,20 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config.settings import get_settings
 from core.llm.client import LlmClient
-from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
+from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services.self_model_service import SelfModelService
 
 logger = logging.getLogger(__name__)
 
 MIN_NEW = 6
-SOURCE = "coach_extraction"
+SOURCE = "consult_extraction"
 NARRATIVE_DEFAULT_CONFIDENCE = 0.6  # LLM이 narrative 를 non-null 로 낸 것 자체가 최소 신뢰 신호(riasec 무관, gate 통과 보장)
 
 
 class SelfModelExtractionService:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.coach_repo = CoachSessionRepository(db)
+        self.coach_repo = ConsultSessionRepository(db)
         settings = get_settings()
         self._api_key = settings.openai_api_key
         self._model = settings.llm_classify_model

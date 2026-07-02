@@ -25,32 +25,32 @@ def check(n: str, c: bool, e: str = "") -> None:
 
 
 def run() -> int:
-    # 1. 빈 상태 + coach 고신뢰 → 기록
-    r = merge_structured(None, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.7}}, "coach_extraction")
-    check("coach 고신뢰 기록", r["riasec"] == {"top_codes": ["I"]})
-    check("source coach", r["source"] == "coach_extraction")
+    # 1. 빈 상태 + consult 고신뢰 → 기록
+    r = merge_structured(None, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.7}}, "consult_extraction")
+    check("consult 고신뢰 기록", r["riasec"] == {"top_codes": ["I"]})
+    check("source consult", r["source"] == "consult_extraction")
 
-    # 2. coach 저신뢰 → 보류(값 미기록, 신뢰도만 반영)
-    r = merge_structured(None, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.2}}, "coach_extraction")
+    # 2. consult 저신뢰 → 보류(값 미기록, 신뢰도만 반영)
+    r = merge_structured(None, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.2}}, "consult_extraction")
     check("저신뢰 값 보류", r["riasec"] is None)
     check("저신뢰 신뢰도 반영", (r["axis_confidence"] or {}).get("riasec") == 0.2)
 
-    # 3. user_form 우위 — 기존 user_form 을 coach 가 못 덮음
+    # 3. user_form 우위 — 기존 user_form 을 consult 가 못 덮음
     existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form", "axis_confidence": {"riasec": 1.0}}
-    r = merge_structured(existing, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.9}}, "coach_extraction")
+    r = merge_structured(existing, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.9}}, "consult_extraction")
     check("user_form 우위 유지", r["riasec"] == {"top_codes": ["A"]})
     check("source user_form 유지", r["source"] == "user_form")
 
-    # 4. user_form 은 기존 coach 를 덮음
-    existing = {"riasec": {"top_codes": ["A"]}, "source": "coach_extraction"}
+    # 4. user_form 은 기존 consult 를 덮음
+    existing = {"riasec": {"top_codes": ["A"]}, "source": "consult_extraction"}
     r = merge_structured(existing, {"riasec": {"top_codes": ["I"]}}, "user_form")
     check("user_form 덮어쓰기", r["riasec"] == {"top_codes": ["I"]})
     check("source→user_form", r["source"] == "user_form")
 
-    # 5. 빈 축만 coach 채움 (기존 user_form 은 riasec 만, big_five 없음)
+    # 5. 빈 축만 consult 채움 (기존 user_form 은 riasec 만, big_five 없음)
     existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form"}
-    r = merge_structured(existing, {"big_five": {"openness": 70}, "axis_confidence": {"big_five": 0.8}}, "coach_extraction")
-    check("빈 축 coach 채움", r["big_five"] == {"openness": 70})
+    r = merge_structured(existing, {"big_five": {"openness": 70}, "axis_confidence": {"big_five": 0.8}}, "consult_extraction")
+    check("빈 축 consult 채움", r["big_five"] == {"openness": 70})
     check("기존 riasec 보존", r["riasec"] == {"top_codes": ["A"]})
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")

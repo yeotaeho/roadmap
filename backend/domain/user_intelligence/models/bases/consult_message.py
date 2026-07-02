@@ -1,4 +1,4 @@
-# 코치 대화 메시지 ORM — 세션별 턴(role·content), append-only
+# 상담 대화 메시지 ORM — role·content append-only
 
 from __future__ import annotations
 
@@ -13,17 +13,17 @@ from sqlalchemy.sql import func
 from core.database import Base
 
 
-class CoachMessage(Base):
-    __tablename__ = "coach_messages"
+class ConsultMessage(Base):
+    __tablename__ = "consult_messages"
     __table_args__ = (
-        Index("ix_coach_messages_session", "session_id", "created_at"),
+        Index("ix_consult_messages_session", "session_id", "created_at"),
         {"comment": "코치 대화 메시지 — 세션별 턴(user/assistant)"},
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("coach_sessions.id", name="fk_coach_message_session", ondelete="CASCADE"),
+        ForeignKey("consult_sessions.id", name="fk_consult_message_session", ondelete="CASCADE"),
         nullable=False,
     )
     role: Mapped[str] = mapped_column(String(10), nullable=False)

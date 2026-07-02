@@ -1,4 +1,4 @@
-# 코치 대화 세션 ORM — 명시적 세션(상태·롤링 요약·추출 표시)
+# 상담 대화 세션 ORM — 명시적 세션·롤링 요약·추출 표시
 
 from __future__ import annotations
 
@@ -13,17 +13,17 @@ from sqlalchemy.sql import func
 from core.database import Base
 
 
-class CoachSession(Base):
-    __tablename__ = "coach_sessions"
+class ConsultSession(Base):
+    __tablename__ = "consult_sessions"
     __table_args__ = (
-        Index("ix_coach_sessions_user", "user_id"),
-        {"comment": "코치 대화 세션 — 명시적 세션·롤링 요약·추출 표시"},
+        Index("ix_consult_sessions_user", "user_id"),
+        {"comment": "상담 대화 세션 — 명시적 세션·롤링 요약·추출 표시"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", name="fk_coach_session_user", ondelete="CASCADE"),
+        ForeignKey("users.id", name="fk_consult_session_user", ondelete="CASCADE"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="active")

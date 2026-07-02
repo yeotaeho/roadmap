@@ -12,8 +12,8 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 from sqlalchemy import text
 
 from core.database import AsyncSessionLocal
-from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
-from domain.ai_coach.hub.services.self_model_extraction_service import SelfModelExtractionService
+from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
+from domain.user_intelligence.hub.services.self_model_extraction_service import SelfModelExtractionService
 from domain.user_intelligence.hub.services.self_model_service import SelfModelService
 
 PASS = 0
@@ -39,9 +39,9 @@ async def _uid(s) -> str:
 
 async def _cleanup(s, uid: str) -> None:
     await s.execute(text(
-        "DELETE FROM coach_messages WHERE session_id IN "
-        "(SELECT id FROM coach_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
-    await s.execute(text("DELETE FROM coach_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        "DELETE FROM consult_messages WHERE session_id IN "
+        "(SELECT id FROM consult_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
+    await s.execute(text("DELETE FROM consult_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.execute(text("DELETE FROM user_self_model_evidence WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.execute(text("DELETE FROM user_self_model WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.commit()
@@ -51,7 +51,7 @@ async def run() -> int:
     async with AsyncSessionLocal() as s:
         uid = await _uid(s)
         await _cleanup(s, uid)
-        repo = CoachSessionRepository(s)
+        repo = ConsultSessionRepository(s)
         sid = await repo.create_session(uid)
         for i in range(8):
             await repo.add_message(sid, "user" if i % 2 == 0 else "assistant", f"발표와 데이터 분석 이야기 {i}")

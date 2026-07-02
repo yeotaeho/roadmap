@@ -1,4 +1,4 @@
-# 코치 세션 엔드포인트 — 생성·스트림(무키 경로)·messages·end·소유권 403/404·무토큰 401
+# 상담 세션 엔드포인트 — 생성·스트림(무키 경로)·messages·end·소유권 403/404·무토큰 401
 
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ async def _uid(s) -> str:
 
 async def _cleanup(s, uid: str) -> None:
     await s.execute(text(
-        "DELETE FROM coach_messages WHERE session_id IN "
-        "(SELECT id FROM coach_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
-    await s.execute(text("DELETE FROM coach_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        "DELETE FROM consult_messages WHERE session_id IN "
+        "(SELECT id FROM consult_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
+    await s.execute(text("DELETE FROM consult_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.commit()
 
 
@@ -51,44 +51,44 @@ async def run() -> int:
         uid = await _uid(s)
         await _cleanup(s, uid)
 
-    token = JWTService().generate_token(uid, provider="test", email="coach@test.local")
+    token = JWTService().generate_token(uid, provider="test", email="consult@test.local")
     h = {"Authorization": f"Bearer {token}"}
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        r = await c.post("/api/coach/sessions", headers=h)
+        r = await c.post("/api/consult/sessions", headers=h)
         check("세션 생성 200", r.status_code == 200, str(r.status_code))
         sid = r.json().get("sessionId")
         check("sessionId 반환", bool(sid))
 
         # 스트림(무키 경로면 비활성 메시지 — 사용자 메시지는 저장됨)
-        r = await c.post("/api/coach/stream", headers=h, json={"sessionId": sid, "message": "안녕"})
+        r = await c.post("/api/consult/stream", headers=h, json={"sessionId": sid, "message": "안녕"})
         check("스트림 200", r.status_code == 200, str(r.status_code))
         check("SSE 프레임", "data:" in r.text, r.text[:80])
 
-        r = await c.get(f"/api/coach/sessions/{sid}/messages", headers=h)
+        r = await c.get(f"/api/consult/sessions/{sid}/messages", headers=h)
         check("messages 200", r.status_code == 200)
         roles = [m["role"] for m in r.json().get("messages", [])]
         check("user 메시지 저장", "user" in roles, str(roles))
 
         # 소유권 — 타인 토큰
         other = JWTService().generate_token("00000000-0000-0000-0000-000000000000", provider="test", email="x@test.local")
-        r = await c.get(f"/api/coach/sessions/{sid}/messages", headers={"Authorization": f"Bearer {other}"})
+        r = await c.get(f"/api/consult/sessions/{sid}/messages", headers={"Authorization": f"Bearer {other}"})
         check("타인 403", r.status_code == 403, str(r.status_code))
 
         # 미존재 404
-        r = await c.get("/api/coach/sessions/11111111-1111-1111-1111-111111111111/messages", headers=h)
+        r = await c.get("/api/consult/sessions/11111111-1111-1111-1111-111111111111/messages", headers=h)
         check("미존재 404", r.status_code == 404, str(r.status_code))
 
         # 잘못된 형식 sessionId → 422(500 아님)
-        r = await c.get("/api/coach/sessions/not-a-uuid/messages", headers=h)
+        r = await c.get("/api/consult/sessions/not-a-uuid/messages", headers=h)
         check("malformed uuid 422", r.status_code == 422, str(r.status_code))
 
         # 종료
-        r = await c.post(f"/api/coach/sessions/{sid}/end", headers=h)
+        r = await c.post(f"/api/consult/sessions/{sid}/end", headers=h)
         check("end 200", r.status_code == 200)
 
         # 무토큰 401
-        r = await c.post("/api/coach/sessions")
+        r = await c.post("/api/consult/sessions")
         check("무토큰 401", r.status_code == 401, str(r.status_code))
 
     async with AsyncSessionLocal() as s:

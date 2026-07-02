@@ -1,19 +1,19 @@
-// AI 코치 SSE 스트리밍 클라이언트 — fetch ReadableStream 으로 토큰 수신(axios 미사용)
+// AI 상담 SSE 스트리밍 클라이언트 — fetch ReadableStream 으로 토큰 수신(axios 미사용)
 import { getStore } from '@/store';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export interface CoachMessage {
+export interface ConsultMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
 /**
- * 코치 세션을 생성한다. 실패 시 null 반환.
+ * 상담 세션을 생성한다. 실패 시 null 반환.
  */
-export async function createCoachSession(): Promise<string | null> {
+export async function createConsultSession(): Promise<string | null> {
   const token = getStore().getState().token;
-  const res = await fetch(`${API_BASE_URL}/api/coach/sessions`, {
+  const res = await fetch(`${API_BASE_URL}/api/consult/sessions`, {
     method: 'POST',
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     credentials: 'include',
@@ -26,9 +26,9 @@ export async function createCoachSession(): Promise<string | null> {
 /**
  * 세션의 기존 대화 히스토리를 불러온다. 실패 시 빈 배열 반환.
  */
-export async function fetchCoachMessages(sessionId: string): Promise<CoachMessage[]> {
+export async function fetchConsultMessages(sessionId: string): Promise<ConsultMessage[]> {
   const token = getStore().getState().token;
-  const res = await fetch(`${API_BASE_URL}/api/coach/sessions/${sessionId}/messages`, {
+  const res = await fetch(`${API_BASE_URL}/api/consult/sessions/${sessionId}/messages`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     credentials: 'include',
   });
@@ -38,11 +38,11 @@ export async function fetchCoachMessages(sessionId: string): Promise<CoachMessag
 }
 
 /**
- * 코치 세션을 종료한다. 실패해도 조용히 무시한다.
+ * 상담 세션을 종료한다. 실패해도 조용히 무시한다.
  */
-export async function endCoachSession(sessionId: string): Promise<void> {
+export async function endConsultSession(sessionId: string): Promise<void> {
   const token = getStore().getState().token;
-  await fetch(`${API_BASE_URL}/api/coach/sessions/${sessionId}/end`, {
+  await fetch(`${API_BASE_URL}/api/consult/sessions/${sessionId}/end`, {
     method: 'POST',
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     credentials: 'include',
@@ -50,17 +50,17 @@ export async function endCoachSession(sessionId: string): Promise<void> {
 }
 
 /**
- * 코치 응답을 SSE 로 스트리밍한다. 토큰마다 onDelta 를 호출한다.
+ * 상담 응답을 SSE 로 스트리밍한다. 토큰마다 onDelta 를 호출한다.
  * 완료 시 정상 반환, 네트워크/HTTP 오류 시 throw.
  */
-export async function streamCoach(
+export async function streamConsult(
   sessionId: string,
   message: string,
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const token = getStore().getState().token;
-  const res = await fetch(`${API_BASE_URL}/api/coach/stream`, {
+  const res = await fetch(`${API_BASE_URL}/api/consult/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ export async function streamCoach(
     signal,
   });
   if (!res.ok || !res.body) {
-    throw new Error(`coach stream failed: ${res.status}`);
+    throw new Error(`consult stream failed: ${res.status}`);
   }
 
   const reader = res.body.getReader();
@@ -91,7 +91,7 @@ export async function streamCoach(
       try {
         const obj = JSON.parse(raw) as { type?: string; content?: string };
         if (obj.type === 'delta' && obj.content) onDelta(obj.content);
-        if (obj.type === 'error') throw new Error('coach stream error');
+        if (obj.type === 'error') throw new Error('consult stream error');
       } catch {
         /* 파싱 불가 조각 무시 */
       }
