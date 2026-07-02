@@ -13,7 +13,7 @@ _CREATE = text(
     "VALUES (CAST(:id AS UUID), CAST(:uid AS UUID), 'active', now(), now())"
 )
 _GET = text(
-    "SELECT user_id, status, context_summary, summarized_until FROM coach_sessions "
+    "SELECT user_id, status, context_summary, summarized_until, extracted_until FROM coach_sessions "
     "WHERE id = CAST(:id AS UUID)"
 )
 _ADD_MSG = text(
@@ -36,6 +36,19 @@ _LATEST_ACTIVE = text(
     "SELECT id FROM coach_sessions WHERE user_id = CAST(:uid AS UUID) AND status = 'active' "
     "ORDER BY created_at DESC LIMIT 1"
 )
+_UPDATE_EXTRACTED = text(
+    "UPDATE coach_sessions SET extracted_until = :eu, extracted_at = now() WHERE id = CAST(:id AS UUID)"
+)
+_FETCH_EXTRACTABLE = text(
+    """
+    SELECT s.id, s.user_id
+    FROM coach_sessions s
+    WHERE (SELECT count(*) FROM coach_messages m WHERE m.session_id = s.id)
+          > s.extracted_until + :min_new
+    ORDER BY s.started_at ASC
+    LIMIT :limit
+    """
+)
 
 
 class CoachSessionRepository(BaseRepository):
@@ -54,6 +67,7 @@ class CoachSessionRepository(BaseRepository):
             "status": r.status,
             "context_summary": r.context_summary,
             "summarized_until": r.summarized_until,
+            "extracted_until": r.extracted_until,
         }
 
     async def add_message(self, session_id: str, role: str, content: str) -> None:
@@ -78,3 +92,17 @@ class CoachSessionRepository(BaseRepository):
     async def get_latest_active_session(self, user_id: str) -> str | None:
         r = (await self.session.execute(_LATEST_ACTIVE, {"uid": user_id})).first()
         return str(r.id) if r else None
+
+    async def update_extracted(self, session_id: str, extracted_until: int) -> None:
+        await self.session.execute(
+            _UPDATE_EXTRACTED, {"id": session_id, "eu": extracted_until}
+        )
+        await self.session.commit()
+
+    async def fetch_extractable_sessions(self, min_new: int, limit: int) -> list[dict]:
+        rows = (
+            await self.session.execute(
+                _FETCH_EXTRACTABLE, {"min_new": min_new, "limit": limit}
+            )
+        ).all()
+        return [{"id": str(r.id), "user_id": str(r.user_id)} for r in rows]
