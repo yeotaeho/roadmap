@@ -44,7 +44,7 @@ _FETCH_EXTRACTABLE = text(
     SELECT s.id, s.user_id
     FROM coach_sessions s
     WHERE (SELECT count(*) FROM coach_messages m WHERE m.session_id = s.id)
-          > s.extracted_until + :min_new
+          >= s.extracted_until + :min_new
     ORDER BY s.started_at ASC
     LIMIT :limit
     """

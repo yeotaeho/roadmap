@@ -66,6 +66,13 @@ async def run() -> int:
         check("미달 미선택(min_new=5)", all(r["id"] != sid for r in sel5), str(sel5))
         check("추출대상 user_id 동반", all("user_id" in r for r in sel2))
 
+        # 정확히 min_new(=2 로 테스트) 개 신규 메시지 → 선택되어야 함(경계값, off-by-one 회귀).
+        sid_boundary = await repo.create_session(uid)
+        for i in range(2):
+            await repo.add_message(sid_boundary, "user", f"b{i}")
+        sel_boundary = await repo.fetch_extractable_sessions(2, 10)
+        check("경계값(min_new=2) 선택됨", any(r["id"] == sid_boundary for r in sel_boundary), str(sel_boundary))
+
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

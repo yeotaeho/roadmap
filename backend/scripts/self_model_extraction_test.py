@@ -92,6 +92,24 @@ async def run() -> int:
         check("재추출 스킵", res2.get("skipped") is True, str(res2))
         check("추출기 1회만 호출", fake_calls["n"] == 1, str(fake_calls))
 
+        # narrative-only(RIASEC 신호 없음) 세션 — 서사가 riasec_confidence=0 에도 불구하고 기록되어야 함.
+        sid_narr = await repo.create_session(uid)
+        for i in range(8):
+            await repo.add_message(sid_narr, "user" if i % 2 == 0 else "assistant", f"가치관 이야기 {i}")
+
+        async def narrative_only_extractor(messages):
+            return {
+                "riasec_top_codes": [], "riasec_confidence": 0.0,
+                "narrative": "안정보다 성장을 우선시함",
+                "evidence": [],
+            }
+
+        svc._extractor = narrative_only_extractor
+        res_narr = await svc.extract_session(uid, sid_narr)
+        check("narrative-only 추출 처리", res_narr.get("extracted") == 8, str(res_narr))
+        model_narr = await SelfModelService(s).get_self_model(uid, include_sensitive=True)
+        check("riasec 없어도 narrative 기록됨", model_narr["narrativeSummary"] == "안정보다 성장을 우선시함", str(model_narr))
+
         # MIN_NEW 미만 — 3개만 더 추가(신규 3 < 6) → 스킵
         for i in range(3):
             await repo.add_message(sid, "user", f"추가 {i}")

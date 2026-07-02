@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 MIN_NEW = 6
 SOURCE = "coach_extraction"
+NARRATIVE_DEFAULT_CONFIDENCE = 0.6  # LLM이 narrative 를 non-null 로 낸 것 자체가 최소 신뢰 신호(riasec 무관, gate 통과 보장)
 
 
 class SelfModelExtractionService:
@@ -44,14 +45,14 @@ class SelfModelExtractionService:
 
         result = await self._extractor(new_msgs)
         svc = SelfModelService(self.db)
+        axis_confidence = {"riasec": result["riasec_confidence"]}
+        if result["narrative"]:
+            axis_confidence["narrative_summary"] = max(result["riasec_confidence"], NARRATIVE_DEFAULT_CONFIDENCE)
         incoming = {
             "riasec": {"top_codes": result["riasec_top_codes"]} if result["riasec_top_codes"] else None,
             "big_five": None,
             "narrative_summary": result["narrative"],
-            "axis_confidence": {
-                "riasec": result["riasec_confidence"],
-                "narrative_summary": result["riasec_confidence"],
-            },
+            "axis_confidence": axis_confidence,
         }
         await svc.upsert_structured(user_id, incoming, SOURCE)
         n_ev = await svc.append_evidence(user_id, result["evidence"], SOURCE)
