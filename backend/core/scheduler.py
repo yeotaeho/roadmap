@@ -61,6 +61,7 @@ from domain.market_insight.hub.services.embed_service import (
     UserEmbedService,
 )
 from domain.market_insight.hub.services.sync_refine_service import SyncRefineService
+from domain.market_insight.hub.services.recommend_explain_service import RecommendExplainService
 from domain.market_insight.hub.services.briefing_service import BriefingRefineService
 from domain.master.hub.services.bronze_economic_ingest_service import (
     BronzeEconomicIngestService,
@@ -711,6 +712,11 @@ async def _job_sync_refine() -> dict[str, Any]:
         return await SyncRefineService(session).refine_and_serve()
 
 
+async def _job_recommend_explain() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        return await RecommendExplainService(session).explain_pending()
+
+
 async def _job_briefing_refine() -> dict[str, Any]:
     """당일 경제 신호 → 3줄 브리핑 생성(LLM, 키 없으면 템플릿 폴백). 멱등(당일 존재 시 스킵)."""
     async with AsyncSessionLocal() as session:
@@ -747,6 +753,8 @@ _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("market_forecast",   _job_market_forecast),
     ("briefing_refine",   _job_briefing_refine),
     ("sync_refine",       _job_sync_refine),
+    # 설명은 재점수 뒤에 생성해야 무효화(CASE NULL)와 경합하지 않는다.
+    ("recommend_explain", _job_recommend_explain),
 )
 
 
