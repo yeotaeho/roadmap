@@ -121,7 +121,7 @@ function GapPanel() {
   );
 }
 
-type SyncRow = { trend: string; score: number; badge?: string };
+type SyncRow = { trend: string; score: number; badge?: string; explanation?: string };
 
 function SyncPanel() {
   const profile = useStore((s) => s.profile);
@@ -132,6 +132,7 @@ function SyncPanel() {
     trend: s.sector_name,
     score: s.score,
     badge: s.badge ?? undefined,
+    explanation: s.explanation ?? undefined,
   }));
   const overall = trendSync.length
     ? Math.round(trendSync.reduce((acc, r) => acc + r.score, 0) / trendSync.length)
@@ -201,6 +202,11 @@ function SyncPanel() {
                     value={row.score}
                     className="mt-2 h-2 bg-slate-200 dark:bg-slate-700 [&>div]:bg-gradient-to-r [&>div]:from-indigo-500 [&>div]:to-emerald-400"
                   />
+                  {row.explanation && (
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {row.explanation}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
@@ -217,6 +223,8 @@ type ChanceCard = {
   opportunity_type: string | null;
   host_name: string | null;
   d_day_date: string | null;
+  match_reason?: string | null;
+  match_explanation?: string | null;
 };
 
 function ChancePanel() {
@@ -263,6 +271,11 @@ function ChancePanel() {
                 )}
               </div>
               <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
+              {(item.match_explanation ?? item.match_reason) && (
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+                  {item.match_explanation ?? item.match_reason}
+                </p>
+              )}
               <p className="mt-2 text-xs text-violet-700 font-bold dark:text-violet-300">{ddayLabel(item.d_day_date)}</p>
               <div className="mt-4 flex items-center justify-between">
                 <button
