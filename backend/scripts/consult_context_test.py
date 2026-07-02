@@ -13,6 +13,7 @@ from domain.user_intelligence.hub.services.consult_context import (
     select_to_summarize,
     split_history,
 )
+from domain.user_intelligence.hub.services.consult_service import build_consult_context
 
 PASS = 0
 FAIL = 0
@@ -48,6 +49,18 @@ def run() -> int:
     out2 = build_llm_messages("SYS", "사용자는 진로 고민 중", [{"role": "assistant", "content": "직전 답"}], "다음")
     check("요약 블록 포함", any("[이전 대화 요약]" in m["content"] and "진로 고민" in m["content"] for m in out2))
     check("recent 포함", any(m["content"] == "직전 답" for m in out2))
+
+    # 로드맵 제거 회귀 가드 — 로드맵/퀘스트가 있어도 맥락 문자열에 새지 않는다.
+    ctx_with_roadmap = {
+        "persona": {"skills": [{"name": "Python"}], "summary": "데이터 지향"},
+        "roadmap": {"title": "백엔드 로드맵"},
+        "quests": [{"title": "FastAPI 퀘스트"}],
+        "movers": [{"sector_slug": "ai-software"}],
+    }
+    s = build_consult_context(ctx_with_roadmap)
+    check("맥락에 로드맵 없음", "로드맵" not in s and "백엔드 로드맵" not in s, s)
+    check("맥락에 퀘스트 없음", "퀘스트" not in s and "FastAPI 퀘스트" not in s, s)
+    check("맥락에 페르소나 유지", "Python" in s, s)
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

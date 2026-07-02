@@ -44,8 +44,8 @@ def test_context_builder() -> None:
         }
     )
     check("맥락 스킬 포함", "Python" in ctx)
-    check("맥락 로드맵 포함", "에너지 로드맵" in ctx)
-    check("맥락 퀘스트 포함", "기초 다지기" in ctx)
+    check("맥락에 로드맵 없음", "로드맵" not in ctx and "에너지 로드맵" not in ctx, ctx)
+    check("맥락에 퀘스트 없음", "퀘스트" not in ctx and "기초 다지기" not in ctx, ctx)
     check("맥락 섹터 포함", "ai-data" in ctx)
 
 

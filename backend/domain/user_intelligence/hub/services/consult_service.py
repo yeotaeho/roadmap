@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config.settings import get_settings
 from core.database import AsyncSessionLocal
-from core.llm.client import _COACH_SYSTEM_PROMPT, LlmClient
+from core.llm.client import _CONSULT_SYSTEM_PROMPT, LlmClient
 from domain.user_intelligence.hub.repositories.consult_context_repository import ConsultContextRepository
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services import consult_context
@@ -21,20 +21,17 @@ _THRESHOLD_T = 24
 
 
 def build_consult_context(ctx: dict) -> str:
-    """맥락 dict → 시스템 프롬프트에 붙일 맥락 문자열. 무네트워크 순수 함수."""
+    """맥락 dict → 시스템 프롬프트에 붙일 맥락 문자열. 무네트워크 순수 함수.
+
+    상담사 맥락은 페르소나·시장 상위 섹터만 — 로드맵·퀘스트는 코치 위임이라 주입하지 않는다.
+    """
     persona = ctx.get("persona") or {}
-    roadmap = ctx.get("roadmap")
-    quests = ctx.get("quests") or []
     movers = ctx.get("movers") or []
     parts = ["[사용자 맥락]"]
     skills = [s.get("name") for s in (persona.get("skills") or []) if s.get("name")]
     parts.append(f"- 보유 스킬: {', '.join(skills) if skills else '미입력'}")
     if persona.get("summary"):
         parts.append(f"- 요약: {persona['summary']}")
-    if roadmap:
-        parts.append(f"- 로드맵: {roadmap.get('title')}")
-    if quests:
-        parts.append("- 진행 중/예정 퀘스트: " + ", ".join(q.get("title") for q in quests))
     if movers:
         parts.append("- 시장 상위 섹터: " + ", ".join(m.get("sector_slug") for m in movers))
     return "\n".join(parts)
@@ -148,7 +145,7 @@ class ConsultService:
         except Exception as e:  # 맥락 로드 실패 시 맥락 없이 진행하되 조용히 삼키지 않는다.
             logger.warning(f"코치 맥락 로드 실패(맥락 없이 진행): {e}")
             context_str = ""
-        system_content = _COACH_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
+        system_content = _CONSULT_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
 
         messages = consult_context.build_llm_messages(system_content, summary, recent, message)
 
