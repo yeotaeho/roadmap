@@ -104,6 +104,8 @@ class UserEmbedService:
             vectors = await self._llm.embed([t for _, t, _ in chunk])
             for (uid, _t, version), vec in zip(chunk, vectors):
                 await self.repo.upsert_user_embedding(uid, vec, version, self._model)
+                # 임베딩 실갱신 = 개인화 컨텍스트 변경 — 점수 불변이어도 낡은 매치 설명을 무효화.
+                await self.repo.clear_user_match_explanations(uid)
                 embedded += 1
             await self.session.commit()
         return {"scanned": len(rows), "embedded": embedded}

@@ -123,6 +123,17 @@ _UPSERT_USER_EMB = text(
 )
 
 
+# 사용자 임베딩이 실제로 갱신된 순간 = 개인화 컨텍스트가 실질 변경된 순간 —
+# 점수·사유가 우연히 불변이어도 낡은 개인화 설명이 남지 않도록 해당 사용자의 매치 설명을 무효화.
+_CLEAR_USER_MATCH_EXPLANATIONS = text(
+    """
+    UPDATE user_chance_matches
+    SET match_explanation = NULL
+    WHERE user_id = CAST(:user_id AS UUID) AND match_explanation IS NOT NULL
+    """
+)
+
+
 class EmbedRepository(BaseRepository):
     async def fetch_unembedded_docs(self, model: str, limit: int) -> list:
         return list(
@@ -162,6 +173,13 @@ class EmbedRepository(BaseRepository):
                 "model": model,
             },
         )
+
+    async def clear_user_match_explanations(self, user_id) -> int:
+        """개인화 컨텍스트 변경(임베딩 실갱신) 사용자의 매치 설명을 무효화한다. 갱신 행 수 반환."""
+        result = await self.session.execute(
+            _CLEAR_USER_MATCH_EXPLANATIONS, {"user_id": str(user_id)}
+        )
+        return result.rowcount or 0
 
     async def fetch_positive_evidence(self, user_ids: list, per_user: int = 10) -> dict[str, list[str]]:
         """사용자별 임베딩용 비민감·긍정 근거 content 목록. {str(user_id): [content...]}."""

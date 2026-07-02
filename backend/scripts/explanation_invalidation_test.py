@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from core.database import AsyncSessionLocal
 from domain.market_insight.hub.repositories.chance_repository import ChanceRepository
+from domain.market_insight.hub.repositories.embed_repository import EmbedRepository
 from domain.market_insight.hub.repositories.sync_repository import SyncRepository
 
 PASS = 0
@@ -94,6 +95,18 @@ async def run() -> int:
 
         matches = await chance_repo.fetch_matches(uid)
         check("fetch_matches 키", all("match_explanation" in r for r in matches), str(matches[:1]))
+
+        # 임베딩 실갱신(개인화 컨텍스트 변경) 시 사용자 매치 설명 무효화
+        await s.execute(text(
+            "UPDATE user_chance_matches SET match_explanation = '컨텍스트 변경 전 설명' "
+            "WHERE user_id = CAST(:u AS UUID) AND opportunity_id = :o"), {"u": uid, "o": opp})
+        await s.commit()
+        cleared = await EmbedRepository(s).clear_user_match_explanations(uid)
+        await s.commit()
+        v = (await s.execute(text(
+            "SELECT match_explanation FROM user_chance_matches "
+            "WHERE user_id = CAST(:u AS UUID) AND opportunity_id = :o"), {"u": uid, "o": opp})).scalar_one()
+        check("임베딩 갱신 → 설명 무효화", cleared >= 1 and v is None, f"cleared={cleared} v={v}")
 
         # 시드 정리
         await s.execute(text(
