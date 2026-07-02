@@ -63,9 +63,11 @@ async def run() -> int:
             "VALUES (CAST(:u AS UUID), :o, 80, '의미 유사도 60점') "
             "ON CONFLICT (user_id, opportunity_id) DO UPDATE SET match_score = 80, "
             "match_reason = '의미 유사도 60점', match_explanation = NULL"), {"u": uid, "o": opp})
+        # 민감 시드는 화이트리스트 내 dimension('value') + is_sensitive=true 조합 —
+        # dimension 필터가 아니라 is_sensitive = false 절만으로 걸러져야 검증이 실효적이다.
         for dim, pol, content, sens in [
             ("dislike", "dislike", "야근을 싫어함", False),
-            ("sensitive", None, "민감한 사정", True),
+            ("value", None, "민감한 사정", True),
         ]:
             await s.execute(text(
                 "INSERT INTO user_self_model_evidence "

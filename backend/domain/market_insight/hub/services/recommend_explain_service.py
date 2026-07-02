@@ -102,13 +102,16 @@ class RecommendExplainService:
             try:
                 user_context = _build_user_context(ctx_map.get(uid), ev_map.get(uid, []))
                 result = await self._explainer(user_context, items["sync"], items["chance"])
+                user_written = 0
                 for it in result.get("sync", []):
                     await self.repo.update_sync_explanation(uid, it["sector_slug"], it["text"])
-                    written += 1
+                    user_written += 1
                 for it in result.get("chance", []):
                     await self.repo.update_match_explanation(uid, it["opportunity_id"], it["text"])
-                    written += 1
+                    user_written += 1
                 await self.session.commit()
+                # rollback 된 건이 통계에 남지 않도록 커밋 성공 후에만 합산.
+                written += user_written
                 processed += 1
             except Exception as e:
                 await self.session.rollback()
