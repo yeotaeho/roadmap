@@ -279,11 +279,11 @@ export function ConsultView() {
                 void send();
               }}
             >
-              <label htmlFor={`${formId}-coach-input`} className="sr-only">
+              <label htmlFor={`${formId}-consult-input`} className="sr-only">
                 메시지 입력
               </label>
               <input
-                id={`${formId}-coach-input`}
+                id={`${formId}-consult-input`}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
