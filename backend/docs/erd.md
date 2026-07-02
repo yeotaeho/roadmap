@@ -903,6 +903,7 @@ CREATE TABLE coach_sessions (
     title VARCHAR(120),                        -- 세션 제목(후속 자동 요약)
     context_summary TEXT,                      -- 오래된 턴 롤링 구조화 요약
     summarized_until INTEGER NOT NULL DEFAULT 0, -- 이미 요약한 메시지 수(증분)
+    extracted_until INTEGER NOT NULL DEFAULT 0, -- 이미 자기모델 추출한 메시지 수(SP-2b 증분)
     extracted_at TIMESTAMPTZ,                  -- 자기모델 추출 완료 시각(SP-2b)
     created_at TIMESTAMPTZ DEFAULT now()       -- 생성 시각
 );
@@ -920,7 +921,7 @@ CREATE INDEX ix_coach_messages_session ON coach_messages(session_id, created_at)
 
 -- (원설계 아이디어·미구현) context_type/context_id/context_title 등 ACTIVE CONTEXT 스냅샷,
 -- 메시지 badge_label/code_snippet/attached_context, insight_wallets(지갑)는 코치 에이전트화
--- 로드맵(AGENT_ROADMAP.md)에서 재검토. SP-2b 는 extracted_until(INT) 컬럼을 추가 예정.
+-- 로드맵(AGENT_ROADMAP.md)에서 재검토.
 
 -- 인사이트 지갑 (우측 Wallet 패널)
 CREATE TABLE insight_wallets (
