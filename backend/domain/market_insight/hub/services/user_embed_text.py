@@ -14,6 +14,7 @@ _WORK_VALUE_LABEL = {
 }
 
 MAX_EMBED_TEXT_CHARS = 1000  # 캡 후 텍스트가 해시(source_version) 기준 — 캡으로 잘린 불변 텍스트 재임베딩 방지.
+EMPTY_EMBED_TEXT = "_"  # 사용 가능한 신호가 전혀 없을 때의 폴백 — 소비자는 이 값을 임베딩하지 않아야 한다.
 
 RIASEC_LABEL = {
     "R": "현실형",
@@ -112,4 +113,4 @@ def build_user_embed_text(
     )
     parts += self_model_terms(riasec, narrative_summary, evidence_contents)
     text = " ".join(p for p in parts if p).strip()
-    return text[:MAX_EMBED_TEXT_CHARS].strip() or "_"
+    return text[:MAX_EMBED_TEXT_CHARS].strip() or EMPTY_EMBED_TEXT

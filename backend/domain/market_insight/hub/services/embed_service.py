@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.market_insight.hub.repositories.embed_repository import EmbedRepository
-from domain.market_insight.hub.services.user_embed_text import build_user_embed_text
+from domain.market_insight.hub.services.user_embed_text import (
+    EMPTY_EMBED_TEXT,
+    build_user_embed_text,
+)
 
 DEFAULT_LIMIT = 300
 _BATCH = 64
@@ -88,6 +91,10 @@ class UserEmbedService:
                 riasec=r.riasec, narrative_summary=r.narrative_summary,
                 evidence_contents=evidence_map.get(str(r.user_id)),
             )
+            if t == EMPTY_EMBED_TEXT:
+                # 사용 가능한 긍정 신호가 전혀 없는 사용자(예: dislike 근거만) —
+                # 무의미한 폴백 임베딩이 임의의 의미 매칭을 만들지 않도록 적재하지 않는다.
+                continue
             version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
             if version != r.source_version:
                 pending.append((r.user_id, t, version))

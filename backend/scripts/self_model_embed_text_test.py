@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from domain.market_insight.hub.services.user_embed_text import (
+    EMPTY_EMBED_TEXT,
     MAX_EMBED_TEXT_CHARS,
     RIASEC_LABEL,
     build_user_embed_text,
@@ -67,6 +68,7 @@ def run() -> int:
 
     # 전부 빈 입력은 기존과 동일하게 "_"
     check("빈 입력 언더스코어", build_user_embed_text() == "_")
+    check("EMPTY_EMBED_TEXT 상수 일치", EMPTY_EMBED_TEXT == "_")
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
