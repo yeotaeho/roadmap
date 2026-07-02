@@ -149,13 +149,17 @@ _UPSERT_MATCH = text(
     ON CONFLICT (user_id, opportunity_id) DO UPDATE SET
         match_score = EXCLUDED.match_score,
         match_reason = EXCLUDED.match_reason,
+        match_explanation = CASE
+            WHEN user_chance_matches.match_score IS NOT DISTINCT FROM EXCLUDED.match_score
+             AND user_chance_matches.match_reason IS NOT DISTINCT FROM EXCLUDED.match_reason
+            THEN user_chance_matches.match_explanation ELSE NULL END,
         updated_at = now()
     """
 )
 
 _FETCH_MATCHES = text(
     """
-    SELECT m.opportunity_id, m.match_score, m.match_reason, m.is_saved, m.is_applied,
+    SELECT m.opportunity_id, m.match_score, m.match_reason, m.match_explanation, m.is_saved, m.is_applied,
            o.title, o.opportunity_type, o.host_name, o.d_day_date, o.sector_slug
     FROM user_chance_matches m
     JOIN chance_opportunities o ON o.id = m.opportunity_id
@@ -278,6 +282,7 @@ class ChanceRepository(BaseRepository):
                 "opportunity_id": r.opportunity_id,
                 "match_score": r.match_score,
                 "match_reason": r.match_reason,
+                "match_explanation": r.match_explanation,
                 "is_saved": r.is_saved,
                 "is_applied": r.is_applied,
                 "title": r.title,

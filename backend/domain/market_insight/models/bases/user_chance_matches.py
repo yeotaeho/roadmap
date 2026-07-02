@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -43,6 +44,9 @@ class UserChanceMatches(Base):
     )
     match_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     match_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    match_explanation: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="LLM 생성 매칭 설명(match_reason 은 결정론 폴백)"
+    )
     is_saved: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     is_applied: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(
