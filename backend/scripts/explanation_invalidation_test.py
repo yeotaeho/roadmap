@@ -108,6 +108,19 @@ async def run() -> int:
             "WHERE user_id = CAST(:u AS UUID) AND opportunity_id = :o"), {"u": uid, "o": opp})).scalar_one()
         check("임베딩 갱신 → 설명 무효화", cleared >= 1 and v is None, f"cleared={cleared} v={v}")
 
+        # 동일 무효화의 Sync 대칭 — 당일 행 설명 클리어
+        await s.execute(text(
+            "UPDATE sync_scores_daily SET explanation = '컨텍스트 변경 전 설명' "
+            "WHERE user_id = CAST(:u AS UUID) AND sector_slug = :sl AND recorded_date = CURRENT_DATE"
+        ), {"u": uid, "sl": slug})
+        await s.commit()
+        cleared_sync = await EmbedRepository(s).clear_user_sync_explanations(uid)
+        await s.commit()
+        v = (await s.execute(text(
+            "SELECT explanation FROM sync_scores_daily WHERE user_id = CAST(:u AS UUID) "
+            "AND sector_slug = :sl AND recorded_date = CURRENT_DATE"), {"u": uid, "sl": slug})).scalar_one()
+        check("임베딩 갱신 → 당일 sync 설명 무효화", cleared_sync >= 1 and v is None, f"cleared={cleared_sync} v={v}")
+
         # 시드 정리
         await s.execute(text(
             "DELETE FROM sync_scores_daily WHERE user_id = CAST(:u AS UUID) "

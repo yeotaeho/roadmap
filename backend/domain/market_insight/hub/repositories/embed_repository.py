@@ -133,6 +133,17 @@ _CLEAR_USER_MATCH_EXPLANATIONS = text(
     """
 )
 
+# 동일 취지의 Sync 대칭 — 당일 행의 설명도 컨텍스트 변경 시 무효화(내일 행은 어차피 NULL 시작).
+_CLEAR_USER_SYNC_EXPLANATIONS = text(
+    """
+    UPDATE sync_scores_daily
+    SET explanation = NULL
+    WHERE user_id = CAST(:user_id AS UUID)
+      AND recorded_date = CURRENT_DATE
+      AND explanation IS NOT NULL
+    """
+)
+
 # 임베딩 가능 신호가 전부 사라진 사용자의 정리 — 낡은 벡터가 의미 매칭을 계속 만들지 않게 삭제.
 _DELETE_USER_EMBEDDING = text(
     "DELETE FROM user_embeddings WHERE user_id = CAST(:user_id AS UUID)"
@@ -188,6 +199,13 @@ class EmbedRepository(BaseRepository):
         """개인화 컨텍스트 변경(임베딩 실갱신) 사용자의 매치 설명을 무효화한다. 갱신 행 수 반환."""
         result = await self.session.execute(
             _CLEAR_USER_MATCH_EXPLANATIONS, {"user_id": str(user_id)}
+        )
+        return result.rowcount or 0
+
+    async def clear_user_sync_explanations(self, user_id) -> int:
+        """개인화 컨텍스트 변경 사용자의 당일 Sync 설명을 무효화한다. 갱신 행 수 반환."""
+        result = await self.session.execute(
+            _CLEAR_USER_SYNC_EXPLANATIONS, {"user_id": str(user_id)}
         )
         return result.rowcount or 0
 
