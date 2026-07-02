@@ -54,6 +54,21 @@ _FETCH_SILVER_FOR_GOLD = text(
     """
 )
 
+# 공고 텍스트(제목·유형) 변경 시 해당 공고의 LLM 매칭 설명을 무효화 —
+# 문서 임베딩은 재계산되지 않아 점수·사유가 그대로여도 설명이 옛 문안을 참조할 수 있다.
+_CLEAR_STALE_MATCH_EXPLANATIONS = text(
+    """
+    UPDATE user_chance_matches m
+    SET match_explanation = NULL
+    FROM chance_opportunities o
+    WHERE o.raw_table_ref = 'raw_opportunity_data' AND o.raw_id = :raw_id
+      AND m.opportunity_id = o.id
+      AND m.match_explanation IS NOT NULL
+      AND (o.title IS DISTINCT FROM :title
+           OR o.opportunity_type IS DISTINCT FROM :opportunity_type)
+    """
+)
+
 _UPSERT_OPPORTUNITY = text(
     """
     INSERT INTO chance_opportunities
@@ -194,11 +209,17 @@ class ChanceRepository(BaseRepository):
         for r in rows:
             benefits = r.extracted_benefits or []
             target = r.extracted_target or []
+            new_title = (r.title or "공고")[:255]
+            # upsert 전에 기존 행과 제목·유형이 달라지는 공고의 설명을 무효화(같은 트랜잭션).
+            await self.session.execute(
+                _CLEAR_STALE_MATCH_EXPLANATIONS,
+                {"raw_id": r.raw_id, "title": new_title, "opportunity_type": r.extracted_type},
+            )
             await self.session.execute(
                 _UPSERT_OPPORTUNITY,
                 {
                     "sector_slug": r.sector_slug,
-                    "title": (r.title or "공고")[:255],
+                    "title": new_title,
                     "opportunity_type": r.extracted_type,
                     "host_name": (r.host_name or None) and r.host_name[:150],
                     "benefit_summary": ("; ".join(benefits))[:255] or None,

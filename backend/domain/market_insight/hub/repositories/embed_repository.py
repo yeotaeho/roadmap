@@ -53,6 +53,8 @@ _INSERT_DOC_EMB = text(
 
 # 임베딩 후보 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 후보(코치-only 포함).
 # 타임스탬프 비교에 자기모델 갱신·근거 추가를 포함해 코치 대화가 재임베딩을 트리거한다.
+# ev 워터마크는 임베딩에 실제 기여하는 근거(_FETCH_POSITIVE_EVIDENCE 와 동일 필터)만 본다 —
+# dislike/constraint 만 추가된 사용자가 해시 불변인 채 영구 재후보가 되는 것을 방지.
 _FETCH_UNEMBEDDED_USERS = text(
     """
     SELECT u.id AS user_id, p.target_job, p.interest_keywords,
@@ -69,6 +71,8 @@ _FETCH_UNEMBEDDED_USERS = text(
         SELECT user_id, max(created_at) AS last_evidence_at
         FROM user_self_model_evidence
         WHERE is_sensitive = false
+          AND dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+          AND (polarity IS NULL OR polarity <> 'dislike')
         GROUP BY user_id
     ) ev ON ev.user_id = u.id
     LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
