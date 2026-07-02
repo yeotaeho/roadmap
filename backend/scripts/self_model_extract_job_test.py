@@ -1,4 +1,4 @@
-# 자기모델 추출 잡 스모크 — _job_self_model_extract 가 dict 반환(에러 없이 실행)
+# 자기모델 추출 잡 스모크 — _job_self_model_extract 가 dict 반환(에러 없이 실행).
 
 from __future__ import annotations
 
