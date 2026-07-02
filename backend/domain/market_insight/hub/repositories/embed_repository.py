@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import UUID
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
@@ -104,7 +105,7 @@ _FETCH_POSITIVE_EVIDENCE = text(
     WHERE rn <= :per_user
     ORDER BY user_id, rn
     """
-).bindparams(bindparam("uids", expanding=True))
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
 _UPSERT_USER_EMB = text(
     """

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import UUID
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
@@ -56,7 +57,7 @@ _FETCH_USER_CONTEXT = text(
     LEFT JOIN user_self_model sm ON sm.user_id = u.id
     WHERE u.id IN :uids
     """
-).bindparams(bindparam("uids", expanding=True))
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
 # 프롬프트용 비민감 근거 — 긍정/회피 분리는 서비스에서 수행(민감은 어떤 경우에도 미주입).
 _FETCH_CONTEXT_EVIDENCE = text(
@@ -68,7 +69,7 @@ _FETCH_CONTEXT_EVIDENCE = text(
       AND dimension IN ('like', 'dislike', 'value', 'aspiration', 'skill_signal')
     ORDER BY user_id, confidence DESC NULLS LAST, created_at DESC, id DESC
     """
-).bindparams(bindparam("uids", expanding=True))
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
 _UPDATE_SYNC_EXPLANATION = text(
     """
