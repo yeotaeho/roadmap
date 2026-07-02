@@ -1,4 +1,4 @@
-# 코치 세션 추출 지점 리포지토리 확장 Neon 테스트 — extracted_until·update·추출대상 조회
+# 상담 세션 추출 지점 리포지토리 확장 Neon 테스트 — extracted_until·update·추출대상 조회
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 from sqlalchemy import text
 
 from core.database import AsyncSessionLocal
-from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
+from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 
 PASS = 0
 FAIL = 0
@@ -37,9 +37,9 @@ async def _uid(s) -> str:
 
 async def _cleanup(s, uid: str) -> None:
     await s.execute(text(
-        "DELETE FROM coach_messages WHERE session_id IN "
-        "(SELECT id FROM coach_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
-    await s.execute(text("DELETE FROM coach_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        "DELETE FROM consult_messages WHERE session_id IN "
+        "(SELECT id FROM consult_sessions WHERE user_id = CAST(:u AS UUID))"), {"u": uid})
+    await s.execute(text("DELETE FROM consult_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.commit()
 
 
@@ -47,7 +47,7 @@ async def run() -> int:
     async with AsyncSessionLocal() as s:
         uid = await _uid(s)
         await _cleanup(s, uid)
-        repo = CoachSessionRepository(s)
+        repo = ConsultSessionRepository(s)
         sid = await repo.create_session(uid)
         for i in range(8):
             await repo.add_message(sid, "user" if i % 2 == 0 else "assistant", f"m{i}")

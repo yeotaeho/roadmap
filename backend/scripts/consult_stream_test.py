@@ -1,6 +1,6 @@
-# AI 코치 SSE 스트리밍 인프로세스 통합 테스트 + 순수 맥락 빌더 검증
+# AI 상담 SSE 스트리밍 인프로세스 통합 테스트 + 순수 맥락 빌더 검증
 #
-# 사용법:  python scripts/coach_stream_test.py [user_id]
+# 사용법:  python scripts/consult_stream_test.py [user_id]
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import httpx  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 from core.database import AsyncSessionLocal  # noqa: E402
-from domain.ai_coach.hub.services.coach_service import build_coach_context  # noqa: E402
+from domain.user_intelligence.hub.services.consult_service import build_consult_context  # noqa: E402
 from domain.auth.hub.security.services.jwt import JWTService  # noqa: E402
 
 PASS = 0
@@ -35,7 +35,7 @@ def check(name: str, cond: bool, extra: str = "") -> None:
 
 
 def test_context_builder() -> None:
-    ctx = build_coach_context(
+    ctx = build_consult_context(
         {
             "persona": {"skills": [{"name": "Python"}], "summary": "ESG×AI 탐색"},
             "roadmap": {"title": "에너지 로드맵"},
@@ -70,13 +70,13 @@ async def run(user_id: str | None) -> int:
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=60.0) as client:
-        sr = await client.post("/api/coach/sessions", headers=headers)
+        sr = await client.post("/api/consult/sessions", headers=headers)
         check("세션 생성 200", sr.status_code == 200, str(sr.status_code))
         sid = sr.json().get("sessionId")
         deltas: list[str] = []
         done = False
         async with client.stream(
-            "POST", "/api/coach/stream", headers=headers,
+            "POST", "/api/consult/stream", headers=headers,
             json={"sessionId": sid, "message": "내 로드맵 다음 한 걸음을 한 문장으로 알려줘."},
         ) as resp:
             check("stream 200", resp.status_code == 200, str(resp.status_code))
@@ -100,7 +100,7 @@ async def run(user_id: str | None) -> int:
 
         # 무토큰 401 (본문은 유효하게 — 인증 실패가 검증보다 먼저 나는지 확인)
         r = await client.post(
-            "/api/coach/stream",
+            "/api/consult/stream",
             json={"sessionId": "11111111-1111-1111-1111-111111111111", "message": "hi"},
         )
         check("무토큰 401", r.status_code == 401, str(r.status_code))
@@ -109,12 +109,12 @@ async def run(user_id: str | None) -> int:
     async with AsyncSessionLocal() as s:
         await s.execute(
             text(
-                "DELETE FROM coach_messages WHERE session_id IN "
-                "(SELECT id FROM coach_sessions WHERE user_id = CAST(:u AS UUID))"
+                "DELETE FROM consult_messages WHERE session_id IN "
+                "(SELECT id FROM consult_sessions WHERE user_id = CAST(:u AS UUID))"
             ),
             {"u": uid},
         )
-        await s.execute(text("DELETE FROM coach_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        await s.execute(text("DELETE FROM consult_sessions WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
         await s.commit()
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")

@@ -59,9 +59,9 @@ _INSERT_EVIDENCE = text(
     """
     INSERT INTO user_self_model_evidence
         (user_id, dimension, polarity, content, confidence, is_sensitive,
-         content_hash, coach_session_ref, source, created_at)
+         content_hash, consult_session_ref, source, created_at)
     VALUES (CAST(:uid AS UUID), :dimension, :polarity, :content, :confidence, :is_sensitive,
-            :content_hash, :coach_session_ref, :source, now())
+            :content_hash, :consult_session_ref, :source, now())
     ON CONFLICT (user_id, content_hash) DO UPDATE SET
         is_sensitive = user_self_model_evidence.is_sensitive OR EXCLUDED.is_sensitive
     RETURNING (xmax = 0) AS inserted
@@ -132,7 +132,7 @@ class SelfModelRepository(BaseRepository):
                     "confidence": it.get("confidence"),
                     "is_sensitive": bool(it.get("is_sensitive", False)),
                     "content_hash": content_hash(dim, pol, content),
-                    "coach_session_ref": it.get("coach_session_ref"),
+                    "consult_session_ref": it.get("consult_session_ref"),
                     "source": source,
                 },
             )

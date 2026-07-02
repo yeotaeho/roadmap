@@ -1,4 +1,4 @@
-# AI 코치 HTTP 라우터 — 세션 생성·영속 스트리밍·종료·히스토리
+# AI 상담 HTTP 라우터 — 세션 생성·영속 스트리밍·종료·히스토리
 
 import logging
 import uuid
@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api_guards import get_authenticated_user_id
 from core.database import get_db
-from domain.ai_coach.hub.services.coach_service import CoachService
+from domain.user_intelligence.hub.services.consult_service import ConsultService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/coach", tags=["coach"])
+router = APIRouter(prefix="/consult", tags=["consult"])
 
 
 class CoachStreamRequest(BaseModel):
@@ -27,8 +27,8 @@ async def create_session(
     user_id: str = Depends(get_authenticated_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """코치 대화 세션 생성 또는 재개(방문 간 최근 active 세션 이어가기)."""
-    session_id = await CoachService(db).get_or_create_session(user_id)
+    """상담 대화 세션 생성 또는 재개(방문 간 최근 active 세션 이어가기)."""
+    session_id = await ConsultService(db).get_or_create_session(user_id)
     return {"success": True, "sessionId": session_id}
 
 
@@ -39,7 +39,7 @@ async def coach_stream(
     db: AsyncSession = Depends(get_db),
 ):
     """세션 소유권 검증 후 사용자 메시지+맥락 주입 LLM 응답 SSE 스트리밍."""
-    svc = CoachService(db)
+    svc = ConsultService(db)
     try:
         status = await svc.verify_owner(user_id, str(request.sessionId))
     except LookupError:
@@ -64,7 +64,7 @@ async def end_session(
 ):
     """세션 종료(소유권 검증). 이미 종료면 멱등."""
     try:
-        await CoachService(db).end_session(user_id, str(session_id))
+        await ConsultService(db).end_session(user_id, str(session_id))
     except LookupError:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
     except PermissionError:
@@ -80,7 +80,7 @@ async def get_messages(
 ):
     """세션 대화 히스토리(소유권 검증)."""
     try:
-        messages = await CoachService(db).get_messages(user_id, str(session_id))
+        messages = await ConsultService(db).get_messages(user_id, str(session_id))
     except LookupError:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
     except PermissionError:

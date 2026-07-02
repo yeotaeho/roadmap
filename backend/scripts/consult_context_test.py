@@ -1,4 +1,4 @@
-# 코치 컨텍스트 조립·롤링 요약 트리거 순수 단위 테스트(무DB·무LLM)
+# 상담 컨텍스트 조립·롤링 요약 트리거 순수 단위 테스트(무DB·무LLM)
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 
-from domain.ai_coach.hub.services.coach_context import (
+from domain.user_intelligence.hub.services.consult_context import (
     build_llm_messages,
     select_to_summarize,
     split_history,

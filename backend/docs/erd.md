@@ -896,7 +896,7 @@ CREATE INDEX idx_growth_logs_user_date ON growth_daily_logs(user_id, log_date DE
 
 ```sql
 -- 코치 대화 세션 (SP-2a 구현 — 명시적 세션·재개·롤링 요약. 마이그 26149c601ff7·20542b62b650)
-CREATE TABLE coach_sessions (
+CREATE TABLE consult_sessions (
     id UUID PRIMARY KEY,                       -- 앱 생성 uuid4
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- 사용자 FK
     status VARCHAR(10) NOT NULL DEFAULT 'active', -- active / ended
@@ -909,17 +909,17 @@ CREATE TABLE coach_sessions (
     extracted_at TIMESTAMPTZ,                  -- 자기모델 추출 완료 시각(SP-2b)
     created_at TIMESTAMPTZ DEFAULT now()       -- 생성 시각
 );
-CREATE INDEX ix_coach_sessions_user ON coach_sessions(user_id);
+CREATE INDEX ix_consult_sessions_user ON consult_sessions(user_id);
 
 -- 코치 대화 메시지 (턴 append-only)
-CREATE TABLE coach_messages (
+CREATE TABLE consult_messages (
     id BIGSERIAL PRIMARY KEY,                 -- 메시지 PK
-    session_id UUID NOT NULL REFERENCES coach_sessions(id) ON DELETE CASCADE, -- 세션 FK
+    session_id UUID NOT NULL REFERENCES consult_sessions(id) ON DELETE CASCADE, -- 세션 FK
     role VARCHAR(10) NOT NULL,                -- user / assistant
     content TEXT NOT NULL,                    -- 본문
     created_at TIMESTAMPTZ DEFAULT now()      -- 생성 시각
 );
-CREATE INDEX ix_coach_messages_session ON coach_messages(session_id, created_at);
+CREATE INDEX ix_consult_messages_session ON consult_messages(session_id, created_at);
 
 -- (원설계 아이디어·미구현) context_type/context_id/context_title 등 ACTIVE CONTEXT 스냅샷,
 -- 메시지 badge_label/code_snippet/attached_context, insight_wallets(지갑)는 코치 에이전트화
@@ -929,7 +929,7 @@ CREATE INDEX ix_coach_messages_session ON coach_messages(session_id, created_at)
 CREATE TABLE insight_wallets (
     id BIGSERIAL PRIMARY KEY,                 -- 지갑 아이템 PK
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- 사용자 FK
-    source_message_id BIGINT REFERENCES coach_messages(id) ON DELETE SET NULL, -- 출처 메시지
+    source_message_id BIGINT REFERENCES consult_messages(id) ON DELETE SET NULL, -- 출처 메시지
 
     item_type VARCHAR(20) NOT NULL,           -- TEXT / CODE / LINK / PROMPT
     title VARCHAR(255),                       -- 지갑 아이템 제목
@@ -943,8 +943,8 @@ CREATE INDEX idx_insight_wallets_user ON insight_wallets(user_id, created_at DES
 ```
 
 코치 워크플로우(SP-2a as-built):
-1. 코치 진입 시 `coach_sessions`를 get-or-create(최근 active 세션 재개, 방문 간 이어감)  
-2. 대화 턴은 `coach_messages`에 append(사용자/어시스턴트) — 멀티턴 기억  
+1. 코치 진입 시 `consult_sessions`를 get-or-create(최근 active 세션 재개, 방문 간 이어감)  
+2. 대화 턴은 `consult_messages`에 append(사용자/어시스턴트) — 멀티턴 기억  
 3. 오래된 턴은 `context_summary`로 증분 롤링 요약(`summarized_until` 추적)  
 4. SP-2b: active 세션에서 자기모델 증분 추출(`extracted_until`) → `SelfModelService`  
 5. (미구현) `insight_wallets`(지갑)은 코치 에이전트화 로드맵에서 재검토

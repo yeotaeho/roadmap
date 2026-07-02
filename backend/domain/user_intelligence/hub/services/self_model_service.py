@@ -8,7 +8,7 @@ from domain.user_intelligence.hub.repositories.self_model_repository import Self
 
 CONFIDENCE_THRESHOLD = 0.40
 SOURCE_USER_FORM = "user_form"
-SOURCE_COACH = "coach_extraction"
+SOURCE_COACH = "consult_extraction"
 _AXES = ("riasec", "big_five", "narrative_summary")
 
 

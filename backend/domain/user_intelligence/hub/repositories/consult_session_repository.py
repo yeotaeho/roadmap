@@ -1,4 +1,4 @@
-# 코치 세션 리포지토리 — 세션·메시지 CRUD·롤링 요약·종료
+# 상담 세션 리포지토리 — CRUD·재개·요약 갱신·추출 대상 조회
 
 from __future__ import annotations
 
@@ -9,41 +9,41 @@ from sqlalchemy import text
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
 _CREATE = text(
-    "INSERT INTO coach_sessions (id, user_id, status, started_at, created_at) "
+    "INSERT INTO consult_sessions (id, user_id, status, started_at, created_at) "
     "VALUES (CAST(:id AS UUID), CAST(:uid AS UUID), 'active', now(), now())"
 )
 _GET = text(
-    "SELECT user_id, status, context_summary, summarized_until, extracted_until FROM coach_sessions "
+    "SELECT user_id, status, context_summary, summarized_until, extracted_until FROM consult_sessions "
     "WHERE id = CAST(:id AS UUID)"
 )
 _ADD_MSG = text(
-    "INSERT INTO coach_messages (session_id, role, content, created_at) "
+    "INSERT INTO consult_messages (session_id, role, content, created_at) "
     "VALUES (CAST(:sid AS UUID), :role, :content, now())"
 )
 _FETCH_MSGS = text(
-    "SELECT role, content FROM coach_messages WHERE session_id = CAST(:sid AS UUID) "
+    "SELECT role, content FROM consult_messages WHERE session_id = CAST(:sid AS UUID) "
     "ORDER BY created_at ASC, id ASC"
 )
-_COUNT = text("SELECT count(*) AS c FROM coach_messages WHERE session_id = CAST(:sid AS UUID)")
+_COUNT = text("SELECT count(*) AS c FROM consult_messages WHERE session_id = CAST(:sid AS UUID)")
 _END = text(
-    "UPDATE coach_sessions SET status='ended', ended_at = COALESCE(ended_at, now()) "
+    "UPDATE consult_sessions SET status='ended', ended_at = COALESCE(ended_at, now()) "
     "WHERE id = CAST(:id AS UUID)"
 )
 _UPDATE_SUMMARY = text(
-    "UPDATE coach_sessions SET context_summary = :s, summarized_until = :su WHERE id = CAST(:id AS UUID)"
+    "UPDATE consult_sessions SET context_summary = :s, summarized_until = :su WHERE id = CAST(:id AS UUID)"
 )
 _LATEST_ACTIVE = text(
-    "SELECT id FROM coach_sessions WHERE user_id = CAST(:uid AS UUID) AND status = 'active' "
+    "SELECT id FROM consult_sessions WHERE user_id = CAST(:uid AS UUID) AND status = 'active' "
     "ORDER BY created_at DESC LIMIT 1"
 )
 _UPDATE_EXTRACTED = text(
-    "UPDATE coach_sessions SET extracted_until = :eu, extracted_at = now() WHERE id = CAST(:id AS UUID)"
+    "UPDATE consult_sessions SET extracted_until = :eu, extracted_at = now() WHERE id = CAST(:id AS UUID)"
 )
 _FETCH_EXTRACTABLE = text(
     """
     SELECT s.id, s.user_id
-    FROM coach_sessions s
-    WHERE (SELECT count(*) FROM coach_messages m WHERE m.session_id = s.id)
+    FROM consult_sessions s
+    WHERE (SELECT count(*) FROM consult_messages m WHERE m.session_id = s.id)
           >= s.extracted_until + :min_new
     ORDER BY s.started_at ASC
     LIMIT :limit
@@ -51,7 +51,7 @@ _FETCH_EXTRACTABLE = text(
 )
 
 
-class CoachSessionRepository(BaseRepository):
+class ConsultSessionRepository(BaseRepository):
     async def create_session(self, user_id: str) -> str:
         sid = str(uuid.uuid4())
         await self.session.execute(_CREATE, {"id": sid, "uid": user_id})

@@ -43,7 +43,7 @@ class UserSelfModelEvidence(Base):
     confidence: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
     is_sensitive: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    coach_session_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    consult_session_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="coach_extraction"
     )

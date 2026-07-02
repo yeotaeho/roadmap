@@ -1,4 +1,4 @@
-# 코치 맥락 리포지토리 — 페르소나·활성 로드맵·상위 Pulse 섹터 읽기(공유 DB read)
+# 상담 맥락 리포지토리 — 페르소나·활성 로드맵·상위 Pulse 섹터 읽기(공유 DB read)
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ _FETCH_MOVERS = text(
 )
 
 
-class CoachRepository(BaseRepository):
+class ConsultContextRepository(BaseRepository):
     async def fetch_context(self, user_id: str) -> dict:
         """코치 맥락 묶음 — 페르소나·로드맵·활성 퀘스트·상위 섹터."""
         pr = (await self.session.execute(_FETCH_PERSONA, {"uid": user_id})).first()

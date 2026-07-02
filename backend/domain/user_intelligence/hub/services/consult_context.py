@@ -1,4 +1,4 @@
-# 코치 LLM 컨텍스트 조립·롤링 요약 트리거 — 순수 함수(무네트워크)
+# 상담 대화 컨텍스트 순수 헬퍼 — 윈도우 분할·주입 메시지 조립
 
 
 def select_to_summarize(total: int, window_n: int, threshold_t: int) -> bool:
