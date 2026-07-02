@@ -1,4 +1,4 @@
-# 자기모델 직렬화(RIASEC 라벨·서사·근거·1000자 캡) 순수 테스트
+# 자기모델 직렬화(RIASEC 라벨·서사·근거·1000자 캡) 순수 테스트.
 
 from __future__ import annotations
 

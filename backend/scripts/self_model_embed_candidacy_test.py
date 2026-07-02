@@ -1,4 +1,4 @@
-# 재임베딩 후보 — 코치-only 사용자 포함·자기모델 갱신 트리거·긍정 근거 필터 (Neon 통합)
+# 재임베딩 후보 — 코치-only 사용자 포함·자기모델 갱신 트리거·긍정 근거 필터 (Neon 통합).
 
 from __future__ import annotations
 

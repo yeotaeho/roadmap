@@ -1,4 +1,4 @@
-# 설명 무효화 — upsert 시 입력 불변이면 설명 보존, 변경이면 NULL (Neon 통합)
+# 설명 무효화 — upsert 시 입력 불변이면 설명 보존, 변경이면 NULL (Neon 통합).
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# 추천 설명 리포지토리 — 설명 없는 Sync/Chance 상위 행·사용자 컨텍스트 조회, 설명 기록
+# 추천 설명 리포지토리 — 설명 없는 Sync/Chance 상위 행·사용자 컨텍스트 조회, 설명 기록.
 
 from __future__ import annotations
 

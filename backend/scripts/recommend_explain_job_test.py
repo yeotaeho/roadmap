@@ -1,4 +1,4 @@
-# 추천 설명 잡 배선 스모크 — 파이프라인 마지막 스텝 등록·잡 callable (LLM 무호출)
+# 추천 설명 잡 배선 스모크 — 파이프라인 마지막 스텝 등록·잡 callable (LLM 무호출).
 
 from __future__ import annotations
 

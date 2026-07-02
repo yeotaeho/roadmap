@@ -1,4 +1,4 @@
-# 추천 설명 파서 — 닫힌 slug/id 검증·200자 클램프·실패 시 빈 리스트 (순수)
+# 추천 설명 파서 — 닫힌 slug/id 검증·200자 클램프·실패 시 빈 리스트 (순수).
 
 from __future__ import annotations
 

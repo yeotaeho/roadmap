@@ -1,4 +1,4 @@
-# 추천 설명 서비스 — 설명 없는 Sync/Chance 상위 항목을 사용자당 LLM 1회로 일괄 설명(일일 배치)
+# 추천 설명 서비스 — 설명 없는 Sync/Chance 상위 항목을 사용자당 LLM 1회로 일괄 설명(일일 배치).
 
 from __future__ import annotations
 

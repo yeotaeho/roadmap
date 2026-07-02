@@ -13,7 +13,7 @@ _WORK_VALUE_LABEL = {
     "compensation": "보상",
 }
 
-MAX_EMBED_TEXT_CHARS = 1000  # 캡 후 텍스트가 해시(source_version) 기준 — 캡으로 잘린 불변 텍스트 재임베딩 방지
+MAX_EMBED_TEXT_CHARS = 1000  # 캡 후 텍스트가 해시(source_version) 기준 — 캡으로 잘린 불변 텍스트 재임베딩 방지.
 
 RIASEC_LABEL = {
     "R": "현실형",

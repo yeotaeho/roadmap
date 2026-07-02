@@ -1,4 +1,4 @@
-# RecommendExplainService — FakeLLM 설명 기록·멱등·민감 미주입·dislike 전달 (Neon 통합)
+# RecommendExplainService — FakeLLM 설명 기록·멱등·민감 미주입·dislike 전달 (Neon 통합).
 
 from __future__ import annotations
 
