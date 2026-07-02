@@ -105,6 +105,13 @@ class UserEmbedService:
             version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
             if version != r.source_version:
                 pending.append((r.user_id, t, version))
+            elif r.source_version is not None:
+                # 후보인데 임베딩 텍스트는 불변 — 임베딩 밖 프롬프트 입력(예: dislike)이 바뀐 경우.
+                # 낡은 설명을 무효화하고 computed_at 을 전진시켜 영구 재후보를 막는다.
+                await self.repo.touch_user_embedding(r.user_id)
+                await self.repo.clear_user_match_explanations(r.user_id)
+                await self.repo.clear_user_sync_explanations(r.user_id)
+                cleared += 1
         embedded = 0
         for i in range(0, len(pending), _BATCH):
             chunk = pending[i : i + _BATCH]

@@ -53,8 +53,9 @@ _INSERT_DOC_EMB = text(
 
 # 임베딩 후보 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 후보(코치-only 포함).
 # 타임스탬프 비교에 자기모델 갱신·근거 추가를 포함해 코치 대화가 재임베딩을 트리거한다.
-# ev 워터마크는 임베딩에 실제 기여하는 근거(_FETCH_POSITIVE_EVIDENCE 와 동일 필터)만 본다 —
-# dislike/constraint 만 추가된 사용자가 해시 불변인 채 영구 재후보가 되는 것을 방지.
+# ev 워터마크는 임베딩·설명 프롬프트에 입력되는 근거 전체(dislike 포함, constraint·민감 제외)를 본다 —
+# dislike 변경도 설명 무효화를 트리거해야 하며, 해시 불변 후보는 touch 로 computed_at 을 전진시켜
+# 영구 재후보를 막는다(embed_service 참고).
 _FETCH_UNEMBEDDED_USERS = text(
     """
     SELECT u.id AS user_id, p.target_job, p.interest_keywords,
@@ -71,8 +72,7 @@ _FETCH_UNEMBEDDED_USERS = text(
         SELECT user_id, max(created_at) AS last_evidence_at
         FROM user_self_model_evidence
         WHERE is_sensitive = false
-          AND dimension IN ('like', 'value', 'aspiration', 'skill_signal')
-          AND (polarity IS NULL OR polarity <> 'dislike')
+          AND dimension IN ('like', 'dislike', 'value', 'aspiration', 'skill_signal')
         GROUP BY user_id
     ) ev ON ev.user_id = u.id
     LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
@@ -144,6 +144,12 @@ _CLEAR_USER_SYNC_EXPLANATIONS = text(
     """
 )
 
+# 해시 불변 후보의 워터마크 소진 — 임베딩 텍스트 밖 프롬프트 입력(dislike 등)만 바뀐 경우
+# computed_at 을 전진시켜 다음 실행부터 후보에서 빠지게 한다(설명 무효화는 호출부에서 동반).
+_TOUCH_USER_EMBEDDING = text(
+    "UPDATE user_embeddings SET computed_at = now() WHERE user_id = CAST(:user_id AS UUID)"
+)
+
 # 임베딩 가능 신호가 전부 사라진 사용자의 정리 — 낡은 벡터가 의미 매칭을 계속 만들지 않게 삭제.
 _DELETE_USER_EMBEDDING = text(
     "DELETE FROM user_embeddings WHERE user_id = CAST(:user_id AS UUID)"
@@ -200,6 +206,11 @@ class EmbedRepository(BaseRepository):
         result = await self.session.execute(
             _CLEAR_USER_MATCH_EXPLANATIONS, {"user_id": str(user_id)}
         )
+        return result.rowcount or 0
+
+    async def touch_user_embedding(self, user_id) -> int:
+        """해시 불변 후보의 computed_at 을 전진시켜 워터마크를 소진한다. 갱신 행 수 반환."""
+        result = await self.session.execute(_TOUCH_USER_EMBEDDING, {"user_id": str(user_id)})
         return result.rowcount or 0
 
     async def clear_user_sync_explanations(self, user_id) -> int:

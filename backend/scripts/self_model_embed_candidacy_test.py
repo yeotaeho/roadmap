@@ -112,6 +112,25 @@ async def run() -> int:
         check("민감 제외", "민감한 내용" not in contents)
         check("빈 입력 빈 dict", await repo.fetch_positive_evidence([]) == {})
 
+        # dislike 변경도 후보 트리거(설명 프롬프트 입력) — touch 로 워터마크 소진
+        await repo.upsert_user_embedding(uid, [0.0] * 3072, "feedbeeffeedbeef", model)
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("재임베딩 후 후보 제외", uid not in {str(r.user_id) for r in rows})
+        await s.execute(text(
+            "INSERT INTO user_self_model_evidence "
+            "(user_id, dimension, polarity, content, confidence, is_sensitive, content_hash, source) "
+            "VALUES (CAST(:u AS UUID), 'dislike', 'dislike', :c, 0.8, false, md5('dislike' || 'dislike' || :c2), "
+            "'coach_extraction')"
+        ), {"u": uid, "c": "새 야근 회피", "c2": "새 야근 회피"})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("dislike 추가 → 후보 재진입", uid in {str(r.user_id) for r in rows})
+        n_touch = await repo.touch_user_embedding(uid)
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("touch → 후보 종료", n_touch == 1 and uid not in {str(r.user_id) for r in rows})
+
         # Chance 매칭 사용자에도 코치-only 포함
         users = await ChanceRepository(s).fetch_users()
         check("chance 사용자 포함", uid in {str(r.user_id) for r in users})
