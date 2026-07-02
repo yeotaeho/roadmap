@@ -83,6 +83,7 @@ class UserEmbedService:
         evidence_map = await self.repo.fetch_positive_evidence([r.user_id for r in rows])
         # 텍스트·해시 산출 후, 저장된 해시와 동일하면(타임스탬프상 후보지만 내용 불변) 임베딩 생략.
         pending = []
+        cleared = 0
         for r in rows:
             t = self._user_text(
                 r.target_job, r.interest_keywords,
@@ -94,6 +95,11 @@ class UserEmbedService:
             if t == EMPTY_EMBED_TEXT:
                 # 사용 가능한 긍정 신호가 전혀 없는 사용자(예: dislike 근거만) —
                 # 무의미한 폴백 임베딩이 임의의 의미 매칭을 만들지 않도록 적재하지 않는다.
+                # 기존 임베딩 보유자가 신호를 전부 지운 경우엔 낡은 벡터·매치 잔재도 제거한다.
+                if r.source_version is not None:
+                    await self.repo.delete_user_embedding(r.user_id)
+                    await self.repo.delete_user_matches(r.user_id)
+                    cleared += 1
                 continue
             version = hashlib.sha256(t.encode("utf-8")).hexdigest()[:16]
             if version != r.source_version:
@@ -108,4 +114,7 @@ class UserEmbedService:
                 await self.repo.clear_user_match_explanations(uid)
                 embedded += 1
             await self.session.commit()
-        return {"scanned": len(rows), "embedded": embedded}
+        if cleared:
+            # 신호 소실 정리는 배치 커밋 밖에서도 발생할 수 있어 명시 커밋(중복 커밋은 무해).
+            await self.session.commit()
+        return {"scanned": len(rows), "embedded": embedded, "cleared": cleared}

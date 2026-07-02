@@ -116,6 +116,19 @@ async def run() -> int:
         users = await ChanceRepository(s).fetch_users()
         check("chance 사용자 포함", uid in {str(r.user_id) for r in users})
 
+        # 신호 소실 정리 경로 — 낡은 임베딩·매치 잔재 삭제(레포 수준)
+        opp = (await s.execute(text(
+            "SELECT id FROM chance_opportunities WHERE is_active = true ORDER BY id LIMIT 1"
+        ))).scalar_one()
+        await s.execute(text(
+            "INSERT INTO user_chance_matches (user_id, opportunity_id, match_score, match_reason) "
+            "VALUES (CAST(:u AS UUID), :o, 50, '정리 테스트') "
+            "ON CONFLICT (user_id, opportunity_id) DO NOTHING"), {"u": uid, "o": opp})
+        await s.commit()
+        check("임베딩 삭제", await repo.delete_user_embedding(uid) == 1)
+        check("매치 잔재 삭제", await repo.delete_user_matches(uid) == 1)
+        await s.commit()
+
         await _cleanup(s, uid)
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

@@ -133,6 +133,16 @@ _CLEAR_USER_MATCH_EXPLANATIONS = text(
     """
 )
 
+# 임베딩 가능 신호가 전부 사라진 사용자의 정리 — 낡은 벡터가 의미 매칭을 계속 만들지 않게 삭제.
+_DELETE_USER_EMBEDDING = text(
+    "DELETE FROM user_embeddings WHERE user_id = CAST(:user_id AS UUID)"
+)
+
+# 신호 소실 사용자의 매치 잔재 삭제 — 임베딩·키워드 둘 다 없으면 재점수 불가라 서빙 근거가 없다.
+_DELETE_USER_MATCHES = text(
+    "DELETE FROM user_chance_matches WHERE user_id = CAST(:user_id AS UUID)"
+)
+
 
 class EmbedRepository(BaseRepository):
     async def fetch_unembedded_docs(self, model: str, limit: int) -> list:
@@ -179,6 +189,16 @@ class EmbedRepository(BaseRepository):
         result = await self.session.execute(
             _CLEAR_USER_MATCH_EXPLANATIONS, {"user_id": str(user_id)}
         )
+        return result.rowcount or 0
+
+    async def delete_user_embedding(self, user_id) -> int:
+        """신호 소실 사용자의 임베딩을 삭제한다. 삭제 행 수 반환."""
+        result = await self.session.execute(_DELETE_USER_EMBEDDING, {"user_id": str(user_id)})
+        return result.rowcount or 0
+
+    async def delete_user_matches(self, user_id) -> int:
+        """신호 소실 사용자의 매치 잔재를 삭제한다. 삭제 행 수 반환."""
+        result = await self.session.execute(_DELETE_USER_MATCHES, {"user_id": str(user_id)})
         return result.rowcount or 0
 
     async def fetch_positive_evidence(self, user_ids: list, per_user: int = 10) -> dict[str, list[str]]:
