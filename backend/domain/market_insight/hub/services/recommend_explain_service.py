@@ -108,13 +108,21 @@ class RecommendExplainService:
             try:
                 user_context = _build_user_context(ctx_map.get(uid), ev_map.get(uid, []))
                 result = await self._explainer(user_context, items["sync"], items["chance"])
+                # 파서가 입력에 있던 slug/id 만 돌려주므로 원본 항목 조회는 항상 성공한다.
+                sync_by_slug = {i["sector_slug"]: i for i in items["sync"]}
+                chance_by_id = {i["opportunity_id"]: i for i in items["chance"]}
                 user_written = 0
                 for it in result.get("sync", []):
-                    await self.repo.update_sync_explanation(uid, it["sector_slug"], it["text"])
-                    user_written += 1
+                    src = sync_by_slug[it["sector_slug"]]
+                    user_written += await self.repo.update_sync_explanation(
+                        uid, it["sector_slug"], it["text"], src["score"], src["badge"]
+                    )
                 for it in result.get("chance", []):
-                    await self.repo.update_match_explanation(uid, it["opportunity_id"], it["text"])
-                    user_written += 1
+                    src = chance_by_id[it["opportunity_id"]]
+                    user_written += await self.repo.update_match_explanation(
+                        uid, it["opportunity_id"], it["text"],
+                        src["match_score"], src["match_reason"],
+                    )
                 await self.session.commit()
                 # rollback 된 건이 통계에 남지 않도록 커밋 성공 후에만 합산.
                 written += user_written

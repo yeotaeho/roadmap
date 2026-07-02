@@ -97,11 +97,16 @@ _FETCH_CONTEXT_EVIDENCE = text(
     """
 ).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
+# 설명 기록은 생성 근거가 된 결정론 입력이 그대로일 때만 — LLM 대기 중 동시 재점수(시간별 잡 중첩 등)로
+# 무효화된 행에 낡은 설명이 되살아나는 것을 방지한다.
 _UPDATE_SYNC_EXPLANATION = text(
     """
     UPDATE sync_scores_daily SET explanation = :explanation
     WHERE user_id = CAST(:user_id AS UUID) AND sector_slug = :sector_slug
       AND recorded_date = CURRENT_DATE
+      AND explanation IS NULL
+      AND score = :score
+      AND badge IS NOT DISTINCT FROM :badge
     """
 )
 
@@ -109,6 +114,9 @@ _UPDATE_MATCH_EXPLANATION = text(
     """
     UPDATE user_chance_matches SET match_explanation = :explanation
     WHERE user_id = CAST(:user_id AS UUID) AND opportunity_id = :opportunity_id
+      AND match_explanation IS NULL
+      AND match_score IS NOT DISTINCT FROM :match_score
+      AND match_reason IS NOT DISTINCT FROM :match_reason
     """
 )
 
@@ -174,14 +182,39 @@ class RecommendExplainRepository(BaseRepository):
             )
         return out
 
-    async def update_sync_explanation(self, user_id: str, sector_slug: str, explanation: str) -> None:
-        await self.session.execute(
+    async def update_sync_explanation(
+        self, user_id: str, sector_slug: str, explanation: str, score: int, badge: str | None
+    ) -> int:
+        """가드(입력 불변·미설명) 통과 시에만 기록. 실제 갱신된 행 수(0|1) 반환."""
+        result = await self.session.execute(
             _UPDATE_SYNC_EXPLANATION,
-            {"user_id": user_id, "sector_slug": sector_slug, "explanation": explanation},
+            {
+                "user_id": user_id,
+                "sector_slug": sector_slug,
+                "explanation": explanation,
+                "score": score,
+                "badge": badge,
+            },
         )
+        return result.rowcount or 0
 
-    async def update_match_explanation(self, user_id: str, opportunity_id: int, explanation: str) -> None:
-        await self.session.execute(
+    async def update_match_explanation(
+        self,
+        user_id: str,
+        opportunity_id: int,
+        explanation: str,
+        match_score: int | None,
+        match_reason: str | None,
+    ) -> int:
+        """가드(입력 불변·미설명) 통과 시에만 기록. 실제 갱신된 행 수(0|1) 반환."""
+        result = await self.session.execute(
             _UPDATE_MATCH_EXPLANATION,
-            {"user_id": user_id, "opportunity_id": opportunity_id, "explanation": explanation},
+            {
+                "user_id": user_id,
+                "opportunity_id": opportunity_id,
+                "explanation": explanation,
+                "match_score": match_score,
+                "match_reason": match_reason,
+            },
         )
+        return result.rowcount or 0
