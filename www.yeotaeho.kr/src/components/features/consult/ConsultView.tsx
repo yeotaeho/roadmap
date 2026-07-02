@@ -16,14 +16,14 @@ import {
   type CoachWalletItem,
 } from "@/data/coachContext";
 import {
-  createCoachSession,
-  fetchCoachMessages,
-  streamCoach,
-} from "@/lib/api/coach";
+  createConsultSession,
+  fetchConsultMessages,
+  streamConsult,
+} from "@/lib/api/consult";
 import { useStore } from "@/store";
 import { InsightWalletPanel } from "./InsightWalletPanel";
 
-type CoachMessage = {
+type ConsultMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
@@ -35,7 +35,7 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function buildProactiveGreeting(): CoachMessage {
+function buildProactiveGreeting(): ConsultMessage {
   return {
     id: "m0",
     role: "assistant",
@@ -45,9 +45,9 @@ function buildProactiveGreeting(): CoachMessage {
   };
 }
 
-const INITIAL_MESSAGES: CoachMessage[] = [buildProactiveGreeting()];
+const INITIAL_MESSAGES: ConsultMessage[] = [buildProactiveGreeting()];
 
-export function CoachView() {
+export function ConsultView() {
   const formId = useId();
   const endRef = useRef<HTMLDivElement>(null);
   const isAuthenticated = useStore((s) => s.isAuthenticated);
@@ -56,7 +56,7 @@ export function CoachView() {
   const [attached, setAttached] = useState<CoachAttachedContext | null>(
     DEMO_ATTACHED_CONTEXTS.roadmap
   );
-  const [messages, setMessages] = useState<CoachMessage[]>(() => INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ConsultMessage[]>(() => INITIAL_MESSAGES);
   const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -84,13 +84,13 @@ export function CoachView() {
     setSessionError(false);
     (async () => {
       try {
-        const id = await createCoachSession();
+        const id = await createConsultSession();
         if (cancelled) return;
         if (!id) {
           setSessionError(true);
           return;
         }
-        const history = await fetchCoachMessages(id);
+        const history = await fetchConsultMessages(id);
         if (cancelled) return;
         if (history.length > 0) {
           setMessages(
@@ -108,13 +108,13 @@ export function CoachView() {
     };
   }, [isAuthenticated, retryKey]);
 
-  const addToWallet = useCallback((msg: CoachMessage) => {
+  const addToWallet = useCallback((msg: ConsultMessage) => {
     const body = [msg.text, msg.code ? `\n\n\`\`\`python\n${msg.code}\n\`\`\`` : ""]
       .filter(Boolean)
       .join("");
     const item: CoachWalletItem = {
       id: uid(),
-      title: `코치 스니펫 · ${msg.badge ?? "응답"}`,
+      title: `상담 스니펫 · ${msg.badge ?? "응답"}`,
       body,
       createdAt: Date.now(),
     };
@@ -139,7 +139,7 @@ export function CoachView() {
     setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }]);
     setIsLoading(true);
     try {
-      await streamCoach(sessionId, text, (delta) => {
+      await streamConsult(sessionId, text, (delta) => {
         setMessages((m) =>
           m.map((msg) =>
             msg.id === assistantId ? { ...msg, text: msg.text + delta } : msg,
@@ -150,7 +150,7 @@ export function CoachView() {
       setMessages((m) =>
         m.map((msg) =>
           msg.id === assistantId && !msg.text
-            ? { ...msg, text: "코치 응답을 불러오지 못했어요. 로그인 상태를 확인하고 다시 시도해 주세요." }
+            ? { ...msg, text: "상담 응답을 불러오지 못했어요. 로그인 상태를 확인하고 다시 시도해 주세요." }
             : msg,
         ),
       );
@@ -170,7 +170,7 @@ export function CoachView() {
     <div className="mx-auto w-full space-y-4 px-0 sm:px-1">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AI 코치</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AI 상담</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
             Daily Mentor — 로드맵·찬스에서 가져온 맥락을 공유하고, 오른쪽 지갑에 스니펫을 쌓아
             실행로 이어갑니다.
@@ -290,7 +290,7 @@ export function CoachView() {
                 placeholder={
                   isAuthenticated
                     ? "예: 룰 기반으로 점수 합산 구조를 깔끔하게 잡고 싶어요"
-                    : "로그인 후 AI 코치와 대화할 수 있어요"
+                    : "로그인 후 AI 상담사와 대화할 수 있어요"
                 }
                 disabled={isLoading || !sessionId}
                 className="min-h-[44px] flex-1 rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -393,8 +393,8 @@ export function CoachView() {
 
       <p className="pb-16 text-center text-[11px] text-slate-500 lg:pb-0 dark:text-slate-500">
         {isAuthenticated
-          ? "AI 코치와의 대화는 세션 단위로 저장됩니다."
-          : "로그인 후 AI 코치와 대화하고 세션 히스토리를 이어갈 수 있어요."}
+          ? "AI 상담사와의 대화는 세션 단위로 저장됩니다."
+          : "로그인 후 AI 상담사와 대화하고 세션 히스토리를 이어갈 수 있어요."}
       </p>
     </div>
   );
