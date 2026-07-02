@@ -79,7 +79,13 @@ _FETCH_UNEMBEDDED_USERS = text(
     ) ev ON ev.user_id = u.id
     LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
     WHERE (
-        p.user_id IS NOT NULL
+        (p.user_id IS NOT NULL AND (
+            NULLIF(btrim(p.target_job), '') IS NOT NULL
+            OR (jsonb_typeof(p.interest_keywords) = 'array'
+                AND jsonb_array_length(p.interest_keywords) > 0)
+            OR pref.user_id IS NOT NULL
+            OR per.user_id IS NOT NULL
+        ))
         OR (sm.user_id IS NOT NULL
             AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
         OR EXISTS (

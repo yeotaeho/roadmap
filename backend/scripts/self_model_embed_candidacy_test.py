@@ -60,6 +60,16 @@ async def run() -> int:
         rows = await repo.fetch_unembedded_users(model, 1000)
         check("신호 없는 사용자 제외", uid not in {str(r.user_id) for r in rows})
 
+        # 완전 빈 프로필 행(내용·성향·페르소나 없음)도 자격 미달 — 영구 재스캔 방지
+        await s.execute(text(
+            "INSERT INTO user_sync_profiles (user_id) VALUES (CAST(:u AS UUID))"), {"u": uid})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("빈 프로필 행 제외", uid not in {str(r.user_id) for r in rows})
+        await s.execute(text(
+            "DELETE FROM user_sync_profiles WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        await s.commit()
+
         # 빈 자기모델(축 전부 null)은 임베딩할 것이 없어 자격 미달
         await s.execute(text(
             "INSERT INTO user_self_model (user_id, source, updated_at) "

@@ -135,7 +135,13 @@ _FETCH_USERS = text(
     LEFT JOIN user_preferences pref ON pref.user_id = u.id
     LEFT JOIN user_personas per ON per.user_id = u.id
     LEFT JOIN user_self_model sm ON sm.user_id = u.id
-    WHERE p.user_id IS NOT NULL
+    WHERE (p.user_id IS NOT NULL AND (
+            NULLIF(btrim(p.target_job), '') IS NOT NULL
+            OR (jsonb_typeof(p.interest_keywords) = 'array'
+                AND jsonb_array_length(p.interest_keywords) > 0)
+            OR pref.user_id IS NOT NULL
+            OR per.user_id IS NOT NULL
+          ))
        OR (sm.user_id IS NOT NULL
            AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
        OR EXISTS (
