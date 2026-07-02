@@ -783,6 +783,7 @@ CREATE TABLE sync_scores_daily (
     trend_delta_pct DECIMAL(5,2),             -- 전일/전주 대비 변화율
     reason_lines JSONB,                        -- ["이유1", "이유2", "이유3"]
     keyword_evidence JSONB,                    -- ["키워드A", "키워드B"]
+    explanation TEXT,                         -- LLM 추천 설명(입력 변경 시 NULL 무효화)
     created_at TIMESTAMPTZ DEFAULT now(),      -- 생성 시각
     UNIQUE (user_id, sector_slug, recorded_date)
 );
@@ -823,6 +824,7 @@ CREATE TABLE user_chance_matches (
 
     match_score INT NOT NULL CHECK (match_score BETWEEN 0 AND 100), -- 적합도 점수
     match_reason VARCHAR(255) NOT NULL,       -- 추천 사유 1줄
+    match_explanation TEXT,                   -- LLM 매칭 설명(match_reason 은 결정론 폴백)
 
     is_saved BOOLEAN DEFAULT FALSE,           -- 북마크 여부
     is_applied BOOLEAN DEFAULT FALSE,         -- 지원 완료 여부

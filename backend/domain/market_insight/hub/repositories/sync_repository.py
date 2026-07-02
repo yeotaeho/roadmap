@@ -53,14 +53,19 @@ _UPSERT_SYNC_GOLD = text(
     INSERT INTO sync_scores_daily (user_id, sector_slug, recorded_date, score, badge)
     VALUES (:user_id, :sector_slug, CURRENT_DATE, :score, :badge)
     ON CONFLICT (user_id, sector_slug, recorded_date) DO UPDATE SET
-        score = EXCLUDED.score, badge = EXCLUDED.badge
+        score = EXCLUDED.score,
+        badge = EXCLUDED.badge,
+        explanation = CASE
+            WHEN sync_scores_daily.score = EXCLUDED.score
+             AND sync_scores_daily.badge IS NOT DISTINCT FROM EXCLUDED.badge
+            THEN sync_scores_daily.explanation ELSE NULL END
     """
 )
 
 _FETCH_SCORES = text(
     """
     SELECT DISTINCT ON (d.sector_slug)
-        d.sector_slug, s.name_ko, s.accent_color, d.score, d.badge, d.recorded_date
+        d.sector_slug, s.name_ko, s.accent_color, d.score, d.badge, d.explanation, d.recorded_date
     FROM sync_scores_daily d
     JOIN sectors s ON s.slug = d.sector_slug
     WHERE d.user_id = CAST(:user_id AS UUID)
@@ -115,6 +120,7 @@ class SyncRepository(BaseRepository):
                 "accent_color": r.accent_color,
                 "score": r.score,
                 "badge": r.badge,
+                "explanation": r.explanation,
                 "recorded_date": r.recorded_date.isoformat() if r.recorded_date else None,
             }
             for r in rows

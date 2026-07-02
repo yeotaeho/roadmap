@@ -54,6 +54,21 @@ _FETCH_SILVER_FOR_GOLD = text(
     """
 )
 
+# 공고 텍스트(제목·유형) 변경 시 해당 공고의 LLM 매칭 설명을 무효화 —
+# 문서 임베딩은 재계산되지 않아 점수·사유가 그대로여도 설명이 옛 문안을 참조할 수 있다.
+_CLEAR_STALE_MATCH_EXPLANATIONS = text(
+    """
+    UPDATE user_chance_matches m
+    SET match_explanation = NULL
+    FROM chance_opportunities o
+    WHERE o.raw_table_ref = 'raw_opportunity_data' AND o.raw_id = :raw_id
+      AND m.opportunity_id = o.id
+      AND m.match_explanation IS NOT NULL
+      AND (o.title IS DISTINCT FROM :title
+           OR o.opportunity_type IS DISTINCT FROM :opportunity_type)
+    """
+)
+
 _UPSERT_OPPORTUNITY = text(
     """
     INSERT INTO chance_opportunities
@@ -109,14 +124,32 @@ _FETCH_ACTIVE_OPPS = text(
     """
 )
 
+# 매칭용 사용자 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 포함(코치-only).
 _FETCH_USERS = text(
     """
-    SELECT p.user_id, p.target_job, p.interest_keywords,
+    SELECT u.id AS user_id, p.target_job, p.interest_keywords,
            pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
            per.skills, per.certifications, per.languages, per.projects
-    FROM user_sync_profiles p
-    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
-    LEFT JOIN user_personas per ON per.user_id = p.user_id
+    FROM users u
+    LEFT JOIN user_sync_profiles p ON p.user_id = u.id
+    LEFT JOIN user_preferences pref ON pref.user_id = u.id
+    LEFT JOIN user_personas per ON per.user_id = u.id
+    LEFT JOIN user_self_model sm ON sm.user_id = u.id
+    WHERE (p.user_id IS NOT NULL AND (
+            NULLIF(btrim(p.target_job), '') IS NOT NULL
+            OR (jsonb_typeof(p.interest_keywords) = 'array'
+                AND jsonb_array_length(p.interest_keywords) > 0)
+            OR pref.user_id IS NOT NULL
+            OR per.user_id IS NOT NULL
+          ))
+       OR (sm.user_id IS NOT NULL
+           AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
+       OR EXISTS (
+            SELECT 1 FROM user_self_model_evidence ev
+            WHERE ev.user_id = u.id AND ev.is_sensitive = false
+              AND ev.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+              AND (ev.polarity IS NULL OR ev.polarity <> 'dislike')
+          )
     """
 )
 
@@ -141,13 +174,17 @@ _UPSERT_MATCH = text(
     ON CONFLICT (user_id, opportunity_id) DO UPDATE SET
         match_score = EXCLUDED.match_score,
         match_reason = EXCLUDED.match_reason,
+        match_explanation = CASE
+            WHEN user_chance_matches.match_score IS NOT DISTINCT FROM EXCLUDED.match_score
+             AND user_chance_matches.match_reason IS NOT DISTINCT FROM EXCLUDED.match_reason
+            THEN user_chance_matches.match_explanation ELSE NULL END,
         updated_at = now()
     """
 )
 
 _FETCH_MATCHES = text(
     """
-    SELECT m.opportunity_id, m.match_score, m.match_reason, m.is_saved, m.is_applied,
+    SELECT m.opportunity_id, m.match_score, m.match_reason, m.match_explanation, m.is_saved, m.is_applied,
            o.title, o.opportunity_type, o.host_name, o.d_day_date, o.sector_slug
     FROM user_chance_matches m
     JOIN chance_opportunities o ON o.id = m.opportunity_id
@@ -182,11 +219,17 @@ class ChanceRepository(BaseRepository):
         for r in rows:
             benefits = r.extracted_benefits or []
             target = r.extracted_target or []
+            new_title = (r.title or "공고")[:255]
+            # upsert 전에 기존 행과 제목·유형이 달라지는 공고의 설명을 무효화(같은 트랜잭션).
+            await self.session.execute(
+                _CLEAR_STALE_MATCH_EXPLANATIONS,
+                {"raw_id": r.raw_id, "title": new_title, "opportunity_type": r.extracted_type},
+            )
             await self.session.execute(
                 _UPSERT_OPPORTUNITY,
                 {
                     "sector_slug": r.sector_slug,
-                    "title": (r.title or "공고")[:255],
+                    "title": new_title,
                     "opportunity_type": r.extracted_type,
                     "host_name": (r.host_name or None) and r.host_name[:150],
                     "benefit_summary": ("; ".join(benefits))[:255] or None,
@@ -270,6 +313,7 @@ class ChanceRepository(BaseRepository):
                 "opportunity_id": r.opportunity_id,
                 "match_score": r.match_score,
                 "match_reason": r.match_reason,
+                "match_explanation": r.match_explanation,
                 "is_saved": r.is_saved,
                 "is_applied": r.is_applied,
                 "title": r.title,

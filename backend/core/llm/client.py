@@ -144,6 +144,17 @@ _RIASEC_CODES = ("R", "I", "A", "S", "E", "C")
 _EVIDENCE_DIMS = ("like", "dislike", "value", "constraint", "sensitive", "aspiration", "skill_signal", "other")
 _EVIDENCE_POLARITIES = ("like", "dislike", "neutral")
 
+_RECOMMEND_EXPLAIN_SYSTEM_PROMPT = (
+    "너는 청년 진로 내비게이터의 추천 설명가다. 사용자 컨텍스트(직무·관심·자기모델: 성향 라벨·서사·"
+    "좋아하는 것 positives·회피하는 것 dislikes)와 추천 항목별 결정론 지표(점수·적합도·트렌드·매칭 사유)를 받아, "
+    "항목마다 '왜 이 추천인지'를 존댓말 1~2문장으로 쓴다. 입력에 주어진 사실만 사용하고 새 사실을 지어내지 마라. "
+    "dislikes 와 명확히 충돌하는 항목은 문장 안에 짧은 주의를 포함하라(점수 언급은 선택). "
+    'JSON 객체만 출력하라. 형식: {"sync": [{"sector_slug": <입력에 있던 slug>, "text": <설명>}], '
+    '"chance": [{"opportunity_id": <입력에 있던 정수 id>, "text": <설명>}]}. 입력에 없는 slug·id 를 만들지 마라.'
+)
+
+_EXPLAIN_TEXT_MAX = 200
+
 
 def _parse_self_model_extract(raw: str | None) -> dict:
     """자기모델 추출 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
@@ -206,6 +217,54 @@ def _parse_self_model_extract(raw: str | None) -> dict:
         "narrative": narrative,
         "evidence": evidence,
     }
+
+
+def _parse_recommend_explain(
+    raw: str | None, valid_slugs: list[str], valid_opp_ids: list[int]
+) -> dict:
+    """추천 설명 응답을 검증된 {sync, chance} 로 파싱한다. 무네트워크 순수 함수.
+
+    모르는 slug/id·빈 text·중복은 버리고 text 는 200자 클램프. 실패 시 빈 리스트(쓰기 없음 → 다음날 재시도).
+    """
+    empty: dict = {"sync": [], "chance": []}
+    try:
+        obj = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        return {"sync": [], "chance": []}
+    if not isinstance(obj, dict):
+        return empty
+
+    slugs = set(valid_slugs)
+    sync_out: list[dict] = []
+    seen_slugs: set[str] = set()
+    sync_raw = obj.get("sync")
+    for it in sync_raw if isinstance(sync_raw, list) else []:
+        if not isinstance(it, dict):
+            continue
+        slug = it.get("sector_slug")
+        text_v = it.get("text")
+        if slug in slugs and slug not in seen_slugs and isinstance(text_v, str) and text_v.strip():
+            seen_slugs.add(slug)
+            sync_out.append({"sector_slug": slug, "text": text_v.strip()[:_EXPLAIN_TEXT_MAX]})
+
+    opp_ids = set(valid_opp_ids)
+    chance_out: list[dict] = []
+    seen_ids: set[int] = set()
+    chance_raw = obj.get("chance")
+    for it in chance_raw if isinstance(chance_raw, list) else []:
+        if not isinstance(it, dict):
+            continue
+        oid = it.get("opportunity_id")
+        text_v = it.get("text")
+        if (
+            isinstance(oid, int) and not isinstance(oid, bool)
+            and oid in opp_ids and oid not in seen_ids
+            and isinstance(text_v, str) and text_v.strip()
+        ):
+            seen_ids.add(oid)
+            chance_out.append({"opportunity_id": oid, "text": text_v.strip()[:_EXPLAIN_TEXT_MAX]})
+
+    return {"sync": sync_out, "chance": chance_out}
 
 _SENTIMENT_LABELS = ("긍정", "중립", "부정")
 
@@ -768,6 +827,29 @@ class LlmClient:
             ],
         )
         return _parse_self_model_extract(resp.choices[0].message.content)
+
+    async def explain_recommendations(
+        self, user_context: dict, sync_items: list[dict], chance_items: list[dict]
+    ) -> dict:
+        """사용자 컨텍스트+추천 항목 결정론 지표에서 항목별 자연어 설명을 생성한다."""
+        payload = json.dumps(
+            {"user": user_context, "sync": sync_items, "chance": chance_items},
+            ensure_ascii=False, default=str,
+        )
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _RECOMMEND_EXPLAIN_SYSTEM_PROMPT},
+                {"role": "user", "content": payload},
+            ],
+        )
+        return _parse_recommend_explain(
+            resp.choices[0].message.content,
+            [i["sector_slug"] for i in sync_items],
+            [i["opportunity_id"] for i in chance_items],
+        )
 
     async def generate_roadmap(self, context: str) -> dict:
         """페르소나·목표·트렌드 맥락에서 개인화 로드맵(퀘스트 트리)을 생성한다. 무효/실패 시 {}."""

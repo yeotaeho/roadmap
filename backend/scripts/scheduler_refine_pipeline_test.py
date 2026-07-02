@@ -27,8 +27,9 @@ def check(name: str, cond: bool) -> None:
 _EXPECTED_ORDER = [
     "text_classify", "entity_extract", "investment_refine", "gap_refine",
     "tech_demand_gap", "gap_project", "causal_refine",
-    "chance_refine", "chance_match", "document_embed", "user_embed",
-    "pulse_refine", "briefing_refine", "sync_refine",
+    "chance_refine", "document_embed", "user_embed", "chance_match",
+    "pulse_refine", "market_forecast", "briefing_refine", "sync_refine",
+    "recommend_explain",
 ]
 
 
@@ -60,7 +61,7 @@ def test_pipeline_runs_in_order() -> None:
         sched._run_job = original
 
     check("실행 순서 = 정의 순서", recorded == _EXPECTED_ORDER)
-    check("steps 카운트 반환", result == {"steps": 14})
+    check("steps 카운트 반환", result == {"steps": 16})
 
 
 def main() -> int:

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,6 +45,9 @@ class SyncScoresDaily(Base):
     recorded_date: Mapped[date] = mapped_column(Date, nullable=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     badge: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    explanation: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="LLM 생성 추천 설명(없으면 결정론 폴백 표시)"
+    )
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )

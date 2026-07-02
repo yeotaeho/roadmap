@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import UUID
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
@@ -50,25 +51,83 @@ _INSERT_DOC_EMB = text(
     """
 )
 
+# 임베딩 후보 — users 기준. 프로필이 없어도 임베딩 가능 신호(비어있지 않은 자기모델 축·긍정 근거)가
+# 있으면 후보(코치-only 포함). dislike-only·빈 자기모델 사용자는 임베딩할 것이 없어 자격에서 제외 —
+# 매 실행 '_' 스킵으로 LIMIT 슬롯을 소모하며 유효 사용자를 밀어내지 않게 한다.
+# 타임스탬프 비교에 자기모델 갱신·근거 추가를 포함해 코치 대화가 재임베딩을 트리거한다.
+# ev 워터마크는 임베딩·설명 프롬프트에 입력되는 근거 전체(dislike 포함, constraint·민감 제외)를 본다 —
+# dislike 변경도 설명 무효화를 트리거해야 하며, 해시 불변 후보는 touch 로 computed_at 을 전진시켜
+# 영구 재후보를 막는다(embed_service 참고).
 _FETCH_UNEMBEDDED_USERS = text(
     """
-    SELECT p.user_id, p.target_job, p.interest_keywords,
+    SELECT u.id AS user_id, p.target_job, p.interest_keywords,
            pref.work_style, pref.company_size_pref, pref.work_type_pref, pref.work_values,
            per.skills, per.certifications, per.languages, per.projects,
+           sm.riasec, sm.narrative_summary,
            e.source_version
-    FROM user_sync_profiles p
-    LEFT JOIN user_preferences pref ON pref.user_id = p.user_id
-    LEFT JOIN user_personas per ON per.user_id = p.user_id
-    LEFT JOIN user_embeddings e ON e.user_id = p.user_id AND e.embedding_model = :model
-    WHERE e.user_id IS NULL
-       OR GREATEST(
-            p.updated_at,
-            COALESCE(pref.updated_at, p.updated_at),
-            COALESCE(per.updated_at, p.updated_at)
-          ) > e.computed_at
+    FROM users u
+    LEFT JOIN user_sync_profiles p ON p.user_id = u.id
+    LEFT JOIN user_preferences pref ON pref.user_id = u.id
+    LEFT JOIN user_personas per ON per.user_id = u.id
+    LEFT JOIN user_self_model sm ON sm.user_id = u.id
+    LEFT JOIN (
+        SELECT user_id, max(created_at) AS last_evidence_at
+        FROM user_self_model_evidence
+        WHERE is_sensitive = false
+          AND dimension IN ('like', 'dislike', 'value', 'aspiration', 'skill_signal')
+        GROUP BY user_id
+    ) ev ON ev.user_id = u.id
+    LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
+    WHERE (
+        (p.user_id IS NOT NULL AND (
+            NULLIF(btrim(p.target_job), '') IS NOT NULL
+            OR (jsonb_typeof(p.interest_keywords) = 'array'
+                AND jsonb_array_length(p.interest_keywords) > 0)
+            OR pref.user_id IS NOT NULL
+            OR per.user_id IS NOT NULL
+        ))
+        OR (sm.user_id IS NOT NULL
+            AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
+        OR EXISTS (
+            SELECT 1 FROM user_self_model_evidence pe
+            WHERE pe.user_id = u.id AND pe.is_sensitive = false
+              AND pe.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+              AND (pe.polarity IS NULL OR pe.polarity <> 'dislike')
+        )
+    )
+      AND (
+        e.user_id IS NULL
+        OR GREATEST(
+             COALESCE(p.updated_at, to_timestamp(0)),
+             COALESCE(pref.updated_at, to_timestamp(0)),
+             COALESCE(per.updated_at, to_timestamp(0)),
+             COALESCE(sm.updated_at, to_timestamp(0)),
+             COALESCE(ev.last_evidence_at, to_timestamp(0))
+           ) > e.computed_at
+      )
     LIMIT :lim
     """
 )
+
+# 임베딩용 비민감·긍정 근거 — 사용자별 confidence·최신순 상위 N. dislike/constraint/민감 제외.
+_FETCH_POSITIVE_EVIDENCE = text(
+    """
+    SELECT user_id, content FROM (
+        SELECT user_id, content,
+               ROW_NUMBER() OVER (
+                   PARTITION BY user_id
+                   ORDER BY confidence DESC NULLS LAST, created_at DESC, id DESC
+               ) AS rn
+        FROM user_self_model_evidence
+        WHERE user_id IN :uids
+          AND is_sensitive = false
+          AND dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+          AND (polarity IS NULL OR polarity <> 'dislike')
+    ) t
+    WHERE rn <= :per_user
+    ORDER BY user_id, rn
+    """
+).bindparams(bindparam("uids", expanding=True, type_=UUID(as_uuid=False)))
 
 _UPSERT_USER_EMB = text(
     """
@@ -79,6 +138,44 @@ _UPSERT_USER_EMB = text(
         source_version = EXCLUDED.source_version,
         computed_at = now()
     """
+)
+
+
+# 사용자 임베딩이 실제로 갱신된 순간 = 개인화 컨텍스트가 실질 변경된 순간 —
+# 점수·사유가 우연히 불변이어도 낡은 개인화 설명이 남지 않도록 해당 사용자의 매치 설명을 무효화.
+_CLEAR_USER_MATCH_EXPLANATIONS = text(
+    """
+    UPDATE user_chance_matches
+    SET match_explanation = NULL
+    WHERE user_id = CAST(:user_id AS UUID) AND match_explanation IS NOT NULL
+    """
+)
+
+# 동일 취지의 Sync 대칭 — 당일 행의 설명도 컨텍스트 변경 시 무효화(내일 행은 어차피 NULL 시작).
+_CLEAR_USER_SYNC_EXPLANATIONS = text(
+    """
+    UPDATE sync_scores_daily
+    SET explanation = NULL
+    WHERE user_id = CAST(:user_id AS UUID)
+      AND recorded_date = CURRENT_DATE
+      AND explanation IS NOT NULL
+    """
+)
+
+# 해시 불변 후보의 워터마크 소진 — 임베딩 텍스트 밖 프롬프트 입력(dislike 등)만 바뀐 경우
+# computed_at 을 전진시켜 다음 실행부터 후보에서 빠지게 한다(설명 무효화는 호출부에서 동반).
+_TOUCH_USER_EMBEDDING = text(
+    "UPDATE user_embeddings SET computed_at = now() WHERE user_id = CAST(:user_id AS UUID)"
+)
+
+# 임베딩 가능 신호가 전부 사라진 사용자의 정리 — 낡은 벡터가 의미 매칭을 계속 만들지 않게 삭제.
+_DELETE_USER_EMBEDDING = text(
+    "DELETE FROM user_embeddings WHERE user_id = CAST(:user_id AS UUID)"
+)
+
+# 신호 소실 사용자의 매치 잔재 삭제 — 임베딩·키워드 둘 다 없으면 재점수 불가라 서빙 근거가 없다.
+_DELETE_USER_MATCHES = text(
+    "DELETE FROM user_chance_matches WHERE user_id = CAST(:user_id AS UUID)"
 )
 
 
@@ -121,3 +218,47 @@ class EmbedRepository(BaseRepository):
                 "model": model,
             },
         )
+
+    async def clear_user_match_explanations(self, user_id) -> int:
+        """개인화 컨텍스트 변경(임베딩 실갱신) 사용자의 매치 설명을 무효화한다. 갱신 행 수 반환."""
+        result = await self.session.execute(
+            _CLEAR_USER_MATCH_EXPLANATIONS, {"user_id": str(user_id)}
+        )
+        return result.rowcount or 0
+
+    async def touch_user_embedding(self, user_id) -> int:
+        """해시 불변 후보의 computed_at 을 전진시켜 워터마크를 소진한다. 갱신 행 수 반환."""
+        result = await self.session.execute(_TOUCH_USER_EMBEDDING, {"user_id": str(user_id)})
+        return result.rowcount or 0
+
+    async def clear_user_sync_explanations(self, user_id) -> int:
+        """개인화 컨텍스트 변경 사용자의 당일 Sync 설명을 무효화한다. 갱신 행 수 반환."""
+        result = await self.session.execute(
+            _CLEAR_USER_SYNC_EXPLANATIONS, {"user_id": str(user_id)}
+        )
+        return result.rowcount or 0
+
+    async def delete_user_embedding(self, user_id) -> int:
+        """신호 소실 사용자의 임베딩을 삭제한다. 삭제 행 수 반환."""
+        result = await self.session.execute(_DELETE_USER_EMBEDDING, {"user_id": str(user_id)})
+        return result.rowcount or 0
+
+    async def delete_user_matches(self, user_id) -> int:
+        """신호 소실 사용자의 매치 잔재를 삭제한다. 삭제 행 수 반환."""
+        result = await self.session.execute(_DELETE_USER_MATCHES, {"user_id": str(user_id)})
+        return result.rowcount or 0
+
+    async def fetch_positive_evidence(self, user_ids: list, per_user: int = 10) -> dict[str, list[str]]:
+        """사용자별 임베딩용 비민감·긍정 근거 content 목록. {str(user_id): [content...]}."""
+        if not user_ids:
+            return {}
+        rows = (
+            await self.session.execute(
+                _FETCH_POSITIVE_EVIDENCE,
+                {"uids": [str(u) for u in user_ids], "per_user": per_user},
+            )
+        ).all()
+        out: dict[str, list[str]] = {}
+        for r in rows:
+            out.setdefault(str(r.user_id), []).append(r.content)
+        return out

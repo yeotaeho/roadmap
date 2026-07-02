@@ -70,6 +70,7 @@ export interface ChanceMatchLive {
   d_day_date: string | null;
   match_score: number | null;
   match_reason: string | null;
+  match_explanation: string | null;
 }
 
 export async function fetchMatches(): Promise<ChanceMatchLive[]> {
@@ -85,6 +86,7 @@ export async function fetchMatches(): Promise<ChanceMatchLive[]> {
     d_day_date: (m.d_day_date ?? null) as string | null,
     match_score: (m.match_score ?? null) as number | null,
     match_reason: (m.match_reason ?? null) as string | null,
+    match_explanation: (m.match_explanation ?? null) as string | null,
   }));
 }
 
@@ -133,6 +135,7 @@ export interface SyncScoreLive {
   accent_color: string;
   score: number;
   badge: string | null;
+  explanation: string | null;
   recorded_date: string | null;
 }
 
