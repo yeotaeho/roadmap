@@ -60,10 +60,19 @@ async def run() -> int:
         rows = await repo.fetch_unembedded_users(model, 1000)
         check("신호 없는 사용자 제외", uid not in {str(r.user_id) for r in rows})
 
-        # 자기모델만 생기면 후보 진입(프로필 없음)
+        # 빈 자기모델(축 전부 null)은 임베딩할 것이 없어 자격 미달
         await s.execute(text(
-            "INSERT INTO user_self_model (user_id, riasec, narrative_summary, source, updated_at) "
-            "VALUES (CAST(:u AS UUID), CAST(:r AS JSONB), '탐구 지향', 'coach_extraction', now())"
+            "INSERT INTO user_self_model (user_id, source, updated_at) "
+            "VALUES (CAST(:u AS UUID), 'coach_extraction', now())"
+        ), {"u": uid})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("빈 자기모델 제외", uid not in {str(r.user_id) for r in rows})
+
+        # 자기모델 축이 차면 후보 진입(프로필 없음)
+        await s.execute(text(
+            "UPDATE user_self_model SET riasec = CAST(:r AS JSONB), narrative_summary = '탐구 지향', "
+            "updated_at = now() WHERE user_id = CAST(:u AS UUID)"
         ), {"u": uid, "r": '{"top_codes": ["I"]}'})
         await s.commit()
         rows = await repo.fetch_unembedded_users(model, 1000)

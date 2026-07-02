@@ -51,7 +51,9 @@ _INSERT_DOC_EMB = text(
     """
 )
 
-# 임베딩 후보 — users 기준. 프로필이 없어도 자기모델·비민감 근거가 있으면 후보(코치-only 포함).
+# 임베딩 후보 — users 기준. 프로필이 없어도 임베딩 가능 신호(비어있지 않은 자기모델 축·긍정 근거)가
+# 있으면 후보(코치-only 포함). dislike-only·빈 자기모델 사용자는 임베딩할 것이 없어 자격에서 제외 —
+# 매 실행 '_' 스킵으로 LIMIT 슬롯을 소모하며 유효 사용자를 밀어내지 않게 한다.
 # 타임스탬프 비교에 자기모델 갱신·근거 추가를 포함해 코치 대화가 재임베딩을 트리거한다.
 # ev 워터마크는 임베딩·설명 프롬프트에 입력되는 근거 전체(dislike 포함, constraint·민감 제외)를 본다 —
 # dislike 변경도 설명 무효화를 트리거해야 하며, 해시 불변 후보는 touch 로 computed_at 을 전진시켜
@@ -76,7 +78,17 @@ _FETCH_UNEMBEDDED_USERS = text(
         GROUP BY user_id
     ) ev ON ev.user_id = u.id
     LEFT JOIN user_embeddings e ON e.user_id = u.id AND e.embedding_model = :model
-    WHERE (p.user_id IS NOT NULL OR sm.user_id IS NOT NULL OR ev.user_id IS NOT NULL)
+    WHERE (
+        p.user_id IS NOT NULL
+        OR (sm.user_id IS NOT NULL
+            AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
+        OR EXISTS (
+            SELECT 1 FROM user_self_model_evidence pe
+            WHERE pe.user_id = u.id AND pe.is_sensitive = false
+              AND pe.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+              AND (pe.polarity IS NULL OR pe.polarity <> 'dislike')
+        )
+    )
       AND (
         e.user_id IS NULL
         OR GREATEST(

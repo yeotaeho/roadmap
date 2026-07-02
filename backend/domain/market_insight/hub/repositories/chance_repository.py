@@ -135,10 +135,14 @@ _FETCH_USERS = text(
     LEFT JOIN user_preferences pref ON pref.user_id = u.id
     LEFT JOIN user_personas per ON per.user_id = u.id
     LEFT JOIN user_self_model sm ON sm.user_id = u.id
-    WHERE p.user_id IS NOT NULL OR sm.user_id IS NOT NULL
+    WHERE p.user_id IS NOT NULL
+       OR (sm.user_id IS NOT NULL
+           AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
        OR EXISTS (
             SELECT 1 FROM user_self_model_evidence ev
             WHERE ev.user_id = u.id AND ev.is_sensitive = false
+              AND ev.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
+              AND (ev.polarity IS NULL OR ev.polarity <> 'dislike')
           )
     """
 )
