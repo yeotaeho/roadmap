@@ -12,9 +12,13 @@ export interface RiasecScores {
   R: number; I: number; A: number; S: number; E: number; C: number;
 }
 
+export interface BigFiveScores {
+  O: number; C: number; E: number; A: number; N: number;
+}
+
 export interface SelfModelLive {
   riasec: { scores?: RiasecScores; top_codes: string[] } | null;
-  bigFive: Record<string, number> | null;
+  bigFive: { scores: BigFiveScores } | null;
   narrativeSummary: string | null;
   axisConfidence: Record<string, number> | null;
   evidence: SelfModelEvidence[];

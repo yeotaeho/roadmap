@@ -29,6 +29,8 @@ def run() -> int:
     ok = _parse_self_model_extract(json.dumps({
         "riasec_scores": {"R": -5, "I": 120, "A": 80, "S": 40, "E": 55, "C": 30},
         "riasec_axis_confidence": {"R": 0.1, "I": 1.5, "A": 0.8, "S": 0.4, "E": 0.5, "C": 0.2},
+        "big_five_scores": {"O": 70, "C": 120, "E": -5, "A": 55, "N": 40},
+        "big_five_axis_confidence": {"O": 0.6, "C": 1.4, "E": 0.1, "A": 0.5, "N": 0.3},
         "narrative": "  탐구·표현 지향  ",
         "evidence": [
             {"dimension": "like", "polarity": "like", "content": "발표를 좋아함", "confidence": 0.9, "is_sensitive": False},
@@ -49,12 +51,17 @@ def run() -> int:
         and ok["evidence"][1]["polarity"] is None,
         str(ok["evidence"]),
     )
+    check("big_five 5키", set(ok["big_five_scores"].keys()) == {"O", "C", "E", "A", "N"}, str(ok["big_five_scores"]))
+    check("big_five 클램프", ok["big_five_scores"]["C"] == 100 and ok["big_five_scores"]["E"] == 0, str(ok["big_five_scores"]))
+    check("big_five conf 클램프", ok["big_five_axis_confidence"]["C"] == 1.0)
 
     # 누락 키 → score 50·conf 0
     partial = _parse_self_model_extract(json.dumps({"riasec_scores": {"I": 70}}))
     check("누락 축 score 50", partial["riasec_scores"]["R"] == 50, str(partial["riasec_scores"]))
     check("누락 축 conf 0", partial["riasec_axis_confidence"]["R"] == 0.0)
     check("있는 축 반영", partial["riasec_scores"]["I"] == 70)
+    check("big_five 누락 축 50", partial["big_five_scores"]["O"] == 50, str(partial["big_five_scores"]))
+    check("big_five 누락 conf 0", partial["big_five_axis_confidence"]["O"] == 0.0)
 
     # 비JSON·비dict → 전 축 50·conf 0·narrative None·evidence []
     empty = _parse_self_model_extract("not json")

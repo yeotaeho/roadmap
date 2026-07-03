@@ -45,20 +45,24 @@ class SelfModelExtractionService:
 
         result = await self._extractor(new_msgs)
         svc = SelfModelService(self.db)
-        window_conf = result["riasec_axis_confidence"]
-        axis_confidence = {"riasec": sum(window_conf.values()) / len(window_conf) if window_conf else 0.0}
+        r_conf = result["riasec_axis_confidence"]
+        bf_conf = result["big_five_axis_confidence"]
+        axis_confidence = {
+            "riasec": sum(r_conf.values()) / len(r_conf) if r_conf else 0.0,
+            "big_five": sum(bf_conf.values()) / len(bf_conf) if bf_conf else 0.0,
+        }
         if result["narrative"]:
             axis_confidence["narrative_summary"] = max(axis_confidence["riasec"], NARRATIVE_DEFAULT_CONFIDENCE)
         incoming = {
-            "riasec": {"window_scores": result["riasec_scores"], "window_conf": window_conf},
-            "big_five": None,
+            "riasec": {"window_scores": result["riasec_scores"], "window_conf": r_conf},
+            "big_five": {"window_scores": result["big_five_scores"], "window_conf": bf_conf},
             "narrative_summary": result["narrative"],
             "axis_confidence": axis_confidence,
         }
         await svc.upsert_structured(user_id, incoming, SOURCE)
         n_ev = await svc.append_evidence(user_id, result["evidence"], SOURCE)
         await self.coach_repo.update_extracted(session_id, cutoff)
-        return {"extracted": len(new_msgs), "evidence": n_ev, "riasec": True}
+        return {"extracted": len(new_msgs), "evidence": n_ev, "riasec": True, "big_five": True}
 
     async def extract_pending(self, limit: int = 20) -> dict:
         """신규 메시지 충분한 세션을 스캔해 각각 추출한다. 건별 실패 격리."""

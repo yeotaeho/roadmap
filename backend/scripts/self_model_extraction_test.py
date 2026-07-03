@@ -64,6 +64,8 @@ async def run() -> int:
             return {
                 "riasec_scores": {"R": 50, "I": 88, "A": 82, "S": 50, "E": 55, "C": 45},
                 "riasec_axis_confidence": {"R": 0.2, "I": 0.9, "A": 0.8, "S": 0.2, "E": 0.3, "C": 0.2},
+                "big_five_scores": {"O": 60, "C": 85, "E": 45, "A": 70, "N": 25},
+                "big_five_axis_confidence": {"O": 0.4, "C": 0.9, "E": 0.3, "A": 0.6, "N": 0.7},
                 "narrative": "탐구·표현 지향",
                 "evidence": [
                     {"dimension": "like", "polarity": "like", "content": "발표를 좋아함", "confidence": 0.9, "is_sensitive": False},
@@ -81,6 +83,9 @@ async def run() -> int:
         riasec = model["riasec"]
         check("riasec scores 존재", isinstance(riasec, dict) and "scores" in riasec, str(riasec))
         check("riasec I 최상위 근접", riasec["scores"]["I"] >= riasec["scores"]["R"], str(riasec["scores"]))
+        big_five = model["bigFive"]
+        check("big_five scores 존재", isinstance(big_five, dict) and "scores" in big_five, str(big_five))
+        check("big_five C 상승", big_five["scores"]["C"] >= big_five["scores"]["E"], str(big_five["scores"]))
         check("narrative 반영", model["narrativeSummary"] == "탐구·표현 지향")
         contents = [e["content"] for e in model["evidence"]]
         check("비민감 근거 저장", "발표를 좋아함" in contents)
@@ -103,6 +108,8 @@ async def run() -> int:
             return {
                 "riasec_scores": {c: 50 for c in ("R", "I", "A", "S", "E", "C")},
                 "riasec_axis_confidence": {c: 0.0 for c in ("R", "I", "A", "S", "E", "C")},
+                "big_five_scores": {c: 50 for c in ("O", "C", "E", "A", "N")},
+                "big_five_axis_confidence": {c: 0.0 for c in ("O", "C", "E", "A", "N")},
                 "narrative": "안정보다 성장을 우선시함",
                 "evidence": [],
             }
