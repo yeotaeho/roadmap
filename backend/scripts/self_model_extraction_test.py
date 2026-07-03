@@ -126,6 +126,13 @@ async def run() -> int:
         res3 = await svc.extract_session(uid, sid)
         check("MIN_NEW 미만 스킵", res3.get("skipped") is True, str(res3))
 
+        # force — MIN_NEW 미만이어도 강제 추출(신규 메시지 0 이 아니므로 스킵 안 됨)
+        before_until = (await repo.get_session(sid))["extracted_until"]
+        res_force = await svc.extract_session(uid, sid, force=True)
+        check("force 추출 실행", "extracted" in res_force, str(res_force))
+        after_until = (await repo.get_session(sid))["extracted_until"]
+        check("force extracted_until 전진", after_until > before_until, f"{before_until}->{after_until}")
+
         # extract_pending — 6개 더 추가하면 신규 9 → 선택·처리
         for i in range(6):
             await repo.add_message(sid, "user", f"더 {i}")

@@ -31,8 +31,8 @@ class SelfModelExtractionService:
         llm = LlmClient(api_key=self._api_key, model=self._model)
         return await llm.extract_self_model(messages)
 
-    async def extract_session(self, user_id: str, session_id: str) -> dict:
-        """세션의 미추출 대화에서 자기모델을 갱신한다. 신규 메시지 부족 시 스킵."""
+    async def extract_session(self, user_id: str, session_id: str, force: bool = False) -> dict:
+        """세션의 미추출 대화에서 자기모델을 갱신한다. 신규 부족 시 스킵(force 는 임계 우회)."""
         sess = await self.coach_repo.get_session(session_id)
         if sess is None:
             return {"skipped": True, "reason": "no_session"}
@@ -40,7 +40,9 @@ class SelfModelExtractionService:
         msgs = await self.coach_repo.fetch_messages(session_id)
         cutoff = len(msgs)
         new_msgs = msgs[extracted_until:cutoff]
-        if len(new_msgs) < MIN_NEW:
+        if not new_msgs:
+            return {"skipped": True, "reason": "no_new"}
+        if not force and len(new_msgs) < MIN_NEW:
             return {"skipped": True, "reason": "insufficient"}
 
         result = await self._extractor(new_msgs)
