@@ -39,9 +39,6 @@ async def _seed_cleanup(s, uid: str, slug: str, opp: int) -> None:
     await s.execute(text(
         "DELETE FROM user_self_model_evidence WHERE user_id = CAST(:u AS UUID) "
         "AND content IN ('민감한 사정', '야근을 싫어함')"), {"u": uid})
-    # big_five 시드 격리 — user_self_model 행은 지우지 않고(다른 축 보존) big_five 만 원복.
-    await s.execute(text(
-        "UPDATE user_self_model SET big_five = NULL WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.commit()
 
 
@@ -67,6 +64,12 @@ async def run() -> int:
             "ON CONFLICT (user_id, opportunity_id) DO UPDATE SET match_score = 80, "
             "match_reason = '의미 유사도 60점', match_explanation = NULL"), {"u": uid, "o": opp})
         # Big Five 시드 — C(성실성) 뚜렷(85) → personality_traits 전달 검증용.
+        # 공유 dev DB — 기존 사용자의 실제 big_five 를 파괴하지 않도록 원값·행 존재 여부 저장 후 정리 때 원상 복원.
+        prev = (await s.execute(text(
+            "SELECT big_five FROM user_self_model WHERE user_id = CAST(:u AS UUID)"
+        ), {"u": uid})).first()
+        row_existed = prev is not None
+        prev_big_five = prev[0] if prev is not None else None  # dict 또는 None (JSONB)
         await s.execute(text(
             "INSERT INTO user_self_model (user_id, big_five, source, updated_at) "
             "VALUES (CAST(:u AS UUID), CAST(:bf AS JSONB), 'consult_extraction', now()) "
@@ -139,6 +142,16 @@ async def run() -> int:
         check("멱등(재대상 없음)", len(again) == 0, str(len(again)))
 
         await _seed_cleanup(s, uid, slug, opp)
+        # big_five 원상 복원 — 시드가 덮어쓰기 전 상태로. updated_at 원복은 생략(핵심은 컬럼 값).
+        if row_existed:
+            await s.execute(text(
+                "UPDATE user_self_model SET big_five = CAST(:bf AS JSONB), updated_at = now() "
+                "WHERE user_id = CAST(:u AS UUID)"
+            ), {"u": uid, "bf": (json.dumps(prev_big_five) if prev_big_five is not None else None)})
+        else:
+            await s.execute(text(
+                "DELETE FROM user_self_model WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
+        await s.commit()
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

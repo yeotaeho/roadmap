@@ -22,7 +22,7 @@ EVIDENCE_POS = 5
 EVIDENCE_DISLIKE = 3
 MAX_USERS_PER_RUN = 200
 
-TRAIT_MARGIN = 12  # display 점수가 50±이 값 밖일 때만 뚜렷한 특질로 서술(중립 스킵)
+TRAIT_MARGIN = 12  # display 점수가 50±이 값 밖일 때만 뚜렷한 특질로 서술(중립 스킵).
 
 _BIG_FIVE_TRAIT_DESC = {
     "O": ("새로움·아이디어에 개방적", "익숙함·실용을 선호"),
