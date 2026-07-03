@@ -1,7 +1,11 @@
-# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.5 · 2026-06-29 갱신)
+# 한국 트렌드 분석 및 예측 엔진 — 데이터 수집 출처 가이드 (v3.6 · 2026-07-03 갱신)
 
 이 문서는 **기존 가이드와 v2 버전을 통합·중복 제거**해 정리한 최종본입니다.  
 **1인 개발자**가 실제로 수집 가능하면서도 **선행 지표 가치**가 높은 출처만 선별했습니다.
+
+> **§1~7·ALIO는 외부 세상을 관찰한 3인칭 데이터**(외부 API·피드·크롤)입니다.
+> **§8 사용자 자기이해(Self-Model / RIASEC)** 는 결이 다른 **1인칭 데이터** — 수집처가 외부 소스가 아니라
+> AI 상담실 대화 그 자체입니다(2026-07-03 추가).
 
 > **현재 구현·API·스케줄 SSOT:**
 > [`backend/domain/master/docs/economic/core/MASTER_BRONZE_IMPLEMENTATION_STATUS.md`](../domain/master/docs/economic/core/MASTER_BRONZE_IMPLEMENTATION_STATUS.md)
@@ -236,8 +240,40 @@ T+수일    스타트업 투자 뉴스      Wowtale / Platum / Venturesquare ✅
 
 ---
 
+## 8. 사용자 자기이해 (Self-Model / RIASEC) — 1인칭 심리측정 신호
+
+§1~7은 외부 세상을 관찰한 **3인칭 데이터**(무엇이 뜨는가). 이 절은 사용자 본인의 대화에서 파생한
+**1인칭 데이터**(나는 누구인가)로, **수집처가 외부 API·크롤이 아니라 AI 상담실(`/consult`) 대화 그 자체**다.
+Sync·Chance 개인화는 이 둘의 교차(사용자 임베딩 × 트렌드·공고)로 이뤄진다.
+
+| 항목 | 값 |
+|------|-----|
+| **원천(수집처)** | AI 상담실(`/consult`) 대화 — `consult_messages`(role·content, append-only) |
+| **수집 방법** | 사용자가 직접 입력한 자연어 대화. **외부 API·크롤 아님**(1인칭 자기보고). 능동적으로 캐묻지 않음 |
+| **추출 방법** | 일별 배치(`_job_self_model_extract`, 10:00 KST)가 미추출 메시지를 LLM으로 분석(증분) |
+| **적재 테이블** | `user_self_model`(riasec 6축 점수·서사·big_five·축별 신뢰도) · `user_self_model_evidence`(근거 문장·차원·극성·민감 플래그) |
+| **RIASEC 채점** | 6축(R현실·I탐구·A예술·S사회·E진취·C관습) 각 0~100 **독립 채점** → confidence 가중 블렌딩 + shrinkage(근거 얇으면 50 중립). `top_codes`는 점수 순위에서 파생 |
+| **스케줄** | 일별(대화 누적분 증분 추출·누적 안정화) |
+| **구현** | ✅ (SP-1 데이터층 · SP-2b 대화→추출 · SP-4 6축 점수화·시각화) |
+
+> **채점 근거**: 실제 한국인이 받는 검사(워크넷 직업선호도검사 S/L형)와 O*NET Interest Profiler가
+> **6축을 독립 문항 풀로 단순 합산**한다는 점을 조사해(→ [research](research/2026-07-03-riasec-scoring-research.md))
+> per-axis 0~100 점수의 정당성을 확보했다. 자유대화는 정식 검사보다 "문항"이 적어 신뢰도가 낮으므로,
+> 근거가 얇은 축은 50(중립)으로 shrink하고 축별 confidence를 낮게 매겨 과신을 막는다.
+> **근거 차원**: `like`·`dislike`·`value`·`constraint`·`aspiration`·`skill_signal`(+`sensitive`).
+> **프라이버시**: 민감 근거(`is_sensitive`)는 저장하되 기본 조회·임베딩·LLM 프롬프트에서 격리하며,
+> 사용자가 스스로 드러낸 것만 플래그한다. 긍정·비민감 근거만 임베딩·추천에 사용한다.
+> **선행/후행**: 대화가 쌓일수록(가중치↑) 점수가 안정화되고, 초기(1~2회)엔 중립(50)에 가깝게 표시된다.
+
+**설계 SSOT**: [self-model 데이터층](superpowers/specs/2026-07-01-ai-coach-self-model-design.md) ·
+[RIASEC 점수화·시각화](superpowers/specs/2026-07-03-self-model-riasec-scoring-viz-design.md) ·
+`user_intelligence/docs/audit_trail.md`.
+
+---
+
 ## 관련 문서
 
+- [`2026-07-03-riasec-scoring-research.md`](research/2026-07-03-riasec-scoring-research.md) — RIASEC(홀랜드) 정식 검사 채점 방식 조사(§8 근거)
 - [`MASTER_BRONZE_IMPLEMENTATION_STATUS.md`](../domain/master/docs/economic/core/MASTER_BRONZE_IMPLEMENTATION_STATUS.md) — 현재 구현·API·스케줄 SSOT
 - [`ECONOMIC_DATA_SOURCE_STATUS.md`](../domain/master/docs/economic/core/ECONOMIC_DATA_SOURCE_STATUS.md) — 과거 제약·우선순위 기록
 - [`BRONZE_ARCHITECTURE_DECISION.md`](../domain/master/docs/economic/core/BRONZE_ARCHITECTURE_DECISION.md) — 6대 정량 소스·두 축 전략
