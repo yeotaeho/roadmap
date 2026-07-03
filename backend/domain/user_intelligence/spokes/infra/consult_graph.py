@@ -102,6 +102,8 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
                 coverage[code] = True
         mode = p.get("mode") if p.get("mode") in ("interview", "listening") else "interview"
         focus = None if mode == "listening" else (p.get("focus_axis") if p.get("focus_axis") in ALL_AXES else None)
+        if focus is not None and coverage.get(focus):
+            focus = None  # 이미 커버된 축은 무시 — 미커버 폴백으로 라운드 진행을 보장한다.
         if focus is None and mode != "listening":
             focus = first_uncovered(coverage)
         hint = p.get("focus_hint") or (probe_hint(focus) if focus else None)
