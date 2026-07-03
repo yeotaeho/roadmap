@@ -13,6 +13,7 @@ from core.llm.client import _CONSULT_SYSTEM_PROMPT, LlmClient
 from domain.user_intelligence.hub.repositories.consult_context_repository import ConsultContextRepository
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services import consult_context
+from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph, get_checkpointer
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class ConsultService:
         # 주입점(테스트 대체 가능). 기본은 실제 LLM.
         self._streamer = self._default_streamer
         self._summarizer = self._default_summarizer
+        self._graph = None
 
     async def _default_streamer(self, messages: list[dict]):
         llm = LlmClient(api_key=self._api_key, model=self._model)
@@ -117,49 +119,47 @@ class ConsultService:
                 return summary
             return prior
 
+    async def _load_history(self, session_id: str) -> list[dict]:
+        """최근 윈도우 히스토리 — 방금 저장된 현재 user 메시지는 제외(별도 주입)."""
+        async with AsyncSessionLocal() as db:
+            all_msgs = await ConsultSessionRepository(db).fetch_messages(session_id)
+        history = all_msgs[:-1] if all_msgs and all_msgs[-1]["role"] == "user" else all_msgs
+        _older, recent = consult_context.split_history(history, _WINDOW_N)
+        return recent
+
+    async def _load_context_system(self, user_id: str) -> str:
+        """상담 시스템 프롬프트 + 사용자 맥락. 맥락 로드 실패 시 프롬프트만(조용히 삼키지 않음)."""
+        try:
+            async with AsyncSessionLocal() as db:
+                ctx = await ConsultContextRepository(db).fetch_context(user_id)
+            context_str = build_consult_context(ctx)
+        except Exception as e:
+            logger.warning(f"상담 맥락 로드 실패(맥락 없이 진행): {e}")
+            context_str = ""
+        return _CONSULT_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
+
+    async def _persist_assistant(self, session_id: str, content: str) -> None:
+        async with AsyncSessionLocal() as db:
+            await ConsultSessionRepository(db).add_message(session_id, "assistant", content)
+
+    async def _get_graph(self):
+        if self._graph is None:
+            self._graph = build_consult_graph(self, await get_checkpointer())
+        return self._graph
+
     async def stream_sse(self, user_id: str, session_id: str, message: str):
-        """사용자 메시지 저장 → 히스토리+요약+맥락 주입 스트리밍 → 어시스턴트 응답 저장(독립 세션)."""
-        # 1) 사용자 메시지 저장(독립 세션 — 스트리밍 중 요청 세션 수명 회피).
+        """사용자 메시지 저장 → LangGraph(prepare→respond→persist) 구동 → custom 델타를 SSE 로 중계."""
         async with AsyncSessionLocal() as db:
             await ConsultSessionRepository(db).add_message(session_id, "user", message)
 
-        # 2) API 키 미설정 시 요약/히스토리/맥락 로드 없이 즉시 비활성 폴백.
         if not self._api_key:
             yield _sse({"type": "delta", "content": "현재 AI 상담이 비활성화되어 있습니다(API 키 미설정)."})
             yield _sse({"type": "done"})
             return
 
-        # 3) 롤링 요약(임계 초과 시) + 최근 윈도우 로드.
-        summary = await self._maybe_summarize(session_id)
-        async with AsyncSessionLocal() as db:
-            all_msgs = await ConsultSessionRepository(db).fetch_messages(session_id)
-        # 방금 저장한 현재 user 메시지는 message 로 별도 주입하므로 히스토리에서 제외.
-        history = all_msgs[:-1] if all_msgs and all_msgs[-1]["role"] == "user" else all_msgs
-        _older, recent = consult_context.split_history(history, _WINDOW_N)
-
-        # 4) 맥락.
-        try:
-            async with AsyncSessionLocal() as db:
-                ctx = await ConsultContextRepository(db).fetch_context(user_id)
-            context_str = build_consult_context(ctx)
-        except Exception as e:  # 맥락 로드 실패 시 맥락 없이 진행하되 조용히 삼키지 않는다.
-            logger.warning(f"상담 맥락 로드 실패(맥락 없이 진행): {e}")
-            context_str = ""
-        system_content = _CONSULT_SYSTEM_PROMPT + ("\n\n" + context_str if context_str else "")
-
-        messages = consult_context.build_llm_messages(system_content, summary, recent, message)
-
-        # 5) 스트리밍 + 누적.
-        acc = ""
-        try:
-            async for delta in self._streamer(messages):
-                acc += delta
-                yield _sse({"type": "delta", "content": delta})
-        except Exception as e:  # 스트림 도중 실패 — 에러 이벤트로 알린다.
-            yield _sse({"type": "error", "message": str(e)})
-
-        # 6) 어시스턴트 응답 저장(내용 있으면).
-        if acc:
-            async with AsyncSessionLocal() as db:
-                await ConsultSessionRepository(db).add_message(session_id, "assistant", acc)
+        graph = await self._get_graph()
+        config = {"configurable": {"thread_id": session_id}}
+        state_in = {"user_id": user_id, "session_id": session_id, "message": message}
+        async for chunk in graph.astream(state_in, config, stream_mode="custom"):
+            yield _sse(chunk)
         yield _sse({"type": "done"})
