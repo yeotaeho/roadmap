@@ -49,13 +49,30 @@ export function SelfModelEditModal({ data, onClose }: { data: SelfModelLive | nu
   const narrativeUserForm = (data?.axisSource || {}).narrative_summary === "user_form";
   const [narrative, setNarrative] = useState(narrativeUserForm ? (data?.narrativeSummary ?? "") : "");
 
+  // 그룹은 provenance 단위(전체가 user_form 로 동결)라, 부분 편집 시 미터치 축을 현재
+  // 코치 추론 레벨로 보존해야 중립(50) 리셋을 막는다. data 클로저에 접근하는 리졸버.
+  function resolveLevels(state: Record<string, Seg>, group: "riasec" | "big_five"): Record<string, AxisLevel> {
+    const out: Record<string, AxisLevel> = {};
+    for (const [k, v] of Object.entries(state)) {
+      if (v !== "auto") { out[k] = v; continue; }
+      const raw =
+        group === "riasec"
+          ? data?.riasec?.scores?.[k as keyof NonNullable<typeof data.riasec>["scores"]]
+          : k === "stability"
+            ? (typeof data?.bigFive?.scores?.N === "number" ? 100 - data.bigFive.scores.N : undefined)
+            : data?.bigFive?.scores?.[k as keyof NonNullable<typeof data.bigFive>["scores"]];
+      out[k] = scoreToLevel(raw);
+    }
+    return out;
+  }
+
   const mutation = useMutation({
     mutationFn: () => {
       const edits: SelfModelEdits = {};
       const rAuto = Object.values(riasec).every((v) => v === "auto");
-      edits.riasec = rAuto ? "auto" : { levels: pickLevels(riasec) };
+      edits.riasec = rAuto ? "auto" : { levels: resolveLevels(riasec, "riasec") };
       const bAuto = Object.values(bigFive).every((v) => v === "auto");
-      edits.big_five = bAuto ? "auto" : { levels: pickLevels(bigFive) };
+      edits.big_five = bAuto ? "auto" : { levels: resolveLevels(bigFive, "big_five") };
       edits.narrative = narrative.trim() ? narrative.trim() : "auto";
       return updateSelfModel(edits);
     },
@@ -104,12 +121,6 @@ export function SelfModelEditModal({ data, onClose }: { data: SelfModelLive | nu
       </div>
     </div>
   );
-}
-
-function pickLevels(state: Record<string, Seg>): Record<string, AxisLevel> {
-  const out: Record<string, AxisLevel> = {};
-  for (const [k, v] of Object.entries(state)) out[k] = v === "auto" ? "mid" : v;
-  return out;
 }
 
 function Section({
