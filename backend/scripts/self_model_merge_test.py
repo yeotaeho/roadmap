@@ -53,6 +53,23 @@ def run() -> int:
     check("빈 축 consult 채움", r["big_five"] == {"openness": 70})
     check("기존 riasec 보존", r["riasec"] == {"top_codes": ["A"]})
 
+    # 6. user_form riasec 은 consult blend 가 못 덮음 (window_scores 형태 incoming — 실제 blend 분기 경로)
+    existing = {
+        "riasec": {"scores": {"S": 78}, "raw": {"S": 78.0}, "weights": {"S": 3.0}, "top_codes": ["S"]},
+        "source": "user_form",
+        "axis_confidence": {"riasec": 1.0},
+    }
+    incoming = {
+        "riasec": {
+            "window_scores": {"R": 50, "I": 95, "A": 90, "S": 50, "E": 50, "C": 50},
+            "window_conf": {"R": 0.2, "I": 0.9, "A": 0.8, "S": 0.2, "E": 0.2, "C": 0.2},
+        },
+        "axis_confidence": {"riasec": 0.9},
+    }
+    r = merge_structured(existing, incoming, "consult_extraction")
+    check("user_form riasec blend 미잠식", r["riasec"] == existing["riasec"], str(r["riasec"]))
+    check("user_form riasec source 유지", r["source"] == "user_form")
+
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 

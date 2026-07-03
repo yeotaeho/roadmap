@@ -94,7 +94,7 @@ async def run() -> int:
         check("재추출 스킵", res2.get("skipped") is True, str(res2))
         check("추출기 1회만 호출", fake_calls["n"] == 1, str(fake_calls))
 
-        # narrative-only(RIASEC 신호 없음) 세션 — 서사가 riasec_confidence=0 에도 불구하고 기록되어야 함.
+        # narrative-only(RIASEC 신호 없음) 세션 — 전 축 riasec_axis_confidence=0(전축 conf 0)에도 불구하고 서사는 기록되어야 함.
         sid_narr = await repo.create_session(uid)
         for i in range(8):
             await repo.add_message(sid_narr, "user" if i % 2 == 0 else "assistant", f"가치관 이야기 {i}")

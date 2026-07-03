@@ -38,6 +38,9 @@ def merge_structured(existing: dict | None, incoming: dict, source: str) -> dict
         if axis == "riasec" and isinstance(inc, dict) and "window_scores" in inc:
             # 점수 블렌딩 — user_form 이 아닌 대화 추출만. user_form 은 아래 일반 규칙(overwrite) 유지.
             if source != SOURCE_USER_FORM:
+                # user_form 으로 명시 입력된 riasec 은 코치 추출 blend 가 잠식하지 않는다(다른 축과 동일 불변식).
+                if existing_source == SOURCE_USER_FORM and base.get("riasec") is not None:
+                    continue
                 existing_riasec = base.get("riasec") if isinstance(base.get("riasec"), dict) else None
                 blended = blend_riasec(existing_riasec, inc["window_scores"], inc["window_conf"])
                 result["riasec"] = blended
