@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.user_intelligence.hub.repositories.self_model_repository import SelfModelRepository
+from domain.user_intelligence.hub.services.riasec_scoring import blend_riasec
 
 CONFIDENCE_THRESHOLD = 0.40
 SOURCE_USER_FORM = "user_form"
@@ -34,11 +35,19 @@ def merge_structured(existing: dict | None, incoming: dict, source: str) -> dict
         inc = incoming.get(axis)
         if inc is None:
             continue
+        if axis == "riasec" and isinstance(inc, dict) and "window_scores" in inc:
+            # 점수 블렌딩 — user_form 이 아닌 대화 추출만. user_form 은 아래 일반 규칙(overwrite) 유지.
+            if source != SOURCE_USER_FORM:
+                existing_riasec = base.get("riasec") if isinstance(base.get("riasec"), dict) else None
+                blended = blend_riasec(existing_riasec, inc["window_scores"], inc["window_conf"])
+                result["riasec"] = blended
+                merged_conf["riasec"] = sum(inc["window_conf"].values()) / len(inc["window_conf"]) if inc["window_conf"] else 0.0
+                continue
         if source == SOURCE_USER_FORM:
             result[axis] = inc  # 사용자 명시 입력 최우선
             merged_conf[axis] = 1.0
             continue
-        # coach_extraction
+        # coach/consult extraction (비riasec-scores 축)
         if existing_source == SOURCE_USER_FORM and base.get(axis) is not None:
             continue  # user_form 우위 — 덮어쓰지 않음
         conf = _incoming_conf(incoming, axis, source)
