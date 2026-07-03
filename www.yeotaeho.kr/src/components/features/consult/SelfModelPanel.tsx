@@ -1,4 +1,4 @@
-// 상담실 우측 — 자기모델(RIASEC 레이더·주요유형·서사·근거·성격 placeholder) 실데이터 패널
+// 상담실 우측 — 자기모델(RIASEC 레이더·주요유형·서사·근거·성격 5요인) 실데이터 패널
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
@@ -22,6 +22,13 @@ const RIASEC_TYPE: Record<string, string> = {
   R: "현실형", I: "탐구형", A: "예술형", S: "사회형", E: "진취형", C: "관습형",
 };
 const POSITIVE_DIMS = new Set(["like", "value", "aspiration", "skill_signal"]);
+const BF_AXES: { key: "O" | "C" | "E" | "A" | "N"; label: string; flip?: boolean }[] = [
+  { key: "O", label: "개방성" },
+  { key: "C", label: "성실성" },
+  { key: "E", label: "외향성" },
+  { key: "A", label: "우호성" },
+  { key: "N", label: "정서안정성", flip: true },
+];
 
 export function SelfModelPanel() {
   const profile = useStore((s) => s.profile);
@@ -34,6 +41,7 @@ export function SelfModelPanel() {
   });
 
   const riasec = data?.riasec ?? null;
+  const bigFive = data?.bigFive ?? null;
   const radarRows = riasec?.scores
     ? (["R", "I", "A", "S", "E", "C"] as const).map((c) => ({
         axis: RIASEC_LABEL[c],
@@ -115,9 +123,28 @@ export function SelfModelPanel() {
         </>
       )}
 
-      <div className="mt-1 rounded-xl border border-dashed border-slate-200 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400 dark:border-slate-700 dark:text-slate-500">
-        대화가 쌓이면 성격 5요인(Big Five)도 여기에 나타나요.
-      </div>
+      {bigFive?.scores ? (
+        <div className="mt-1 space-y-1.5">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">성격 5요인</p>
+          {BF_AXES.map(({ key, label, flip }) => {
+            const v = flip ? 100 - (bigFive.scores.N ?? 50) : (bigFive.scores[key] ?? 50);
+            return (
+              <div key={key} className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-[11px] text-slate-600 dark:text-slate-300">{label}</span>
+                <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                  <div className="absolute left-1/2 top-0 h-full w-px bg-slate-300 dark:bg-slate-600" aria-hidden />
+                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${v}%` }} />
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">가운데 선은 중립(파악 중)이에요.</p>
+        </div>
+      ) : (
+        <div className="mt-1 rounded-xl border border-dashed border-slate-200 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400 dark:border-slate-700 dark:text-slate-500">
+          대화가 쌓이면 성격 5요인(Big Five)도 여기에 나타나요.
+        </div>
+      )}
       <p className="text-center text-[10px] text-slate-400 dark:text-slate-500">나의 성향은 매일 대화를 바탕으로 정리돼요.</p>
     </div>
   );
