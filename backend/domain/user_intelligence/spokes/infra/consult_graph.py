@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 logger = logging.getLogger(__name__)
 
 _CHECKPOINTER: Any = None  # None=미시도, False=비활성 확정, 그 외=AsyncPostgresSaver
+_CHECKPOINTER_CM: Any = None  # from_conn_string 컨텍스트 매니저 — GC 로 커넥션이 닫히지 않게 프로세스 수명 보관
 _CHECKPOINTER_LOCK = asyncio.Lock()
 
 
@@ -34,7 +35,7 @@ def _psycopg_dsn(url: str) -> str:
 
 async def get_checkpointer():
     """AsyncPostgresSaver 프로세스 싱글턴 — 실패 시 경고 후 무체크포인트(fail-open, 상담 불능 방지)."""
-    global _CHECKPOINTER
+    global _CHECKPOINTER, _CHECKPOINTER_CM
     if _CHECKPOINTER is not None:
         return _CHECKPOINTER or None
     async with _CHECKPOINTER_LOCK:
@@ -48,6 +49,7 @@ async def get_checkpointer():
             cm = AsyncPostgresSaver.from_conn_string(_psycopg_dsn(get_settings().database_url))
             saver = await cm.__aenter__()  # 프로세스 수명 동안 유지(의도적 미종료)
             await saver.setup()  # 멱등 — 테이블은 Task 1 PoC 승인 시 이미 생성됨
+            _CHECKPOINTER_CM = cm  # GC 파이널라이저가 커넥션을 닫지 않게 참조 유지
             _CHECKPOINTER = saver
         except Exception as e:
             logger.warning(f"LangGraph 체크포인터 비활성(무체크포인트로 동작): {e}")
