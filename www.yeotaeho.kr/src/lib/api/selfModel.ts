@@ -21,6 +21,7 @@ export interface SelfModelLive {
   bigFive: { scores: BigFiveScores } | null;
   narrativeSummary: string | null;
   axisConfidence: Record<string, number> | null;
+  axisSource: Record<string, string> | null;
   evidence: SelfModelEvidence[];
 }
 
@@ -32,6 +33,28 @@ export async function fetchSelfModel(): Promise<SelfModelLive> {
     bigFive: m.bigFive ?? null,
     narrativeSummary: m.narrativeSummary ?? null,
     axisConfidence: m.axisConfidence ?? null,
+    axisSource: m.axisSource ?? null,
+    evidence: Array.isArray(m.evidence) ? m.evidence : [],
+  };
+}
+
+export type AxisLevel = "low" | "mid" | "high";
+
+export interface SelfModelEdits {
+  riasec?: { levels: Record<string, AxisLevel> } | "auto";
+  big_five?: { levels: Record<string, AxisLevel> } | "auto";
+  narrative?: string | "auto";
+}
+
+export async function updateSelfModel(edits: SelfModelEdits): Promise<SelfModelLive> {
+  const { data } = await apiClient.put("/api/user/self-model", edits);
+  const m = data?.selfModel ?? {};
+  return {
+    riasec: m.riasec ?? null,
+    bigFive: m.bigFive ?? null,
+    narrativeSummary: m.narrativeSummary ?? null,
+    axisConfidence: m.axisConfidence ?? null,
+    axisSource: m.axisSource ?? null,
     evidence: Array.isArray(m.evidence) ? m.evidence : [],
   };
 }

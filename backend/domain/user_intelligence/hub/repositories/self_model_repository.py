@@ -24,7 +24,7 @@ def content_hash(dimension: str, polarity: str | None, content: str) -> str:
 
 _FETCH_MODEL = text(
     """
-    SELECT riasec, big_five, narrative_summary, axis_confidence, source
+    SELECT riasec, big_five, narrative_summary, axis_confidence, source, axis_source
     FROM user_self_model WHERE user_id = CAST(:uid AS UUID)
     """
 )
@@ -32,15 +32,16 @@ _FETCH_MODEL = text(
 _WRITE_MODEL = text(
     """
     INSERT INTO user_self_model
-        (user_id, riasec, big_five, narrative_summary, axis_confidence, source, updated_at)
+        (user_id, riasec, big_five, narrative_summary, axis_confidence, source, axis_source, updated_at)
     VALUES (CAST(:uid AS UUID), CAST(:riasec AS JSONB), CAST(:big_five AS JSONB),
-            :narrative_summary, CAST(:axis_confidence AS JSONB), :source, now())
+            :narrative_summary, CAST(:axis_confidence AS JSONB), :source, CAST(:axis_source AS JSONB), now())
     ON CONFLICT (user_id) DO UPDATE SET
         riasec = EXCLUDED.riasec,
         big_five = EXCLUDED.big_five,
         narrative_summary = EXCLUDED.narrative_summary,
         axis_confidence = EXCLUDED.axis_confidence,
         source = EXCLUDED.source,
+        axis_source = EXCLUDED.axis_source,
         updated_at = now()
     """
 )
@@ -80,10 +81,11 @@ class SelfModelRepository(BaseRepository):
             "narrative_summary": r.narrative_summary,
             "axis_confidence": r.axis_confidence,
             "source": r.source,
+            "axis_source": r.axis_source,
         }
 
     async def write_self_model(
-        self, user_id, riasec, big_five, narrative_summary, axis_confidence, source
+        self, user_id, riasec, big_five, narrative_summary, axis_confidence, source, axis_source=None
     ) -> None:
         await self.session.execute(
             _WRITE_MODEL,
@@ -94,6 +96,7 @@ class SelfModelRepository(BaseRepository):
                 "narrative_summary": narrative_summary,
                 "axis_confidence": json.dumps(axis_confidence) if axis_confidence is not None else None,
                 "source": source,
+                "axis_source": json.dumps(axis_source) if axis_source is not None else None,
             },
         )
         await self.session.commit()

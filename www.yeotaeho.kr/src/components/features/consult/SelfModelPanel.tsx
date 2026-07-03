@@ -2,7 +2,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Radar as RadarIcon, Sparkles } from "lucide-react";
+import { Pencil, Radar as RadarIcon, Sparkles } from "lucide-react";
+import { useState } from "react";
 import {
   PolarAngleAxis,
   PolarGrid,
@@ -13,6 +14,7 @@ import {
 } from "recharts";
 import { fetchSelfModel, type SelfModelLive } from "@/lib/api/selfModel";
 import { useStore } from "@/store";
+import { SelfModelEditModal } from "./SelfModelEditModal";
 
 const INDIGO = "#4F46E5";
 const RIASEC_LABEL: Record<string, string> = {
@@ -33,6 +35,7 @@ const BF_AXES: { key: "O" | "C" | "E" | "A" | "N"; label: string; flip?: boolean
 export function SelfModelPanel() {
   const profile = useStore((s) => s.profile);
   const authed = !!profile?.id;
+  const [editing, setEditing] = useState(false);
   const { data, isLoading, isError } = useQuery<SelfModelLive>({
     queryKey: ["self-model", profile?.id],
     queryFn: fetchSelfModel,
@@ -58,10 +61,22 @@ export function SelfModelPanel() {
     topCodes.length > 0 || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0 || bigFiveHasSignal;
 
   return (
+    <>
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
         <RadarIcon className="h-4 w-4 text-indigo-600" aria-hidden />
         나의 성향 지도
+        {authed && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            disabled={!data}
+            className="ml-auto inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-700"
+            aria-label="성향 수정"
+          >
+            <Pencil className="h-3 w-3" /> 수정
+          </button>
+        )}
       </div>
 
       {!authed ? (
@@ -150,5 +165,7 @@ export function SelfModelPanel() {
       )}
       <p className="text-center text-[10px] text-slate-400 dark:text-slate-500">나의 성향은 매일 대화를 바탕으로 정리돼요.</p>
     </div>
+      {editing && <SelfModelEditModal data={data ?? null} onClose={() => setEditing(false)} />}
+    </>
   );
 }

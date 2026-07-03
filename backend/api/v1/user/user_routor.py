@@ -193,3 +193,24 @@ async def get_self_model(
     except Exception as e:
         logger.error(f"자기모델 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"자기모델 조회 실패: {str(e)}")
+
+
+class SelfModelEditRequest(BaseModel):
+    riasec: dict | str | None = None
+    big_five: dict | str | None = None
+    narrative: str | None = None
+
+
+@router.put("/self-model")
+async def update_self_model(
+    request: SelfModelEditRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """사용자 자기모델 편집 — 축별 3단계/AI판단. 확정 축은 코치 추출이 잠식하지 않는다."""
+    try:
+        model = await SelfModelService(db).apply_user_edits(user_id, request.model_dump())
+        return {"success": True, "selfModel": model}
+    except Exception as e:
+        logger.error(f"자기모델 편집 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"자기모델 편집 실패: {str(e)}")
