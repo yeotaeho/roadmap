@@ -45,13 +45,17 @@ class SelfModelExtractionService:
 
         result = await self._extractor(new_msgs)
         svc = SelfModelService(self.db)
-        window_conf = result["riasec_axis_confidence"]
-        axis_confidence = {"riasec": sum(window_conf.values()) / len(window_conf) if window_conf else 0.0}
+        r_conf = result["riasec_axis_confidence"]
+        bf_conf = result["big_five_axis_confidence"]
+        axis_confidence = {
+            "riasec": sum(r_conf.values()) / len(r_conf) if r_conf else 0.0,
+            "big_five": sum(bf_conf.values()) / len(bf_conf) if bf_conf else 0.0,
+        }
         if result["narrative"]:
             axis_confidence["narrative_summary"] = max(axis_confidence["riasec"], NARRATIVE_DEFAULT_CONFIDENCE)
         incoming = {
-            "riasec": {"window_scores": result["riasec_scores"], "window_conf": window_conf},
-            "big_five": None,
+            "riasec": {"window_scores": result["riasec_scores"], "window_conf": r_conf},
+            "big_five": {"window_scores": result["big_five_scores"], "window_conf": bf_conf},
             "narrative_summary": result["narrative"],
             "axis_confidence": axis_confidence,
         }

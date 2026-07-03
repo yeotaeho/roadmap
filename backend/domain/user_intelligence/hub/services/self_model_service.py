@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from domain.user_intelligence.hub.repositories.self_model_repository import SelfModelRepository
-from domain.user_intelligence.hub.services.riasec_scoring import blend_riasec
+from domain.user_intelligence.hub.services.riasec_scoring import blend_big_five, blend_riasec
 
 CONFIDENCE_THRESHOLD = 0.40
 SOURCE_USER_FORM = "user_form"
@@ -35,16 +35,16 @@ def merge_structured(existing: dict | None, incoming: dict, source: str) -> dict
         inc = incoming.get(axis)
         if inc is None:
             continue
-        if axis == "riasec" and isinstance(inc, dict) and "window_scores" in inc:
+        if axis in ("riasec", "big_five") and isinstance(inc, dict) and "window_scores" in inc:
             # 점수 블렌딩 — user_form 이 아닌 대화 추출만. user_form 은 아래 일반 규칙(overwrite) 유지.
             if source != SOURCE_USER_FORM:
-                # user_form 으로 명시 입력된 riasec 은 코치 추출 blend 가 잠식하지 않는다(다른 축과 동일 불변식).
-                if existing_source == SOURCE_USER_FORM and base.get("riasec") is not None:
+                # user_form 으로 명시 입력된 축은 코치 추출 blend 가 잠식하지 않는다.
+                if existing_source == SOURCE_USER_FORM and base.get(axis) is not None:
                     continue
-                existing_riasec = base.get("riasec") if isinstance(base.get("riasec"), dict) else None
-                blended = blend_riasec(existing_riasec, inc["window_scores"], inc["window_conf"])
-                result["riasec"] = blended
-                merged_conf["riasec"] = sum(inc["window_conf"].values()) / len(inc["window_conf"]) if inc["window_conf"] else 0.0
+                existing_axis = base.get(axis) if isinstance(base.get(axis), dict) else None
+                blender = blend_riasec if axis == "riasec" else blend_big_five
+                result[axis] = blender(existing_axis, inc["window_scores"], inc["window_conf"])
+                merged_conf[axis] = sum(inc["window_conf"].values()) / len(inc["window_conf"]) if inc["window_conf"] else 0.0
                 continue
         if source == SOURCE_USER_FORM:
             result[axis] = inc  # 사용자 명시 입력 최우선
