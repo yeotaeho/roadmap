@@ -52,9 +52,10 @@ export function SelfModelPanel() {
   const positives = (data?.evidence ?? [])
     .filter((e) => POSITIVE_DIMS.has(e.dimension))
     .slice(0, 8);
-  const hasAny = topCodes.length > 0 || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0;
   const bfScores = bigFive?.scores;
   const bigFiveHasSignal = !!bfScores && Object.values(bfScores).some((v) => v !== 50);
+  const hasAny =
+    topCodes.length > 0 || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0 || bigFiveHasSignal;
 
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
