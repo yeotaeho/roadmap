@@ -5,15 +5,12 @@ import {
   Paperclip,
   SendHorizonal,
   Sparkles,
-  Wallet,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
-  COACH_ACTIVE_FOCUS,
   DEMO_ATTACHED_CONTEXTS,
   type CoachAttachedContext,
-  type CoachWalletItem,
 } from "@/data/coachContext";
 import {
   createConsultSession,
@@ -21,7 +18,7 @@ import {
   streamConsult,
 } from "@/lib/api/consult";
 import { useStore } from "@/store";
-import { InsightWalletPanel } from "./InsightWalletPanel";
+import { SelfModelPanel } from "./SelfModelPanel";
 
 type ConsultMessage = {
   id: string;
@@ -55,7 +52,6 @@ export function ConsultView() {
   const [isLoading, setIsLoading] = useState(false);
   const [attached, setAttached] = useState<CoachAttachedContext | null>(null);
   const [messages, setMessages] = useState<ConsultMessage[]>(() => INITIAL_MESSAGES);
-  const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
@@ -106,28 +102,6 @@ export function ConsultView() {
     };
   }, [isAuthenticated, retryKey]);
 
-  const addToWallet = useCallback((msg: ConsultMessage) => {
-    const body = [msg.text, msg.code ? `\n\n\`\`\`python\n${msg.code}\n\`\`\`` : ""]
-      .filter(Boolean)
-      .join("");
-    const item: CoachWalletItem = {
-      id: uid(),
-      title: `상담 스니펫 · ${msg.badge ?? "응답"}`,
-      body,
-      createdAt: Date.now(),
-    };
-    setWallet((w) => [item, ...w]);
-  }, []);
-
-  const copyWallet = (id: string) => {
-    const item = wallet.find((w) => w.id === id);
-    if (item) void navigator.clipboard.writeText(item.body);
-  };
-
-  const removeWallet = (id: string) => {
-    setWallet((w) => w.filter((x) => x.id !== id));
-  };
-
   const send = async () => {
     const text = input.trim();
     if (!text || isLoading || !sessionId) return;
@@ -170,8 +144,8 @@ export function ConsultView() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AI 상담</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-            AI 상담사 — 대화를 통해 나의 성향과 강점을 함께 발견해요. 마음에 남는 답변은 오른쪽
-            지갑에 저장할 수 있습니다.
+            AI 상담사 — 대화를 통해 나의 성향과 강점을 함께 발견해요. 대화가 쌓이면 오른쪽에
+            나의 성향이 정리돼요.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -211,7 +185,7 @@ export function ConsultView() {
                   className={`relative max-w-[92%] sm:max-w-[85%] ${
                     m.role === "user"
                       ? "rounded-2xl rounded-tr-md bg-indigo-600 px-4 py-3 text-sm text-white shadow-sm"
-                      : "rounded-2xl rounded-tl-md bg-slate-100 px-4 pb-9 pt-3 text-sm text-slate-900 shadow-sm pr-10 dark:bg-slate-900 dark:text-slate-100"
+                      : "rounded-2xl rounded-tl-md bg-slate-100 px-4 py-3 text-sm text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
                   }`}
                 >
                   {m.role === "assistant" && m.badge ? (
@@ -224,17 +198,6 @@ export function ConsultView() {
                     <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900/95 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 ring-1 ring-slate-700">
                       <code>{m.code}</code>
                     </pre>
-                  ) : null}
-                  {m.role === "assistant" ? (
-                    <button
-                      type="button"
-                      onClick={() => addToWallet(m)}
-                      className="absolute bottom-2 right-2 rounded-lg border border-slate-200/80 bg-white/90 p-1.5 text-slate-600 shadow-sm hover:border-indigo-300 hover:text-indigo-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
-                      title="지갑에 저장"
-                      aria-label="지갑에 저장"
-                    >
-                      <Wallet className="h-3.5 w-3.5" />
-                    </button>
                   ) : null}
                 </div>
               </div>
@@ -314,17 +277,9 @@ export function ConsultView() {
           </div>
         </section>
 
-        {/* 우: 데스크톱 지갑 */}
+        {/* 우: 데스크톱 성향 패널 */}
         <aside className="hidden min-h-0 lg:flex lg:flex-col">
-          <InsightWalletPanel
-            activeFocusTitle={COACH_ACTIVE_FOCUS.title}
-            activeFocusSubtitle={COACH_ACTIVE_FOCUS.subtitle}
-            activeFocusBody={COACH_ACTIVE_FOCUS.body}
-            activeTags={COACH_ACTIVE_FOCUS.tags}
-            wallet={wallet}
-            onCopy={copyWallet}
-            onRemove={removeWallet}
-          />
+          <SelfModelPanel />
         </aside>
       </div>
 
@@ -333,7 +288,7 @@ export function ConsultView() {
         type="button"
         onClick={() => setSheetOpen(true)}
         className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg ring-2 ring-white/90 transition hover:bg-indigo-700 lg:hidden"
-        aria-label="맥락 및 지갑 열기"
+        aria-label="나의 성향 열기"
       >
         <Sparkles className="h-6 w-6" />
       </button>
@@ -364,7 +319,7 @@ export function ConsultView() {
               </div>
               <div className="max-h-[calc(85vh-40px)] overflow-y-auto p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">맥락 &amp; 지갑</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">나의 성향</p>
                   <button
                     type="button"
                     onClick={() => setSheetOpen(false)}
@@ -374,15 +329,7 @@ export function ConsultView() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <InsightWalletPanel
-                  activeFocusTitle={COACH_ACTIVE_FOCUS.title}
-                  activeFocusSubtitle={COACH_ACTIVE_FOCUS.subtitle}
-                  activeFocusBody={COACH_ACTIVE_FOCUS.body}
-                  activeTags={COACH_ACTIVE_FOCUS.tags}
-                  wallet={wallet}
-                  onCopy={copyWallet}
-                  onRemove={removeWallet}
-                />
+                <SelfModelPanel />
               </div>
             </motion.div>
           </>

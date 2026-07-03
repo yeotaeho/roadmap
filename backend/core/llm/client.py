@@ -133,15 +133,17 @@ _COACH_SUMMARY_SYSTEM_PROMPT = (
 )
 
 _SELF_MODEL_EXTRACT_SYSTEM_PROMPT = (
-    "너는 청년 진로 코치와 사용자의 대화에서 사용자의 '자기모델' 신호를 추출하는 분석기다. "
-    "대화에서 드러난 (1) 직업 흥미(RIASEC: R현실·I탐구·A예술·S사회·E기업·C관습 중 두드러진 1~3개), "
-    "(2) 한 줄 자기서사, (3) 근거(호불호·가치관·제약·포부·스킬 신호)를 뽑아라. "
-    "확실하지 않으면 riasec_top_codes 를 빈 배열로, narrative 를 null 로 두라(억지 추정 금지). "
-    "각 신호에 confidence(0~1)를 정직하게 매겨라. "
+    "너는 청년 진로 상담사와 사용자의 대화에서 사용자의 '자기모델' 신호를 추출하는 분석기다. "
+    "대화에서 드러난 (1) 직업 흥미 RIASEC 6축을 각각 0~100 점수로 채점하라(R현실·I탐구·A예술·S사회·E진취·C관습). "
+    "행동·구체적 일화 근거를 명시적 자기규정('저는 사회형이에요')보다 높게 가중하라. "
+    "특정 축의 근거가 부족하면 그 축은 50(중립) 근처로 보수적으로 채점하고 axis_confidence 를 낮게 매겨라(억지 추정 금지). "
+    "top_codes 는 네가 정하지 마라(점수에서 파생된다). "
+    "(2) 한 줄 자기서사, (3) 근거(호불호·가치관·제약·포부·스킬 신호)도 뽑아라. "
     "민감정보(트라우마·개인적 아픔·건강·가정사 등)는 사용자가 스스로 드러낸 것만 is_sensitive=true 로 표시하고, "
     "능동적으로 캐묻거나 추론하지 마라. "
-    'JSON 객체만 출력하라. 형식: {"riasec_top_codes": [<"R"|"I"|"A"|"S"|"E"|"C">...], '
-    '"riasec_confidence": <0~1>, "narrative": <문자열 또는 null>, '
+    'JSON 객체만 출력하라. 형식: {"riasec_scores": {"R":<0~100>,"I":<0~100>,"A":<0~100>,"S":<0~100>,"E":<0~100>,"C":<0~100>}, '
+    '"riasec_axis_confidence": {"R":<0~1>,"I":<0~1>,"A":<0~1>,"S":<0~1>,"E":<0~1>,"C":<0~1>}, '
+    '"narrative": <문자열 또는 null>, '
     '"evidence": [{"dimension": <"like"|"dislike"|"value"|"constraint"|"sensitive"|"aspiration"|"skill_signal"|"other">, '
     '"polarity": <"like"|"dislike"|"neutral"|null>, "content": <근거 문장>, '
     '"confidence": <0~1>, "is_sensitive": <bool>}...]}.'
@@ -166,26 +168,38 @@ _EXPLAIN_TEXT_MAX = 200
 def _parse_self_model_extract(raw: str | None) -> dict:
     """자기모델 추출 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
 
-    riasec_top_codes 는 유효 코드만·최대 6개(없으면 confidence 0). evidence 는 content 있는 항목만·최대 20개,
+    riasec_scores 6축 0~100·axis_confidence 6축 0~1(누락 키는 50·0). evidence 는 content 있는 항목만·최대 20개,
     dimension 닫힌집합 외는 'other', polarity 닫힌집합 외는 None, confidence 0~1 클램프.
     """
-    empty = {"riasec_top_codes": [], "riasec_confidence": 0.0, "narrative": None, "evidence": []}
+    def _empty() -> dict:
+        return {
+            "riasec_scores": {c: 50 for c in _RIASEC_CODES},
+            "riasec_axis_confidence": {c: 0.0 for c in _RIASEC_CODES},
+            "narrative": None,
+            "evidence": [],
+        }
     try:
         obj = json.loads(raw) if raw else {}
     except (json.JSONDecodeError, TypeError):
-        return dict(empty)
+        return _empty()
     if not isinstance(obj, dict):
-        return dict(empty)
+        return _empty()
 
-    codes_raw = obj.get("riasec_top_codes")
-    codes = [c for c in codes_raw if c in _RIASEC_CODES][:6] if isinstance(codes_raw, list) else []
-    try:
-        rconf = float(obj.get("riasec_confidence"))
-    except (TypeError, ValueError):
-        rconf = 0.0
-    rconf = max(0.0, min(1.0, rconf))
-    if not codes:
-        rconf = 0.0
+    scores_raw = obj.get("riasec_scores")
+    conf_raw = obj.get("riasec_axis_confidence")
+    scores: dict[str, int] = {}
+    axis_conf: dict[str, float] = {}
+    for c in _RIASEC_CODES:
+        try:
+            s = float(scores_raw.get(c)) if isinstance(scores_raw, dict) else 50.0
+        except (TypeError, ValueError):
+            s = 50.0
+        scores[c] = int(round(max(0.0, min(100.0, s))))
+        try:
+            cf = float(conf_raw.get(c)) if isinstance(conf_raw, dict) else 0.0
+        except (TypeError, ValueError):
+            cf = 0.0
+        axis_conf[c] = max(0.0, min(1.0, cf))
 
     narrative = obj.get("narrative")
     narrative = narrative.strip()[:500] if isinstance(narrative, str) and narrative.strip() else None
@@ -219,8 +233,8 @@ def _parse_self_model_extract(raw: str | None) -> dict:
                 break
 
     return {
-        "riasec_top_codes": codes,
-        "riasec_confidence": rconf,
+        "riasec_scores": scores,
+        "riasec_axis_confidence": axis_conf,
         "narrative": narrative,
         "evidence": evidence,
     }

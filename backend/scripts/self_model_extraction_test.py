@@ -62,8 +62,8 @@ async def run() -> int:
         async def fake_extractor(messages):
             fake_calls["n"] += 1
             return {
-                "riasec_top_codes": ["I", "A"],
-                "riasec_confidence": 0.8,
+                "riasec_scores": {"R": 50, "I": 88, "A": 82, "S": 50, "E": 55, "C": 45},
+                "riasec_axis_confidence": {"R": 0.2, "I": 0.9, "A": 0.8, "S": 0.2, "E": 0.3, "C": 0.2},
                 "narrative": "탐구·표현 지향",
                 "evidence": [
                     {"dimension": "like", "polarity": "like", "content": "발표를 좋아함", "confidence": 0.9, "is_sensitive": False},
@@ -78,7 +78,9 @@ async def run() -> int:
         check("근거 2건", res.get("evidence") == 2, str(res))
 
         model = await SelfModelService(s).get_self_model(uid, include_sensitive=True)
-        check("riasec 반영", model["riasec"] == {"top_codes": ["I", "A"]}, str(model["riasec"]))
+        riasec = model["riasec"]
+        check("riasec scores 존재", isinstance(riasec, dict) and "scores" in riasec, str(riasec))
+        check("riasec I 최상위 근접", riasec["scores"]["I"] >= riasec["scores"]["R"], str(riasec["scores"]))
         check("narrative 반영", model["narrativeSummary"] == "탐구·표현 지향")
         contents = [e["content"] for e in model["evidence"]]
         check("비민감 근거 저장", "발표를 좋아함" in contents)
@@ -92,14 +94,15 @@ async def run() -> int:
         check("재추출 스킵", res2.get("skipped") is True, str(res2))
         check("추출기 1회만 호출", fake_calls["n"] == 1, str(fake_calls))
 
-        # narrative-only(RIASEC 신호 없음) 세션 — 서사가 riasec_confidence=0 에도 불구하고 기록되어야 함.
+        # narrative-only(RIASEC 신호 없음) 세션 — 전 축 riasec_axis_confidence=0(전축 conf 0)에도 불구하고 서사는 기록되어야 함.
         sid_narr = await repo.create_session(uid)
         for i in range(8):
             await repo.add_message(sid_narr, "user" if i % 2 == 0 else "assistant", f"가치관 이야기 {i}")
 
         async def narrative_only_extractor(messages):
             return {
-                "riasec_top_codes": [], "riasec_confidence": 0.0,
+                "riasec_scores": {c: 50 for c in ("R", "I", "A", "S", "E", "C")},
+                "riasec_axis_confidence": {c: 0.0 for c in ("R", "I", "A", "S", "E", "C")},
                 "narrative": "안정보다 성장을 우선시함",
                 "evidence": [],
             }

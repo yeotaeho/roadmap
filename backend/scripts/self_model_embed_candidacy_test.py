@@ -79,6 +79,42 @@ async def run() -> int:
         rows = await repo.fetch_unembedded_users(model, 1000)
         check("빈 자기모델 제외", uid not in {str(r.user_id) for r in rows})
 
+        # all-neutral 추출(6축 전부 중립·top_codes 빈·narrative 없음)도 임베딩할 것이 없어 자격 미달
+        await s.execute(text(
+            "UPDATE user_self_model SET riasec = CAST(:r AS JSONB), narrative_summary = NULL, "
+            "updated_at = now() WHERE user_id = CAST(:u AS UUID)"
+        ), {"u": uid, "r": (
+            '{"scores": {"R": 50, "I": 50, "A": 50, "S": 50, "E": 50, "C": 50}, '
+            '"weights": {"R": 0, "I": 0, "A": 0, "S": 0, "E": 0, "C": 0}, "top_codes": []}'
+        )})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("all-neutral riasec 제외", uid not in {str(r.user_id) for r in rows})
+
+        # 기존 임베딩 보유 all-neutral(신호 소실) 사용자는 정리 경로(embed_service)를 위해 후보 유지
+        await repo.upsert_user_embedding(uid, [0.0] * 3072, "cafebabecafebabe", model)
+        await s.commit()
+        await s.execute(text(
+            "UPDATE user_self_model SET updated_at = now() WHERE user_id = CAST(:u AS UUID)"
+        ), {"u": uid})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("정리 대상(기존 임베딩+신호 소실) 후보 유지", uid in {str(r.user_id) for r in rows})
+        await repo.delete_user_embedding(uid)
+        await s.commit()
+
+        # top_codes 에 값이 생기면 후보 진입
+        await s.execute(text(
+            "UPDATE user_self_model SET riasec = CAST(:r AS JSONB), updated_at = now() "
+            "WHERE user_id = CAST(:u AS UUID)"
+        ), {"u": uid, "r": (
+            '{"scores": {"R": 50, "I": 62, "A": 50, "S": 50, "E": 50, "C": 50}, '
+            '"weights": {"R": 0, "I": 1, "A": 0, "S": 0, "E": 0, "C": 0}, "top_codes": ["I"]}'
+        )})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("top_codes 진입 → 후보 진입", uid in {str(r.user_id) for r in rows})
+
         # 자기모델 축이 차면 후보 진입(프로필 없음)
         await s.execute(text(
             "UPDATE user_self_model SET riasec = CAST(:r AS JSONB), narrative_summary = '탐구 지향', "

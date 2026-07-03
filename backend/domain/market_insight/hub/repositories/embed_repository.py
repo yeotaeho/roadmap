@@ -87,13 +87,19 @@ _FETCH_UNEMBEDDED_USERS = text(
             OR per.user_id IS NOT NULL
         ))
         OR (sm.user_id IS NOT NULL
-            AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
+            AND (
+                (jsonb_typeof(sm.riasec->'top_codes') = 'array'
+                 AND jsonb_array_length(sm.riasec->'top_codes') > 0)
+                OR sm.narrative_summary IS NOT NULL
+            ))
         OR EXISTS (
             SELECT 1 FROM user_self_model_evidence pe
             WHERE pe.user_id = u.id AND pe.is_sensitive = false
               AND pe.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
               AND (pe.polarity IS NULL OR pe.polarity <> 'dislike')
         )
+        -- 기존 임베딩 보유자는 신호 소실 시 정리(embed_service)를 위해 계속 후보 — 두 번째 AND 절이 변경 없으면 걸러냄
+        OR e.user_id IS NOT NULL
     )
       AND (
         e.user_id IS NULL
