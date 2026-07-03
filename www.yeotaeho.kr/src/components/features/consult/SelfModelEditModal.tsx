@@ -3,7 +3,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { updateSelfModel, type AxisLevel, type SelfModelEdits, type SelfModelLive } from "@/lib/api/selfModel";
+import { updateSelfModel, type AxisLevel, type BigFiveScores, type RiasecScores, type SelfModelEdits, type SelfModelLive } from "@/lib/api/selfModel";
 import { useStore } from "@/store";
 
 type Seg = AxisLevel | "auto";
@@ -36,13 +36,13 @@ export function SelfModelEditModal({ data, onClose }: { data: SelfModelLive | nu
   // 손대지 않고 저장하면 코치 소유가 유지되고(footgun 방지), 레벨을 고르면 그때 user_form 이 된다.
   const [riasec, setRiasec] = useState<Record<string, Seg>>(() =>
     Object.fromEntries(RIASEC.map((a) => [a.key,
-      riasecUserForm ? scoreToLevel(data?.riasec?.scores?.[a.key as keyof typeof data.riasec.scores]) : "auto"])),
+      riasecUserForm ? scoreToLevel(data?.riasec?.scores?.[a.key as keyof RiasecScores]) : "auto"])),
   );
   const [bigFive, setBigFive] = useState<Record<string, Seg>>(() =>
     Object.fromEntries(BIG_FIVE.map((a) => {
       const raw = a.key === "stability"
         ? (typeof data?.bigFive?.scores?.N === "number" ? 100 - data.bigFive.scores.N : undefined)
-        : data?.bigFive?.scores?.[a.key as keyof typeof data.bigFive.scores];
+        : data?.bigFive?.scores?.[a.key as keyof BigFiveScores];
       return [a.key, bigFiveUserForm ? scoreToLevel(raw) : "auto"];
     })),
   );
@@ -57,10 +57,10 @@ export function SelfModelEditModal({ data, onClose }: { data: SelfModelLive | nu
       if (v !== "auto") { out[k] = v; continue; }
       const raw =
         group === "riasec"
-          ? data?.riasec?.scores?.[k as keyof NonNullable<typeof data.riasec>["scores"]]
+          ? data?.riasec?.scores?.[k as keyof RiasecScores]
           : k === "stability"
             ? (typeof data?.bigFive?.scores?.N === "number" ? 100 - data.bigFive.scores.N : undefined)
-            : data?.bigFive?.scores?.[k as keyof NonNullable<typeof data.bigFive>["scores"]];
+            : data?.bigFive?.scores?.[k as keyof BigFiveScores];
       out[k] = scoreToLevel(raw);
     }
     return out;

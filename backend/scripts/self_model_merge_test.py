@@ -49,7 +49,7 @@ def run() -> int:
     check("source→user_form", r["source"] == "user_form")
 
     # 5. 빈 축만 consult 채움 (기존 user_form 은 riasec 만, big_five 없음)
-    existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form"}
+    existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form", "axis_source": {"riasec": "user_form"}}
     r = merge_structured(existing, {"big_five": {"openness": 70}, "axis_confidence": {"big_five": 0.8}}, "consult_extraction")
     check("빈 축 consult 채움", r["big_five"] == {"openness": 70})
     check("기존 riasec 보존", r["riasec"] == {"top_codes": ["A"]})
@@ -113,6 +113,23 @@ def run() -> int:
     # scores 는 shrinkage(K=8) 로 누적가중 1.9 에선 반올림 상 그대로일 수 있음 — raw 로 blend 발생 자체를 단정.
     check("코치 big_five 는 blend(상승)", m["big_five"]["raw"]["O"] > 55, str(m["big_five"]["raw"]))
     check("axis_source 보존", m["axis_source"] == {"riasec": "user_form"}, str(m.get("axis_source")))
+
+    # 9. legacy 행(axis_source 없음, source='user_form') 도 riasec blend 를 막아야 함 — 폴백 가드
+    existing = {
+        "riasec": {"scores": {"S": 78}, "raw": {"S": 78.0}, "weights": {"S": 3.0}, "top_codes": ["S"]},
+        "source": "user_form",
+        "axis_confidence": {"riasec": 1.0},
+        "axis_source": None,
+    }
+    incoming = {
+        "riasec": {
+            "window_scores": {"R": 50, "I": 95, "A": 90, "S": 50, "E": 50, "C": 50},
+            "window_conf": {"R": 0.2, "I": 0.9, "A": 0.8, "S": 0.2, "E": 0.2, "C": 0.2},
+        },
+        "axis_confidence": {"riasec": 0.9},
+    }
+    r = merge_structured(existing, incoming, "consult_extraction")
+    check("legacy user_form 행 riasec blend 미잠식", r["riasec"] == existing["riasec"], str(r["riasec"]))
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

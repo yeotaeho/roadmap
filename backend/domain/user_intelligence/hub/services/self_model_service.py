@@ -48,16 +48,19 @@ def _incoming_conf(incoming: dict, axis: str, source: str) -> float:
 
 
 def _axis_is_user_form(base: dict, axis: str) -> bool:
-    """해당 축이 사용자 확정(user_form)인지 — 축별 provenance."""
+    """해당 축이 사용자 확정(user_form)인지 — 축별 provenance. axis_source 부재 시 legacy 행 source 로 폴백."""
     src = base.get("axis_source")
-    return isinstance(src, dict) and src.get(axis) == SOURCE_USER_FORM
+    if isinstance(src, dict):
+        return src.get(axis) == SOURCE_USER_FORM
+    # 구 도식(axis_source 신설 전)의 행 단위 source='user_form' 보호를 유지
+    return base.get("source") == SOURCE_USER_FORM
 
 
 def merge_structured(existing: dict | None, incoming: dict, source: str) -> dict:
     """구조 축 병합(순수). user_form 우위·빈 축만 coach 채움·저confidence 보류.
 
     existing: 기존 행 dict|None. incoming: {riasec, big_five, narrative_summary, axis_confidence}.
-    반환: 저장할 최종 행 dict(riasec, big_five, narrative_summary, axis_confidence, source).
+    반환: 저장할 최종 행 dict(riasec, big_five, narrative_summary, axis_confidence, source, axis_source).
     """
     base = dict(existing or {})
     existing_source = base.get("source")
