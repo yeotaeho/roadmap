@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 
+from domain.user_intelligence.spokes.infra import consult_graph
 from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph
 
 PASS = 0
@@ -90,6 +91,12 @@ async def run() -> int:
     graph3 = build_consult_graph(svc3)
     await collect(graph3, {"user_id": "u1", "session_id": "s3", "message": "x"}, {"configurable": {"thread_id": "t3"}})
     check("빈 응답 미저장", svc3.persisted == [], str(svc3.persisted))
+
+    # 강등 함수 — 전역을 직접 조작해 검증(순수, Neon 연결 없음)
+    consult_graph._CHECKPOINTER = "sentinel"
+    consult_graph.disable_checkpointer()
+    demoted = await consult_graph.get_checkpointer()
+    check("disable_checkpointer 후 get_checkpointer None", demoted is None, str(demoted))
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0

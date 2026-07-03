@@ -13,7 +13,7 @@ from core.llm.client import _CONSULT_SYSTEM_PROMPT, LlmClient
 from domain.user_intelligence.hub.repositories.consult_context_repository import ConsultContextRepository
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services import consult_context
-from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph, get_checkpointer
+from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph, disable_checkpointer, get_checkpointer
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +142,19 @@ class ConsultService:
         async with AsyncSessionLocal() as db:
             await ConsultSessionRepository(db).add_message(session_id, "assistant", content)
 
+    async def _persist_assistant_if_missing(self, session_id: str, content: str) -> None:
+        """강등 경로 저장 — persist 노드가 이미 같은 내용을 저장했으면 건너뛴다(이중 저장 방지)."""
+        if not content:
+            return
+        try:
+            async with AsyncSessionLocal() as db:
+                msgs = await ConsultSessionRepository(db).fetch_messages(session_id)
+            if msgs and msgs[-1]["role"] == "assistant" and msgs[-1]["content"] == content:
+                return
+            await self._persist_assistant(session_id, content)
+        except Exception as pe:  # 강등 경로의 저장 실패는 대화 지속을 막지 않는다.
+            logger.warning(f"강등 경로 부분 응답 저장 실패: {pe}")
+
     async def _get_graph(self):
         if self._graph is None:
             self._graph = build_consult_graph(self, await get_checkpointer())
@@ -160,6 +173,16 @@ class ConsultService:
         graph = await self._get_graph()
         config = {"configurable": {"thread_id": session_id}}
         state_in = {"user_id": user_id, "session_id": session_id, "message": message}
-        async for chunk in graph.astream(state_in, config, stream_mode="custom"):
-            yield _sse(chunk)
+        acc = ""
+        try:
+            async for chunk in graph.astream(state_in, config, stream_mode="custom"):
+                if chunk.get("type") == "delta":
+                    acc += chunk.get("content") or ""
+                yield _sse(chunk)
+        except Exception as e:  # 체크포인트 쓰기 등 그래프 실행 실패 — 강등하고 부분 응답은 보존.
+            logger.warning(f"상담 그래프 실행 실패(체크포인터 비활성 강등): {e}")
+            disable_checkpointer()
+            self._graph = None  # 다음 요청은 무체크포인트로 재구성
+            await self._persist_assistant_if_missing(session_id, acc)
+            yield _sse({"type": "error", "message": str(e)})
         yield _sse({"type": "done"})

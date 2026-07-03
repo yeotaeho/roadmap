@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, TypedDict
 
@@ -11,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 logger = logging.getLogger(__name__)
 
 _CHECKPOINTER: Any = None  # None=미시도, False=비활성 확정, 그 외=AsyncPostgresSaver
+_CHECKPOINTER_LOCK = asyncio.Lock()
 
 
 class ConsultState(TypedDict, total=False):
@@ -35,19 +37,28 @@ async def get_checkpointer():
     global _CHECKPOINTER
     if _CHECKPOINTER is not None:
         return _CHECKPOINTER or None
-    try:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    async with _CHECKPOINTER_LOCK:
+        if _CHECKPOINTER is not None:
+            return _CHECKPOINTER or None
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-        from core.config.settings import get_settings
+            from core.config.settings import get_settings
 
-        cm = AsyncPostgresSaver.from_conn_string(_psycopg_dsn(get_settings().database_url))
-        saver = await cm.__aenter__()  # 프로세스 수명 동안 유지(의도적 미종료)
-        await saver.setup()  # 멱등 — 테이블은 Task 1 PoC 승인 시 이미 생성됨
-        _CHECKPOINTER = saver
-    except Exception as e:
-        logger.warning(f"LangGraph 체크포인터 비활성(무체크포인트로 동작): {e}")
-        _CHECKPOINTER = False
+            cm = AsyncPostgresSaver.from_conn_string(_psycopg_dsn(get_settings().database_url))
+            saver = await cm.__aenter__()  # 프로세스 수명 동안 유지(의도적 미종료)
+            await saver.setup()  # 멱등 — 테이블은 Task 1 PoC 승인 시 이미 생성됨
+            _CHECKPOINTER = saver
+        except Exception as e:
+            logger.warning(f"LangGraph 체크포인터 비활성(무체크포인트로 동작): {e}")
+            _CHECKPOINTER = False
     return _CHECKPOINTER or None
+
+
+def disable_checkpointer() -> None:
+    """체크포인터를 프로세스 수명 동안 비활성화한다 — 커넥션 사망 등 런타임 강등용."""
+    global _CHECKPOINTER
+    _CHECKPOINTER = False
 
 
 def build_consult_graph(service: Any, checkpointer: Any | None = None):

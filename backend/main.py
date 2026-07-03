@@ -43,6 +43,9 @@ API_V1_PREFIX = "/api"
 async def lifespan(app: FastAPI):
     """FastAPI 라이프사이클 — APScheduler 자동 수집 스케줄러 시작/종료."""
     start_scheduler()
+    # 상담 체크포인터 워밍 — setup(멱등 DDL)을 요청 경로가 아니라 부팅 시 1회 수행(fail-open).
+    from domain.user_intelligence.spokes.infra.consult_graph import get_checkpointer
+    await get_checkpointer()
     try:
         yield
     finally:
