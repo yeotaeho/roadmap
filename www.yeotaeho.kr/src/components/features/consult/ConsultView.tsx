@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DEMO_ATTACHED_CONTEXTS,
   type CoachAttachedContext,
@@ -47,7 +48,9 @@ const INITIAL_MESSAGES: ConsultMessage[] = [buildProactiveGreeting()];
 export function ConsultView() {
   const formId = useId();
   const endRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
   const isAuthenticated = useStore((s) => s.isAuthenticated);
+  const profile = useStore((s) => s.profile);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [attached, setAttached] = useState<CoachAttachedContext | null>(null);
@@ -111,13 +114,19 @@ export function ConsultView() {
     setMessages((m) => [...m, { id: assistantId, role: "assistant", text: "" }]);
     setIsLoading(true);
     try {
-      await streamConsult(sessionId, text, (delta) => {
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === assistantId ? { ...msg, text: msg.text + delta } : msg,
-          ),
-        );
-      });
+      await streamConsult(
+        sessionId,
+        text,
+        (delta) => {
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === assistantId ? { ...msg, text: msg.text + delta } : msg,
+            ),
+          );
+        },
+        undefined,
+        () => queryClient.invalidateQueries({ queryKey: ["self-model", profile?.id] }),
+      );
     } catch {
       setMessages((m) =>
         m.map((msg) =>

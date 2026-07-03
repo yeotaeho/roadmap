@@ -58,6 +58,7 @@ export async function streamConsult(
   message: string,
   onDelta: (text: string) => void,
   signal?: AbortSignal,
+  onSelfModelUpdated?: () => void,
 ): Promise<void> {
   const token = getStore().getState().token;
   const res = await fetch(`${API_BASE_URL}/api/consult/stream`, {
@@ -91,6 +92,7 @@ export async function streamConsult(
       try {
         const obj = JSON.parse(raw) as { type?: string; content?: string };
         if (obj.type === 'delta' && obj.content) onDelta(obj.content);
+        if (obj.type === 'self_model_updated') onSelfModelUpdated?.();
         if (obj.type === 'error') throw new Error('consult stream error');
       } catch {
         /* 파싱 불가 조각 무시 */
