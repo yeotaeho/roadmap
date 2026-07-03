@@ -39,6 +39,9 @@ async def _seed_cleanup(s, uid: str, slug: str, opp: int) -> None:
     await s.execute(text(
         "DELETE FROM user_self_model_evidence WHERE user_id = CAST(:u AS UUID) "
         "AND content IN ('민감한 사정', '야근을 싫어함')"), {"u": uid})
+    # big_five 시드 격리 — user_self_model 행은 지우지 않고(다른 축 보존) big_five 만 원복.
+    await s.execute(text(
+        "UPDATE user_self_model SET big_five = NULL WHERE user_id = CAST(:u AS UUID)"), {"u": uid})
     await s.commit()
 
 
@@ -63,6 +66,17 @@ async def run() -> int:
             "VALUES (CAST(:u AS UUID), :o, 80, '의미 유사도 60점') "
             "ON CONFLICT (user_id, opportunity_id) DO UPDATE SET match_score = 80, "
             "match_reason = '의미 유사도 60점', match_explanation = NULL"), {"u": uid, "o": opp})
+        # Big Five 시드 — C(성실성) 뚜렷(85) → personality_traits 전달 검증용.
+        await s.execute(text(
+            "INSERT INTO user_self_model (user_id, big_five, source, updated_at) "
+            "VALUES (CAST(:u AS UUID), CAST(:bf AS JSONB), 'consult_extraction', now()) "
+            "ON CONFLICT (user_id) DO UPDATE SET big_five = CAST(:bf AS JSONB), updated_at = now()"
+        ), {"u": uid, "bf": (
+            '{"scores": {"O": 50, "C": 85, "E": 50, "A": 50, "N": 50}, '
+            '"raw": {"O": 50, "C": 85, "E": 50, "A": 50, "N": 50}, '
+            '"weights": {"O": 5, "C": 5, "E": 5, "A": 5, "N": 5}}'
+        )})
+        await s.commit()
         # 민감 시드는 화이트리스트 내 dimension('value') + is_sensitive=true 조합 —
         # dimension 필터가 아니라 is_sensitive = false 절만으로 걸러져야 검증이 실효적이다.
         for dim, pol, content, sens in [
@@ -111,6 +125,8 @@ async def run() -> int:
         check("민감 근거 미주입", "민감한 사정" not in blob, blob[:200])
         my_ctx = [c["ctx"] for c in captured if "야근을 싫어함" in (c["ctx"].get("dislikes") or [])]
         check("dislike 전달", len(my_ctx) >= 1)
+        my_pt = [c["ctx"] for c in captured if "체계적이고 성실함" in (c["ctx"].get("personality_traits") or [])]
+        check("personality_traits 전달", len(my_pt) >= 1, str([c["ctx"].get("personality_traits") for c in captured]))
 
         # 멱등 — 시드 사용자 항목이 다시 대상이 되지 않음
         captured.clear()
