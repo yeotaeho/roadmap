@@ -25,6 +25,13 @@ def upgrade() -> None:
         sa.Column("axis_source", postgresql.JSONB, nullable=True,
                   comment="축별 출처 — user_form 으로 확정한 축만 기록"),
     )
+    # 구 도식의 행 단위 source='user_form' 행을 축별 provenance 로 승격(신 도식 단일화)
+    op.execute(
+        "UPDATE user_self_model "
+        "SET axis_source = jsonb_build_object("
+        "'riasec','user_form','big_five','user_form','narrative_summary','user_form') "
+        "WHERE source = 'user_form'"
+    )
 
 
 def downgrade() -> None:

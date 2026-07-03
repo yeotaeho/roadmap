@@ -70,7 +70,8 @@ export function SelfModelPanel() {
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-700"
+            disabled={!data}
+            className="ml-auto inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-700"
             aria-label="성향 수정"
           >
             <Pencil className="h-3 w-3" /> 수정
