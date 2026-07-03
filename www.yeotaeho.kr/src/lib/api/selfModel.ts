@@ -13,7 +13,7 @@ export interface RiasecScores {
 }
 
 export interface SelfModelLive {
-  riasec: { scores: RiasecScores; top_codes: string[] } | null;
+  riasec: { scores?: RiasecScores; top_codes: string[] } | null;
   bigFive: Record<string, number> | null;
   narrativeSummary: string | null;
   axisConfidence: Record<string, number> | null;

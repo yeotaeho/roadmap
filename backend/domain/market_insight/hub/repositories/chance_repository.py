@@ -143,7 +143,11 @@ _FETCH_USERS = text(
             OR per.user_id IS NOT NULL
           ))
        OR (sm.user_id IS NOT NULL
-           AND (sm.riasec IS NOT NULL OR sm.narrative_summary IS NOT NULL))
+           AND (
+               (jsonb_typeof(sm.riasec->'top_codes') = 'array'
+                AND jsonb_array_length(sm.riasec->'top_codes') > 0)
+               OR sm.narrative_summary IS NOT NULL
+           ))
        OR EXISTS (
             SELECT 1 FROM user_self_model_evidence ev
             WHERE ev.user_id = u.id AND ev.is_sensitive = false

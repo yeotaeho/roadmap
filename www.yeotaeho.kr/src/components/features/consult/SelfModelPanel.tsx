@@ -27,24 +27,24 @@ export function SelfModelPanel() {
   const profile = useStore((s) => s.profile);
   const authed = !!profile?.id;
   const { data, isLoading, isError } = useQuery<SelfModelLive>({
-    queryKey: ["self-model"],
+    queryKey: ["self-model", profile?.id],
     queryFn: fetchSelfModel,
     staleTime: 5 * 60 * 1000,
     enabled: authed,
   });
 
   const riasec = data?.riasec ?? null;
-  const radarRows = riasec
+  const radarRows = riasec?.scores
     ? (["R", "I", "A", "S", "E", "C"] as const).map((c) => ({
         axis: RIASEC_LABEL[c],
-        value: riasec.scores[c] ?? 50,
+        value: riasec.scores?.[c] ?? 50,
       }))
     : [];
   const topCodes = riasec?.top_codes ?? [];
   const positives = (data?.evidence ?? [])
     .filter((e) => POSITIVE_DIMS.has(e.dimension))
     .slice(0, 8);
-  const hasAny = !!riasec || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0;
+  const hasAny = topCodes.length > 0 || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0;
 
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -67,7 +67,7 @@ export function SelfModelPanel() {
         </p>
       ) : (
         <>
-          {riasec && (
+          {riasec?.scores && (
             <div className="h-[220px] w-full min-w-0">
               <ResponsiveContainer width="100%" height={220}>
                 <RadarChart cx="50%" cy="50%" outerRadius="72%" data={radarRows}>
