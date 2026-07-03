@@ -173,7 +173,7 @@ class ConsultService:
         return self._graph
 
     async def stream_sse(self, user_id: str, session_id: str, message: str):
-        """사용자 메시지 저장 → LangGraph(prepare→respond→persist) 구동 → custom 델타를 SSE 로 중계."""
+        """사용자 메시지 저장 → LangGraph(prepare→plan→respond→persist→extract) 구동 → custom 델타를 SSE 로 중계."""
         async with AsyncSessionLocal() as db:
             await ConsultSessionRepository(db).add_message(session_id, "user", message)
 

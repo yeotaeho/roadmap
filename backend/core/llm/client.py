@@ -306,8 +306,11 @@ def _parse_interview_plan(content: str | None) -> dict:
     if data.get("focus_axis") in _INTERVIEW_AXIS_CODES:
         out["focus_axis"] = data["focus_axis"]
     fh = data.get("focus_hint")
-    if isinstance(fh, str) and fh.strip():
-        out["focus_hint"] = fh.strip()[:200]
+    if isinstance(fh, str):
+        # 개행·연속 공백 축약 + 큰따옴표 치환(시스템 지침 인용 프레임 보호) 후 200자 클램프.
+        cleaned = " ".join(fh.split()).replace('"', "'")
+        if cleaned:
+            out["focus_hint"] = cleaned[:200]
     return out
 
 
