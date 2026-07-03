@@ -98,6 +98,8 @@ _FETCH_UNEMBEDDED_USERS = text(
               AND pe.dimension IN ('like', 'value', 'aspiration', 'skill_signal')
               AND (pe.polarity IS NULL OR pe.polarity <> 'dislike')
         )
+        -- 기존 임베딩 보유자는 신호 소실 시 정리(embed_service)를 위해 계속 후보 — 두 번째 AND 절이 변경 없으면 걸러냄
+        OR e.user_id IS NOT NULL
     )
       AND (
         e.user_id IS NULL

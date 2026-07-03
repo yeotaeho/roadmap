@@ -91,6 +91,18 @@ async def run() -> int:
         rows = await repo.fetch_unembedded_users(model, 1000)
         check("all-neutral riasec 제외", uid not in {str(r.user_id) for r in rows})
 
+        # 기존 임베딩 보유 all-neutral(신호 소실) 사용자는 정리 경로(embed_service)를 위해 후보 유지
+        await repo.upsert_user_embedding(uid, [0.0] * 3072, "cafebabecafebabe", model)
+        await s.commit()
+        await s.execute(text(
+            "UPDATE user_self_model SET updated_at = now() WHERE user_id = CAST(:u AS UUID)"
+        ), {"u": uid})
+        await s.commit()
+        rows = await repo.fetch_unembedded_users(model, 1000)
+        check("정리 대상(기존 임베딩+신호 소실) 후보 유지", uid in {str(r.user_id) for r in rows})
+        await repo.delete_user_embedding(uid)
+        await s.commit()
+
         # top_codes 에 값이 생기면 후보 진입
         await s.execute(text(
             "UPDATE user_self_model SET riasec = CAST(:r AS JSONB), updated_at = now() "
