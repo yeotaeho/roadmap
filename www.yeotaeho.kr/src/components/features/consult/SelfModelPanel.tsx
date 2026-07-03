@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { fetchSelfModel, type SelfModelLive } from "@/lib/api/selfModel";
+import { useStore } from "@/store";
 
 const INDIGO = "#4F46E5";
 const RIASEC_LABEL: Record<string, string> = {
@@ -23,10 +24,13 @@ const RIASEC_TYPE: Record<string, string> = {
 const POSITIVE_DIMS = new Set(["like", "value", "aspiration", "skill_signal"]);
 
 export function SelfModelPanel() {
+  const profile = useStore((s) => s.profile);
+  const authed = !!profile?.id;
   const { data, isLoading, isError } = useQuery<SelfModelLive>({
     queryKey: ["self-model"],
     queryFn: fetchSelfModel,
     staleTime: 5 * 60 * 1000,
+    enabled: authed,
   });
 
   const riasec = data?.riasec ?? null;
@@ -49,7 +53,11 @@ export function SelfModelPanel() {
         나의 성향 지도
       </div>
 
-      {isLoading ? (
+      {!authed ? (
+        <p className="py-8 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          상담을 나누면 여기에 나의 성향이 나타나요.
+        </p>
+      ) : isLoading ? (
         <p className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">불러오는 중…</p>
       ) : isError ? (
         <p className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">잠시 후 다시 시도해 주세요.</p>
