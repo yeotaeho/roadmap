@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
-  COACH_ACTIVE_FOCUS,
   DEMO_ATTACHED_CONTEXTS,
   type CoachAttachedContext,
   type CoachWalletItem,
@@ -21,7 +20,7 @@ import {
   streamConsult,
 } from "@/lib/api/consult";
 import { useStore } from "@/store";
-import { InsightWalletPanel } from "./InsightWalletPanel";
+import { SelfModelPanel } from "./SelfModelPanel";
 
 type ConsultMessage = {
   id: string;
@@ -55,7 +54,7 @@ export function ConsultView() {
   const [isLoading, setIsLoading] = useState(false);
   const [attached, setAttached] = useState<CoachAttachedContext | null>(null);
   const [messages, setMessages] = useState<ConsultMessage[]>(() => INITIAL_MESSAGES);
-  const [wallet, setWallet] = useState<CoachWalletItem[]>([]);
+  const [, setWallet] = useState<CoachWalletItem[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
@@ -118,15 +117,6 @@ export function ConsultView() {
     };
     setWallet((w) => [item, ...w]);
   }, []);
-
-  const copyWallet = (id: string) => {
-    const item = wallet.find((w) => w.id === id);
-    if (item) void navigator.clipboard.writeText(item.body);
-  };
-
-  const removeWallet = (id: string) => {
-    setWallet((w) => w.filter((x) => x.id !== id));
-  };
 
   const send = async () => {
     const text = input.trim();
@@ -316,15 +306,7 @@ export function ConsultView() {
 
         {/* 우: 데스크톱 지갑 */}
         <aside className="hidden min-h-0 lg:flex lg:flex-col">
-          <InsightWalletPanel
-            activeFocusTitle={COACH_ACTIVE_FOCUS.title}
-            activeFocusSubtitle={COACH_ACTIVE_FOCUS.subtitle}
-            activeFocusBody={COACH_ACTIVE_FOCUS.body}
-            activeTags={COACH_ACTIVE_FOCUS.tags}
-            wallet={wallet}
-            onCopy={copyWallet}
-            onRemove={removeWallet}
-          />
+          <SelfModelPanel />
         </aside>
       </div>
 
@@ -374,15 +356,7 @@ export function ConsultView() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <InsightWalletPanel
-                  activeFocusTitle={COACH_ACTIVE_FOCUS.title}
-                  activeFocusSubtitle={COACH_ACTIVE_FOCUS.subtitle}
-                  activeFocusBody={COACH_ACTIVE_FOCUS.body}
-                  activeTags={COACH_ACTIVE_FOCUS.tags}
-                  wallet={wallet}
-                  onCopy={copyWallet}
-                  onRemove={removeWallet}
-                />
+                <SelfModelPanel />
               </div>
             </motion.div>
           </>
