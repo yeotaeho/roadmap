@@ -9,6 +9,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
 
+from langgraph.checkpoint.memory import MemorySaver
+
 from domain.user_intelligence.spokes.infra import consult_graph
 from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph
 
@@ -37,6 +39,18 @@ class FakeService:
                 yield d
 
         self._streamer = default_streamer
+
+        self.extract_calls: list[tuple[str, str]] = []
+
+        async def default_planner(coverage, recent, message):
+            return {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None}
+
+        self._planner = default_planner
+
+        async def default_extract_round(user_id, session_id):
+            self.extract_calls.append((user_id, session_id))
+
+        self._extract_round = default_extract_round
 
     async def _maybe_summarize(self, session_id):
         return "요약본"
@@ -97,6 +111,80 @@ async def run() -> int:
     consult_graph.disable_checkpointer()
     demoted = await consult_graph.get_checkpointer()
     check("disable_checkpointer 후 get_checkpointer None", demoted is None, str(demoted))
+
+    # --- SP-8b 인터뷰 검증 ---
+    from domain.user_intelligence.hub.services.consult_interview_bank import ALL_AXES
+
+    # 커버리지 병합 + 인터뷰 지침 주입
+    svc4 = FakeService()
+
+    async def planner4(coverage, recent, message):
+        return {"mode": "interview", "newly_covered": ["R", "I"], "focus_axis": "A", "focus_hint": "표현 활동 각도"}
+
+    svc4._planner = planner4
+    graph4 = build_consult_graph(svc4, MemorySaver())
+    cfg4 = {"configurable": {"thread_id": "t4"}}
+    await collect(graph4, {"user_id": "u1", "session_id": "s4", "message": "네"}, cfg4)
+    st4 = await graph4.aget_state(cfg4)
+    check("plan 커버리지 병합", st4.values.get("coverage") == {"R": True, "I": True}, str(st4.values.get("coverage")))
+    sys4 = svc4.seen_messages[0]["content"]
+    check("인터뷰 지침 주입", "예술형" in sys4 and "표현 활동 각도" in sys4, sys4[-200:])
+
+    # 경청 모드
+    svc5 = FakeService()
+
+    async def planner5(coverage, recent, message):
+        return {"mode": "listening", "newly_covered": [], "focus_axis": None, "focus_hint": None}
+
+    svc5._planner = planner5
+    graph5 = build_consult_graph(svc5)
+    await collect(graph5, {"user_id": "u1", "session_id": "s5", "message": "요즘 너무 힘들어"}, {"configurable": {"thread_id": "t5"}})
+    check("경청 모드 지침", "경청" in svc5.seen_messages[0]["content"], svc5.seen_messages[0]["content"][-200:])
+
+    # 플래너 실패 → 정적 폴백(첫 미커버 축)
+    svc6 = FakeService()
+
+    async def planner6(coverage, recent, message):
+        raise RuntimeError("plan fail")
+
+    svc6._planner = planner6
+    graph6 = build_consult_graph(svc6)
+    chunks6 = await collect(graph6, {"user_id": "u1", "session_id": "s6", "message": "hi"}, {"configurable": {"thread_id": "t6"}})
+    check("플랜 실패 폴백 지침", "현실형" in svc6.seen_messages[0]["content"], svc6.seen_messages[0]["content"][-200:])
+    check("플랜 실패에도 스트림 정상", any(c.get("type") == "delta" for c in chunks6), str(chunks6))
+
+    # 전 축 커버 → 즉시 추출 + 이벤트 + round_done
+    svc7 = FakeService()
+
+    async def planner7(coverage, recent, message):
+        return {"mode": "interview", "newly_covered": list(ALL_AXES), "focus_axis": None, "focus_hint": None}
+
+    svc7._planner = planner7
+    graph7 = build_consult_graph(svc7, MemorySaver())
+    cfg7 = {"configurable": {"thread_id": "t7"}}
+    chunks7 = await collect(graph7, {"user_id": "u7", "session_id": "s7", "message": "응"}, cfg7)
+    check("라운드 완료 즉시 추출", svc7.extract_calls == [("u7", "s7")], str(svc7.extract_calls))
+    check("self_model_updated 방출", any(c.get("type") == "self_model_updated" for c in chunks7), str(chunks7))
+    st7 = await graph7.aget_state(cfg7)
+    check("round_done 설정", st7.values.get("round_done") is True, str(st7.values.get("round_done")))
+
+    # 같은 스레드 다음 턴 — 재추출 없음
+    chunks7b = await collect(graph7, {"user_id": "u7", "session_id": "s7", "message": "더 얘기하자"}, cfg7)
+    check("round_done 재추출 스킵", len(svc7.extract_calls) == 1 and not any(c.get("type") == "self_model_updated" for c in chunks7b), str(svc7.extract_calls))
+
+    # 추출 실패 — 비치명(이벤트 없음·round_done 미설정)
+    svc8 = FakeService()
+    svc8._planner = planner7
+
+    async def boom_extract(user_id, session_id):
+        raise RuntimeError("extract fail")
+
+    svc8._extract_round = boom_extract
+    graph8 = build_consult_graph(svc8, MemorySaver())
+    cfg8 = {"configurable": {"thread_id": "t8"}}
+    chunks8 = await collect(graph8, {"user_id": "u8", "session_id": "s8", "message": "응"}, cfg8)
+    check("추출 실패 비치명", not any(c.get("type") == "self_model_updated" for c in chunks8)
+          and (await graph8.aget_state(cfg8)).values.get("round_done") is not True, str(chunks8))
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
