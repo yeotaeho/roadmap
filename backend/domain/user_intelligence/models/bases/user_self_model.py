@@ -31,6 +31,8 @@ class UserSelfModel(Base):
     narrative_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 축별 신뢰도 {"riasec":0.0-1.0, "big_five":..}
     axis_confidence: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # 축별 출처 — user_form 으로 확정한 축만 기록 {"riasec":"user_form"}. 없으면 코치 소유.
+    axis_source: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     source: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="consult_extraction"
     )

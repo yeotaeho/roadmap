@@ -36,7 +36,8 @@ def run() -> int:
     check("저신뢰 신뢰도 반영", (r["axis_confidence"] or {}).get("riasec") == 0.2)
 
     # 3. user_form 우위 — 기존 user_form 을 consult 가 못 덮음
-    existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form", "axis_confidence": {"riasec": 1.0}}
+    existing = {"riasec": {"top_codes": ["A"]}, "source": "user_form", "axis_confidence": {"riasec": 1.0},
+                "axis_source": {"riasec": "user_form"}}
     r = merge_structured(existing, {"riasec": {"top_codes": ["I"]}, "axis_confidence": {"riasec": 0.9}}, "consult_extraction")
     check("user_form 우위 유지", r["riasec"] == {"top_codes": ["A"]})
     check("source user_form 유지", r["source"] == "user_form")
@@ -58,6 +59,7 @@ def run() -> int:
         "riasec": {"scores": {"S": 78}, "raw": {"S": 78.0}, "weights": {"S": 3.0}, "top_codes": ["S"]},
         "source": "user_form",
         "axis_confidence": {"riasec": 1.0},
+        "axis_source": {"riasec": "user_form"},
     }
     incoming = {
         "riasec": {
@@ -75,6 +77,7 @@ def run() -> int:
         "big_five": {"scores": {"C": 78}, "raw": {"C": 78.0}, "weights": {"C": 3.0}},
         "source": "user_form",
         "axis_confidence": {"big_five": 1.0},
+        "axis_source": {"big_five": "user_form"},
     }
     incoming = {
         "big_five": {
@@ -86,6 +89,30 @@ def run() -> int:
     r = merge_structured(existing, incoming, "consult_extraction")
     check("user_form big_five blend 미잠식", r["big_five"] == existing["big_five"], str(r["big_five"]))
     check("user_form big_five source 유지", r["source"] == "user_form")
+
+    # 8. 축별 provenance — riasec 만 user_form 고정, big_five 는 코치 소유
+    existing_axis = {
+        "riasec": {"scores": {c: 60 for c in "RIASEC"}, "raw": {c: 60 for c in "RIASEC"},
+                   "weights": {c: 4 for c in "RIASEC"}, "top_codes": ["R"]},
+        "big_five": {"scores": {c: 55 for c in ("O", "C", "E", "A", "N")},
+                     "raw": {c: 55 for c in ("O", "C", "E", "A", "N")},
+                     "weights": {c: 1 for c in ("O", "C", "E", "A", "N")}},
+        "narrative_summary": None,
+        "axis_confidence": {"riasec": 1.0, "big_five": 0.2},
+        "axis_source": {"riasec": "user_form"},
+        "source": "consult_extraction",
+    }
+    incoming_both = {
+        "riasec": {"window_scores": {c: 90 for c in "RIASEC"}, "window_conf": {c: 0.9 for c in "RIASEC"}},
+        "big_five": {"window_scores": {c: 90 for c in ("O", "C", "E", "A", "N")}, "window_conf": {c: 0.9 for c in ("O", "C", "E", "A", "N")}},
+        "narrative_summary": None,
+        "axis_confidence": {"riasec": 0.9, "big_five": 0.9},
+    }
+    m = merge_structured(existing_axis, incoming_both, "consult_extraction")
+    check("user_form riasec 보존", m["riasec"] == existing_axis["riasec"], str(m["riasec"]))
+    # scores 는 shrinkage(K=8) 로 누적가중 1.9 에선 반올림 상 그대로일 수 있음 — raw 로 blend 발생 자체를 단정.
+    check("코치 big_five 는 blend(상승)", m["big_five"]["raw"]["O"] > 55, str(m["big_five"]["raw"]))
+    check("axis_source 보존", m["axis_source"] == {"riasec": "user_form"}, str(m.get("axis_source")))
 
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
