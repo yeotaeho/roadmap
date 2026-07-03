@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-07-03 — SP-6①: Big Five를 추천 설명 레이어에 활용
+- **무엇** — SP-5에서 채점한 Big Five 성격 5요인을 추천 **설명 레이어에만** 녹임. 순수 `big_five_traits`(뚜렷한 축만 — display 50±`TRAIT_MARGIN=12` 밖 — 강점·중립 서술어로, **신경성 N은 정서안정성(100−N) 관점만**·병리 규정 금지)를 `_build_user_context`가 `personality_traits`로 만들어 `explain_recommendations` LLM 컨텍스트에 주입. 프롬프트는 성격-적합을 **공고가 그 일하는 방식을 분명히 포함할 때만** 언급(억지·환각 금지)·강점 톤·섹터보다 개별 공고. **점수·임베딩·Sync/Chance 순위 불변** — 설명 문구만.
+- **왜** — 흥미(RIASEC)는 분야 매칭에 자연스럽지만 성격(Big Five)은 "일하는 방식·환경 적합"이라 섹터/공고 임베딩에 넣으면 노이즈. 성격의 제자리는 "이 일이 왜 당신과 맞는지" 설명 레이어(사용자 결정).
+- **어디** — [recommend_explain_service.py](../hub/services/recommend_explain_service.py)(`big_five_traits`·`TRAIT_MARGIN`·`_build_user_context`) · [recommend_explain_repository.py](../hub/repositories/recommend_explain_repository.py)(`_FETCH_USER_CONTEXT`에 `sm.big_five`) · [core/llm/client.py](../../../core/llm/client.py)(`_RECOMMEND_EXPLAIN_SYSTEM_PROMPT`). 스펙 [design](../../../docs/superpowers/specs/2026-07-03-big-five-recommend-explain-design.md)·플랜 [plan](../../../docs/superpowers/plans/2026-07-03-big-five-recommend-explain.md).
+- **검증** — SDD 단일 태스크 리뷰 Approved(personality_traits 경로 end-to-end 확인·점수/순위/임베딩 미변경·민감 미주입). **Codex 2라운드**: P2 1건(통합 테스트가 기존 사용자 big_five 컬럼을 NULL로 지워 dev DB 실데이터 파괴 위험) → 원값·행존재 저장 후 **원상 복원/생성행 삭제**로 수정(두 분기 데이터 동일성 검증), 재검토 클린. big_five_traits12·service7·parse8·job3 등 green. 커밋 5188127..91068c8.
+- **후속** — Big Five를 임베딩·Sync/Chance 점수에 반영(현재 설명만·의도적 제외) — 별도 SP. ② user_form 자기모델 입력 UI + 축별 provenance. ③ 규준집단 백분위(규준 데이터 확보 시).
+
 ## 2026-07-02 — SP-3: 자기모델 추천 반영 + LLM 설명 레이어
 - **무엇** — (1) 자기모델(RIASEC 라벨·서사·비민감 긍정 근거 top10)을 `build_user_embed_text` 직렬화에 통합(1000자 캡 내장·캡 후 해시)하고, 재임베딩 후보를 `users` 기준으로 재구성해 **프로필 없는 코치-only 사용자도 임베딩·매칭 대상**에 포함. (2) Gold 2테이블에 설명 컬럼(`sync_scores_daily.explanation`·`user_chance_matches.match_explanation`, 마이그 `a6af4387ed37`) + 재점수 upsert 시 입력 불변이면 보존/변경이면 NULL 무효화 CASE + 서빙 노출. (3) `LlmClient.explain_recommendations`(+닫힌 스키마 파서 `_parse_recommend_explain`, 200자 클램프)와 `RecommendExplainService` 일일 배치 — **사용자당 LLM 1회**로 Sync 상위 3섹터+Chance 상위 10매치 설명 생성(SQL 캡 선별·TOCTOU 가드·per-user 격리), `_REFINE_PIPELINE` 마지막 등록. dislike 근거는 프롬프트로 전달해 충돌 시 주의 문구 포함(감점 없음). (4) 프론트 Sync 행·Chance 카드에 설명 서브텍스트(`match_explanation ?? match_reason` 폴백). **민감 근거는 임베딩·프롬프트 어디에도 미주입**(리포 필터 + 반증 검증 테스트).
 - **왜** — SP-1/2b로 쌓인 자기모델이 추천을 실제로 바꾸고 "왜 이 추천인지"가 보여야 "AI 상담실=개인화 본가" 루프가 닫힘. 폼을 안 채워도 코치와 대화하면 Sync/Chance 신호가 두꺼워지는 비전의 완성.

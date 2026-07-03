@@ -22,9 +22,47 @@ EVIDENCE_POS = 5
 EVIDENCE_DISLIKE = 3
 MAX_USERS_PER_RUN = 200
 
+TRAIT_MARGIN = 12  # display 점수가 50±이 값 밖일 때만 뚜렷한 특질로 서술(중립 스킵).
+
+_BIG_FIVE_TRAIT_DESC = {
+    "O": ("새로움·아이디어에 개방적", "익숙함·실용을 선호"),
+    "C": ("체계적이고 성실함", "유연하고 즉흥적"),
+    "E": ("사람과 교류에서 에너지를 얻음", "혼자 깊이 집중하는 걸 선호"),
+    "A": ("협력적이고 배려심 있음", "독립적이고 솔직함"),
+}
+# 신경성 N 은 정서안정성(100-N) 관점으로만 — 병리·약점 규정 금지.
+_STABILITY_DESC = ("차분하고 정서적으로 안정적", "신중하게 위험을 살핌")
+
 
 def _is_dislike(ev: dict) -> bool:
     return ev.get("dimension") == "dislike" or ev.get("polarity") == "dislike"
+
+
+def big_five_traits(big_five: dict | None) -> list[str]:
+    """Big Five 점수에서 뚜렷한 축만 강점·중립 서술어로 변환한다. 순수·결정론.
+
+    각 축 점수가 50±TRAIT_MARGIN 밖일 때만 서술(중립 스킵). N 은 정서안정성(100-N) 관점으로만.
+    """
+    scores = big_five.get("scores") if isinstance(big_five, dict) else None
+    if not isinstance(scores, dict):
+        return []
+    traits: list[str] = []
+    for code in ("O", "C", "E", "A"):
+        v = scores.get(code)
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        if v >= 50 + TRAIT_MARGIN:
+            traits.append(_BIG_FIVE_TRAIT_DESC[code][0])
+        elif v <= 50 - TRAIT_MARGIN:
+            traits.append(_BIG_FIVE_TRAIT_DESC[code][1])
+    n = scores.get("N")
+    if isinstance(n, (int, float)) and not isinstance(n, bool):
+        stability = 100 - n
+        if stability >= 50 + TRAIT_MARGIN:
+            traits.append(_STABILITY_DESC[0])
+        elif stability <= 50 - TRAIT_MARGIN:
+            traits.append(_STABILITY_DESC[1])
+    return traits
 
 
 def _build_user_context(ctx_row: dict | None, evidence: list[dict]) -> dict:
@@ -42,6 +80,7 @@ def _build_user_context(ctx_row: dict | None, evidence: list[dict]) -> dict:
         "narrative": ctx.get("narrative_summary"),
         "positives": positives,
         "dislikes": dislikes,
+        "personality_traits": big_five_traits(ctx.get("big_five")),
     }
 
 

@@ -77,7 +77,7 @@ _FETCH_UNEXPLAINED_MATCHES = text(
 _FETCH_USER_CONTEXT = text(
     """
     SELECT u.id AS user_id, p.target_job, p.interest_keywords,
-           sm.riasec, sm.narrative_summary
+           sm.riasec, sm.narrative_summary, sm.big_five
     FROM users u
     LEFT JOIN user_sync_profiles p ON p.user_id = u.id
     LEFT JOIN user_self_model sm ON sm.user_id = u.id
@@ -167,6 +167,7 @@ class RecommendExplainRepository(BaseRepository):
                 "interest_keywords": r.interest_keywords if isinstance(r.interest_keywords, list) else [],
                 "riasec": r.riasec,
                 "narrative_summary": r.narrative_summary,
+                "big_five": r.big_five,
             }
             for r in rows
         }
