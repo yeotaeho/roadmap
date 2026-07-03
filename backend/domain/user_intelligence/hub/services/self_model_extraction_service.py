@@ -62,7 +62,7 @@ class SelfModelExtractionService:
         await svc.upsert_structured(user_id, incoming, SOURCE)
         n_ev = await svc.append_evidence(user_id, result["evidence"], SOURCE)
         await self.coach_repo.update_extracted(session_id, cutoff)
-        return {"extracted": len(new_msgs), "evidence": n_ev, "riasec": True}
+        return {"extracted": len(new_msgs), "evidence": n_ev, "riasec": True, "big_five": True}
 
     async def extract_pending(self, limit: int = 20) -> dict:
         """신규 메시지 충분한 세션을 스캔해 각각 추출한다. 건별 실패 격리."""

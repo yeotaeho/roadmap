@@ -53,6 +53,8 @@ export function SelfModelPanel() {
     .filter((e) => POSITIVE_DIMS.has(e.dimension))
     .slice(0, 8);
   const hasAny = topCodes.length > 0 || !!data?.narrativeSummary || (data?.evidence?.length ?? 0) > 0;
+  const bfScores = bigFive?.scores;
+  const bigFiveHasSignal = !!bfScores && Object.values(bfScores).some((v) => v !== 50);
 
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -123,14 +125,14 @@ export function SelfModelPanel() {
         </>
       )}
 
-      {bigFive?.scores ? (
+      {bigFiveHasSignal && bfScores ? (
         <div className="mt-1 space-y-1.5">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">성격 5요인</p>
           {BF_AXES.map(({ key, label, flip }) => {
-            const v = flip ? 100 - (bigFive.scores.N ?? 50) : (bigFive.scores[key] ?? 50);
+            const v = flip ? 100 - (bfScores.N ?? 50) : (bfScores[key] ?? 50);
             return (
               <div key={key} className="flex items-center gap-2">
-                <span className="w-14 shrink-0 text-[11px] text-slate-600 dark:text-slate-300">{label}</span>
+                <span className="w-14 shrink-0 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">{label}</span>
                 <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                   <div className="absolute left-1/2 top-0 h-full w-px bg-slate-300 dark:bg-slate-600" aria-hidden />
                   <div className="h-full rounded-full bg-indigo-500" style={{ width: `${v}%` }} />

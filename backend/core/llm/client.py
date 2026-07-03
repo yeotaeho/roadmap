@@ -173,7 +173,8 @@ _EXPLAIN_TEXT_MAX = 200
 def _parse_self_model_extract(raw: str | None) -> dict:
     """자기모델 추출 응답을 검증된 결과로 파싱한다. 무네트워크 순수 함수.
 
-    riasec_scores 6축 0~100·axis_confidence 6축 0~1(누락 키는 50·0). evidence 는 content 있는 항목만·최대 20개,
+    riasec_scores 6축 0~100·riasec_axis_confidence 6축 0~1(누락 키는 50·0),
+    big_five_scores 5축 0~100·big_five_axis_confidence 5축 0~1(누락 키는 50·0). evidence 는 content 있는 항목만·최대 20개,
     dimension 닫힌집합 외는 'other', polarity 닫힌집합 외는 None, confidence 0~1 클램프.
     """
     def _empty() -> dict:
@@ -858,7 +859,7 @@ class LlmClient:
         return (resp.choices[0].message.content or "").strip()
 
     async def extract_self_model(self, messages: list[dict]) -> dict:
-        """코치 대화(최근 미추출분)에서 자기모델 신호(RIASEC·서사·근거)를 추출한다."""
+        """코치 대화(최근 미추출분)에서 자기모델 신호(RIASEC·Big Five·서사·근거)를 추출한다."""
         convo = "\n".join(
             f"{m.get('role')}: {m.get('content')}" for m in messages
             if m.get("role") in ("user", "assistant") and m.get("content")

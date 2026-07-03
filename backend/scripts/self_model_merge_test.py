@@ -70,6 +70,23 @@ def run() -> int:
     check("user_form riasec blend 미잠식", r["riasec"] == existing["riasec"], str(r["riasec"]))
     check("user_form riasec source 유지", r["source"] == "user_form")
 
+    # 7. user_form big_five 는 consult blend 가 못 덮음 (case6 대칭 — window_scores 형태 incoming)
+    existing = {
+        "big_five": {"scores": {"C": 78}, "raw": {"C": 78.0}, "weights": {"C": 3.0}},
+        "source": "user_form",
+        "axis_confidence": {"big_five": 1.0},
+    }
+    incoming = {
+        "big_five": {
+            "window_scores": {"O": 50, "C": 95, "E": 90, "A": 50, "N": 50},
+            "window_conf": {"O": 0.2, "C": 0.9, "E": 0.8, "A": 0.2, "N": 0.2},
+        },
+        "axis_confidence": {"big_five": 0.9},
+    }
+    r = merge_structured(existing, incoming, "consult_extraction")
+    check("user_form big_five blend 미잠식", r["big_five"] == existing["big_five"], str(r["big_five"]))
+    check("user_form big_five source 유지", r["source"] == "user_form")
+
     print(f"\n결과: PASS={PASS} FAIL={FAIL}")
     return 1 if FAIL else 0
 
