@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config.settings import get_settings
 from core.database import AsyncSessionLocal
 from core.llm.client import _CONSULT_SYSTEM_PROMPT, LlmClient
+from core.llm.provider import resolve_user_llm
 from domain.user_intelligence.hub.repositories.consult_context_repository import ConsultContextRepository
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services import consult_context
@@ -110,8 +111,12 @@ class ConsultService:
         self.session = session
         self.repo = ConsultContextRepository(session)
         settings = get_settings()
-        self._model = settings.llm_classify_model
-        self._api_key = settings.openai_api_key
+        try:
+            self._api_key, self._model, self._base_url = resolve_user_llm(settings)
+            self._llm_error = None
+        except Exception as e:  # provider 해석 실패 — 설정은 안 깨고(비-LLM 엔드포인트 유지) stream 에서 노출.
+            self._api_key = self._model = self._base_url = None
+            self._llm_error = str(e)
         # 주입점(테스트 대체 가능). 기본은 실제 LLM.
         self._streamer = self._default_streamer
         self._summarizer = self._default_summarizer
@@ -120,16 +125,16 @@ class ConsultService:
         self._graph = None
 
     async def _default_streamer(self, messages: list[dict]):
-        llm = LlmClient(api_key=self._api_key, model=self._model)
+        llm = LlmClient(api_key=self._api_key, model=self._model, base_url=self._base_url)
         async for delta in llm.stream_chat(messages):
             yield delta
 
     async def _default_summarizer(self, prior_summary, older):
-        llm = LlmClient(api_key=self._api_key, model=self._model)
+        llm = LlmClient(api_key=self._api_key, model=self._model, base_url=self._base_url)
         return await llm.summarize_conversation(prior_summary, older)
 
     async def _default_planner(self, coverage: dict, recent: list[dict], message: str) -> dict:
-        llm = LlmClient(api_key=self._api_key, model=self._model)
+        llm = LlmClient(api_key=self._api_key, model=self._model, base_url=self._base_url)
         return await llm.plan_interview(coverage, recent, message)
 
     async def _default_extract_round(self, user_id: str, session_id: str) -> None:
@@ -245,8 +250,8 @@ class ConsultService:
         async with AsyncSessionLocal() as db:
             await ConsultSessionRepository(db).add_message(session_id, "user", message)
 
-        if not self._api_key:
-            yield _sse({"type": "delta", "content": "현재 AI 상담이 비활성화되어 있습니다(API 키 미설정)."})
+        if self._llm_error:
+            yield _sse({"type": "error", "message": f"상담 모델 설정 오류 — {self._llm_error}"})
             yield _sse({"type": "done"})
             return
 

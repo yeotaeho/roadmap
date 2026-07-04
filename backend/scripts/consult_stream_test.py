@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
+os.environ.setdefault("USER_LLM_PROVIDER", "openai")
 
 import httpx  # noqa: E402
 from sqlalchemy import text  # noqa: E402

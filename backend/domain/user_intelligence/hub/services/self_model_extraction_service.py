@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config.settings import get_settings
 from core.llm.client import LlmClient
+from core.llm.provider import resolve_user_llm
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services.self_model_service import SelfModelService
 
@@ -23,12 +24,18 @@ class SelfModelExtractionService:
         self.db = db
         self.coach_repo = ConsultSessionRepository(db)
         settings = get_settings()
-        self._api_key = settings.openai_api_key
-        self._model = settings.llm_classify_model
+        try:
+            self._api_key, self._model, self._base_url = resolve_user_llm(settings)
+            self._llm_error = None
+        except Exception as e:  # 해석 실패 — 추출 시 raise(폴백 없음). 구성 자체는 안 깨 테스트 주입을 허용.
+            self._api_key = self._model = self._base_url = None
+            self._llm_error = str(e)
         self._extractor = self._default_extractor
 
     async def _default_extractor(self, messages: list[dict]) -> dict:
-        llm = LlmClient(api_key=self._api_key, model=self._model)
+        if self._llm_error:
+            raise RuntimeError(f"자기모델 추출 LLM 설정 오류 — {self._llm_error}")
+        llm = LlmClient(api_key=self._api_key, model=self._model, base_url=self._base_url)
         return await llm.extract_self_model(messages)
 
     async def extract_session(self, user_id: str, session_id: str, force: bool = False) -> dict:
