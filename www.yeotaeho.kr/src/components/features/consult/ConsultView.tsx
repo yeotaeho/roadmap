@@ -70,6 +70,11 @@ export function ConsultView() {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
 
+  // 로그아웃/사용자 전환 시 이전 사용자의 진행률이 잠깐 노출되지 않도록 리셋
+  useEffect(() => {
+    setCoverage(null);
+  }, [profile?.id]);
+
   // 로그인 상태에서 마운트 시 세션 재개(get-or-create) + 기존 히스토리 로드
   useEffect(() => {
     if (!isAuthenticated) {

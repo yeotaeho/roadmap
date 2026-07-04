@@ -201,8 +201,14 @@ async def run() -> int:
     svc9._planner = counting_planner
     graph9 = build_consult_graph(svc9, MemorySaver())
     cfg9 = {"configurable": {"thread_id": "t9"}}
-    await collect(graph9, {"user_id": "u9", "session_id": "s9", "message": "a", "round_done": True}, cfg9)
+    chunks9 = await collect(graph9, {"user_id": "u9", "session_id": "s9", "message": "a", "round_done": True}, cfg9)
     check("round_done 플래너 게이트", planner_calls == [], str(planner_calls))
+    cov9 = [c for c in chunks9 if c.get("type") == "coverage"]
+    check(
+        "round_done 에도 coverage 방출(배지 sticky)",
+        len(cov9) == 1 and cov9[0].get("covered") == 0 and cov9[0].get("total") == len(ALL_AXES),
+        str(cov9),
+    )
 
     # focus_hint 의 개행·따옴표가 새니타이즈되어 지침에 인용 격리로 들어간다
     from core.llm.client import _parse_interview_plan

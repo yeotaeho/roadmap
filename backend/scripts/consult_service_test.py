@@ -92,20 +92,19 @@ async def run() -> int:
         # 신호 보유 자기모델 → _load_context_system 이 배경 기억 블록을 주입 (monkeypatch)
         from domain.user_intelligence.hub.services import self_model_service as _sms
 
-        async def fake_get_self_model(self, user_id, include_sensitive=False):
+        async def fake_get_self_model_structured(self, user_id):
             return {
                 "riasec": {"top_codes": ["I", "A"]},
                 "bigFive": {"scores": {"O": 80, "C": 75, "E": 50, "A": 50, "N": 20}},
                 "narrativeSummary": "탐구를 좋아하는 빌더",
-                "evidence": [],
             }
 
-        _orig = _sms.SelfModelService.get_self_model
-        _sms.SelfModelService.get_self_model = fake_get_self_model
+        _orig = _sms.SelfModelService.get_self_model_structured
+        _sms.SelfModelService.get_self_model_structured = fake_get_self_model_structured
         try:
             sysmsg = await svc._load_context_system(uid)
         finally:
-            _sms.SelfModelService.get_self_model = _orig
+            _sms.SelfModelService.get_self_model_structured = _orig
         check("배경 기억 블록 주입", "배경 기억" in sysmsg and "탐구" in sysmsg, sysmsg[-300:])
         check("서사 포함", "탐구를 좋아하는 빌더" in sysmsg, sysmsg[-300:])
 

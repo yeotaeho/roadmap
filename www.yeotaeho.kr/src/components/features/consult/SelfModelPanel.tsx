@@ -79,7 +79,7 @@ export function SelfModelPanel({ coverage }: { coverage?: { covered: number; tot
         )}
       </div>
 
-      {coverage && coverage.total > 0 && (
+      {authed && coverage && coverage.total > 0 && (
         <div className="mt-2">
           {coverage.covered >= coverage.total ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">

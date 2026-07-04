@@ -130,6 +130,19 @@ class SelfModelService:
             "evidence": evidence,
         }
 
+    async def get_self_model_structured(self, user_id: str) -> dict:
+        """구조 척추만(근거 미조회) — 배경 기억 등 evidence 불필요 경로용. camelCase."""
+        model = await self.repo.fetch_self_model(user_id)
+        if model is None:
+            return {"riasec": None, "bigFive": None, "narrativeSummary": None, "axisConfidence": None, "axisSource": None}
+        return {
+            "riasec": model["riasec"],
+            "bigFive": model["big_five"],
+            "narrativeSummary": model["narrative_summary"],
+            "axisConfidence": model["axis_confidence"],
+            "axisSource": model.get("axis_source"),
+        }
+
     async def upsert_structured(self, user_id: str, incoming: dict, source: str) -> dict:
         existing = await self.repo.fetch_self_model(user_id)
         merged = merge_structured(existing, incoming, source)
