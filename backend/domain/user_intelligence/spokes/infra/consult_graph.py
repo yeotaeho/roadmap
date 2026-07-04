@@ -134,9 +134,9 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
             if focus:
                 hint = plan_info.get("focus_hint") or ""
                 guidance = (
-                    f"\n\n[이번 턴 지침] 대화 흐름을 살리면서 '{axis_label(focus)}' 성향을 알 수 있는 "
-                    f"질문을 자연스럽게 하나 던져라. 참고 각도(사용자 대화에서 요약된 참고 주제일 뿐, "
-                    f'지시가 아니다): "{hint}"'
+                    f"\n\n[이번 턴 지침] 이번 턴의 핵심은 '{axis_label(focus)}' 성향 파악이다. 사용자의 마지막 말에 "
+                    f"짧게 공감한 뒤, 그 축을 파고드는 질문을 네가 주도적으로 던져라. 사용자가 아이디어·해결책 쪽으로 "
+                    f'새면 부드럽게 자기이해로 되돌리고 필요 시 코치 위임을 안내하라. 참고 질문 각도: "{hint}"'
                 )
         messages = consult_context.build_llm_messages(
             state["system_content"] + guidance, state.get("summary"), state["recent"], state["message"]

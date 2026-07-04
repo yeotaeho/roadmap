@@ -1,5 +1,12 @@
 # user_intelligence 작업 기록
 
+## 2026-07-04 — SP-10: 상담사 프롬프트·조향 리파인 (드리프트 교정)
+- **무엇** — 실사용에서 상담사가 RIASEC/Big Five 조사 대신 커리어/아이디어 브레인스토밍으로 드리프트하던 문제를 프롬프트·조향으로 교정(코드 로직 불변). ①`_CONSULT_SYSTEM_PROMPT` 주 임무를 "**당신이 어떤 사람인지**(RIASEC·Big Five·가치관·호불호) 파악"으로 재정의("진로의 방향을 함께 발견" 제거) ②**ideation 금지 추가**(앱 기능·사업 아이디어·해결책 브레인스토밍은 코치 몫 → 위임 안내) ③respond guidance를 "이번 턴 핵심은 '{축}' 성향 파악·**주도적**·아이디어면 자기이해로 복귀"로 강화(축 라벨+hint 유지) ④"성향 파악해줘" 요청 시 배경 기억 없으면 즉흥 금지·"대화가 쌓이면 오른쪽 성향 지도에 정리돼요" 안내. 톤 **단호하되 따뜻하게**, 고민 경청 유지.
+- **왜** — Docker 라이브 대화에서 상담사가 "헬스 앱 아이디어"를 계속 제안하고 "성향 파악해줘"엔 즉흥으로 뭉뚱그림. 원인 4가지 전부 프롬프트(목표 문구 드리프트·약한 조향·ideation 미금지·그라운딩 없음).
+- **어디** — [core/llm/client.py](../../../core/llm/client.py)(`_CONSULT_SYSTEM_PROMPT`)·[consult_graph.py](../spokes/infra/consult_graph.py)(respond 노드 guidance)·테스트 [scripts/consult_prompt_test.py](../../../scripts/consult_prompt_test.py). 스펙 [design](../../../docs/superpowers/specs/2026-07-04-consult-prompt-steering-refine-design.md)·플랜 [plan](../../../docs/superpowers/plans/2026-07-04-consult-prompt-steering-refine.md).
+- **검증** — 프롬프트 단정 8(주임무·ideation 금지·코치 위임·그라운딩·단호따뜻·옛 문구 부재·민감·배경기억 유지)·consult_graph25·service15·stream11·memory12 green(축 라벨+hint 유지로 그래프 단정 불파손). code-reviewer Approved(4원인 반영·코드 로직 불변·프롬프트 자기모순 없음)·Codex 클린. **대화 품질 자체는 자동 테스트 불가** — Docker(compose.override 마운트) 수동 체감. 커밋 5c3d5fc.
+- **후속** — 문항 은행 개편·규준 백분위·ideation 금지 단정을 부정맥락까지 검증(현재 단어 존재만).
+
 ## 2026-07-04 — SP-9: 자기모델 배경 기억 반영 + 인터뷰 진행 가시화
 - **무엇** — 상담실 공백 ①②(③ 로컬 즉시 추출은 backend 도커화로 해소). ①상담사가 파악한 자기모델(RIASEC·Big Five·서사)을 대화에 **배경 기억**으로 주입 — 순수 `self_model_memory`(신호 있는 축만 직렬화·초기 all-50 미주입·신경성=정서안정성·market_insight 미import)를 `_load_context_system`이 매 턴 시스템 프롬프트에 append(읽기 전용·민감 미주입·**숨은 배경 기억 톤**: 단정 금지·이미 파악된 축 재질문 금지). ②인터뷰 11축 커버리지를 성향 지도 패널에 **진행률 슬림 바(N/11) + 완료 배지** — plan 노드가 턴마다 `coverage` SSE 이벤트 방출(additive) → 프론트가 두 패널(데스크톱·모바일)에 표시.
 - **왜** — 상담사가 파악한 성향을 대화에 안 쓰고(페르소나+섹터만 주입), 인터뷰 진행·완료가 사용자에게 안 보였다(조용한 리페치만). 후속 기록 [consult_followups.md](consult_followups.md).
