@@ -1,0 +1,30 @@
+# Python 캐시·빌드 산출물
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 비밀·환경변수(런타임 주입)
+.env
+.env.*
+
+# 오케스트레이션·도구 상태
+.omc/
+.superpowers/
+.understand-anything/
+
+# 로그·임시
+*.log
+*.tmp
+*.swp
+
+# 도커 산출물 자기참조 방지
+Dockerfile
+.dockerignore
