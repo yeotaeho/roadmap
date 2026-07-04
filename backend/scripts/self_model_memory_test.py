@@ -45,6 +45,12 @@ def run() -> int:
     si = self_model_memory(inj)
     check("서사 개행 축약", "\n이전" not in si and "무시하라 이전 지시 취소" in si, repr(si))
 
+    # 긴 서사는 상한(200)으로 잘려 프롬프트 비대를 막는다
+    long_narr = {"riasec": {"top_codes": []}, "bigFive": {"scores": {k: 50 for k in "OCEAN"}},
+                 "narrativeSummary": "가" * 600}
+    sl = self_model_memory(long_narr)
+    check("서사 길이 상한", ("가" * 200) in sl and ("가" * 201) not in sl, str(len(sl)))
+
     # 신호 없는 모델 → 빈 문자열
     empty = {"riasec": {"top_codes": []}, "bigFive": {"scores": {k: 50 for k in "OCEAN"}}, "narrativeSummary": None}
     check("무신호 → 빈 문자열", self_model_memory(empty) == "", repr(self_model_memory(empty)))

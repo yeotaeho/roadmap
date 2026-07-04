@@ -90,7 +90,7 @@ def self_model_memory(model: dict | None) -> str:
         parts.append("- 성격: " + ", ".join(traits))
     narr = model.get("narrativeSummary")
     if isinstance(narr, str) and narr.strip():
-        clean = " ".join(narr.split())  # 개행·연속 공백 축약 — 구조 보호.
+        clean = " ".join(narr.split())[:200]  # 개행 축약 + 한 줄 배경 힌트 길이 상한(프롬프트 비대 방지).
         parts.append('- 한 줄: "' + clean.replace('"', "'") + '"')  # 인용 격리.
     if not parts:
         return ""
