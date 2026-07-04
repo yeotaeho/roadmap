@@ -59,6 +59,7 @@ export function ConsultView() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
   const scrollBottom = useCallback(() => {
@@ -126,6 +127,7 @@ export function ConsultView() {
         },
         undefined,
         () => queryClient.invalidateQueries({ queryKey: ["self-model", profile?.id] }),
+        (covered, total) => setCoverage({ covered, total }),
       );
     } catch {
       setMessages((m) =>
@@ -288,7 +290,7 @@ export function ConsultView() {
 
         {/* 우: 데스크톱 성향 패널 */}
         <aside className="hidden min-h-0 lg:flex lg:flex-col">
-          <SelfModelPanel />
+          <SelfModelPanel coverage={coverage} />
         </aside>
       </div>
 
@@ -338,7 +340,7 @@ export function ConsultView() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <SelfModelPanel />
+                <SelfModelPanel coverage={coverage} />
               </div>
             </motion.div>
           </>
