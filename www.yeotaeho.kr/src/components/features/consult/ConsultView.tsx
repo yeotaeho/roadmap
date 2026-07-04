@@ -59,6 +59,7 @@ export function ConsultView() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
   const scrollBottom = useCallback(() => {
@@ -68,6 +69,11 @@ export function ConsultView() {
   useEffect(() => {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
+
+  // 로그아웃/사용자 전환 시 이전 사용자의 진행률이 잠깐 노출되지 않도록 리셋
+  useEffect(() => {
+    setCoverage(null);
+  }, [profile?.id]);
 
   // 로그인 상태에서 마운트 시 세션 재개(get-or-create) + 기존 히스토리 로드
   useEffect(() => {
@@ -126,6 +132,7 @@ export function ConsultView() {
         },
         undefined,
         () => queryClient.invalidateQueries({ queryKey: ["self-model", profile?.id] }),
+        (covered, total) => setCoverage({ covered, total }),
       );
     } catch {
       setMessages((m) =>
@@ -288,7 +295,7 @@ export function ConsultView() {
 
         {/* 우: 데스크톱 성향 패널 */}
         <aside className="hidden min-h-0 lg:flex lg:flex-col">
-          <SelfModelPanel />
+          <SelfModelPanel coverage={coverage} />
         </aside>
       </div>
 
@@ -338,7 +345,7 @@ export function ConsultView() {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <SelfModelPanel />
+                <SelfModelPanel coverage={coverage} />
               </div>
             </motion.div>
           </>

@@ -90,6 +90,13 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
     async def plan(state: ConsultState) -> dict:
         if state.get("round_done"):
             # 라운드 완료 후에는 조사 계획이 불필요 — 플래너 호출을 건너뛰고 일반 상담으로 응답한다.
+            # 단, coverage 는 재방출해 리로드 시 배지가 사라지지 않게 한다.
+            cov = state.get("coverage") or {}
+            get_stream_writer()({
+                "type": "coverage",
+                "covered": sum(1 for a in ALL_AXES if cov.get(a)),
+                "total": len(ALL_AXES),
+            })
             return {"mode": "interview", "plan": {}}
         coverage = dict(state.get("coverage") or {})
         try:
@@ -107,6 +114,11 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         if focus is None and mode != "listening":
             focus = first_uncovered(coverage)
         hint = p.get("focus_hint") or (probe_hint(focus) if focus else None)
+        get_stream_writer()({
+            "type": "coverage",
+            "covered": sum(1 for a in ALL_AXES if coverage.get(a)),
+            "total": len(ALL_AXES),
+        })
         return {"coverage": coverage, "mode": mode, "plan": {"focus_axis": focus, "focus_hint": hint}}
 
     async def respond(state: ConsultState) -> dict:

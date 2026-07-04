@@ -59,6 +59,7 @@ export async function streamConsult(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
   onSelfModelUpdated?: () => void,
+  onCoverage?: (covered: number, total: number) => void,
 ): Promise<void> {
   const token = getStore().getState().token;
   const res = await fetch(`${API_BASE_URL}/api/consult/stream`, {
@@ -90,9 +91,12 @@ export async function streamConsult(
       const raw = dataLine.slice(5).trim();
       if (!raw) continue;
       try {
-        const obj = JSON.parse(raw) as { type?: string; content?: string };
+        const obj = JSON.parse(raw) as { type?: string; content?: string; covered?: number; total?: number };
         if (obj.type === 'delta' && obj.content) onDelta(obj.content);
         if (obj.type === 'self_model_updated') onSelfModelUpdated?.();
+        if (obj.type === 'coverage' && typeof obj.covered === 'number' && typeof obj.total === 'number') {
+          onCoverage?.(obj.covered, obj.total);
+        }
         if (obj.type === 'error') throw new Error('consult stream error');
       } catch {
         /* 파싱 불가 조각 무시 */

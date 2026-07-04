@@ -32,7 +32,7 @@ const BF_AXES: { key: "O" | "C" | "E" | "A" | "N"; label: string; flip?: boolean
   { key: "N", label: "정서안정성", flip: true },
 ];
 
-export function SelfModelPanel() {
+export function SelfModelPanel({ coverage }: { coverage?: { covered: number; total: number } | null }) {
   const profile = useStore((s) => s.profile);
   const authed = !!profile?.id;
   const [editing, setEditing] = useState(false);
@@ -78,6 +78,29 @@ export function SelfModelPanel() {
           </button>
         )}
       </div>
+
+      {authed && coverage && coverage.total > 0 && (
+        <div className="mt-2">
+          {coverage.covered >= coverage.total ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+              <Sparkles className="h-3 w-3" /> 성향이 정리됐어요
+            </span>
+          ) : (
+            <>
+              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <span>성향 파악</span>
+                <span>{coverage.covered}/{coverage.total}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                <div
+                  className="h-full rounded-full bg-indigo-500 transition-all"
+                  style={{ width: `${Math.round((coverage.covered / coverage.total) * 100)}%` }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {!authed ? (
         <p className="py-8 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
