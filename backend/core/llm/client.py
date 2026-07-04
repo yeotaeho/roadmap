@@ -764,11 +764,12 @@ class LlmClient:
         api_key: str,
         model: str = "gpt-4o-mini",
         embed_model: str = "text-embedding-3-large",
+        base_url: str | None = None,
     ) -> None:
         # openai 는 사용 시점에만 임포트 — 순수 파서(_parse_classification) 테스트가 의존하지 않도록.
         from openai import AsyncOpenAI
 
-        self._client = AsyncOpenAI(api_key=api_key)
+        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._model = model
         self._embed_model = embed_model
 
