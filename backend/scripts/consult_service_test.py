@@ -51,6 +51,11 @@ async def _drain(gen) -> str:
     return out
 
 
+async def fake_planner(coverage, recent, message):
+    """SP-8b plan 노드가 실 LLM 을 타지 않게(커버리지가 안 차므로 추출도 안 돈다 — 기존 단정 무영향)."""
+    return {"mode": "interview", "newly_covered": [], "focus_axis": "I", "focus_hint": None}
+
+
 async def run() -> int:
     async with AsyncSessionLocal() as s:
         uid = await _uid(s)
@@ -72,6 +77,7 @@ async def run() -> int:
 
         svc._streamer = fake_streamer
         svc._summarizer = fake_summarizer
+        svc._planner = fake_planner
 
         sid = await svc.create_session(uid)
         # 스트림 1회 — 사용자+어시스턴트 저장
@@ -133,6 +139,7 @@ async def run() -> int:
             raise AssertionError("summarizer must not run without key")
 
         svc2._summarizer = boom
+        svc2._planner = fake_planner
         sid2 = await svc2.create_session(uid)
         async with AsyncSessionLocal() as s7:
             repo7 = ConsultSessionRepository(s7)
@@ -156,6 +163,7 @@ async def run() -> int:
 
         svc3._summarizer = raises
         svc3._streamer = fake_streamer3
+        svc3._planner = fake_planner
         sid3 = await svc3.create_session(uid)
         async with AsyncSessionLocal() as s8:
             repo8 = ConsultSessionRepository(s8)

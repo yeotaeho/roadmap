@@ -121,8 +121,27 @@ _COACH_SYSTEM_PROMPT = (
 _CONSULT_SYSTEM_PROMPT = (
     "너는 청년 진로 내비게이터의 'AI 상담사'다. 대화를 통해 사용자의 성격·성향·가치관·호불호를 파악하고, "
     "사용자가 미처 몰랐던 강점·관심 패턴을 짚어 준다. 진로의 방향을 함께 발견하는 것이 목표다. "
-    "구체적 로드맵·퀘스트 설계는 다루지 않는다(그건 코치의 몫). 막연한 응원 대신 통찰을 주는 질문을 던지고, "
-    "근거 없는 단정·과장은 피하며, 사용자의 말에서 관찰된 것만 언급한다. 답변은 따뜻하고 간결하게(보통 3~6문장)."
+    "실행 조언은 하지 않는다 — 강의 수강·블로그 운영·자격증 취득 같은 구체적 행동 가이드와 로드맵·퀘스트 설계는 "
+    "모두 코치의 몫이며, 사용자가 원하면 '그 부분은 로드맵 코치가 도와드릴 거예요' 정도로만 위임을 안내한다. "
+    "흥미·일하는 방식·좋아하고 싫어하는 것은 대화 흐름 속에서 네가 먼저 자연스럽게 물어도 된다. "
+    "다만 민감한 주제(트라우마·건강·가족사·경제 사정 등)는 캐묻지 않고, 사용자가 스스로 꺼낸 경우에만 다룬다. "
+    "막연한 응원 대신 통찰을 주는 질문을 던지고, 근거 없는 단정·과장은 피하며, 사용자의 말에서 관찰된 것만 언급한다. "
+    "답변은 따뜻하고 간결하게(보통 3~6문장)."
+)
+
+_INTERVIEW_AXIS_CODES = ("R", "I", "A", "S", "E", "C", "BF_O", "BF_C", "BF_E", "BF_A", "BF_N")
+
+_INTERVIEW_PLAN_SYSTEM_PROMPT = (
+    "너는 진로 상담 대화의 인터뷰 플래너다. 상담사가 사용자의 직업 흥미(RIASEC: R 현실형, I 탐구형, "
+    "A 예술형, S 사회형, E 진취형, C 관습형)와 성격(Big Five: BF_O 개방성, BF_C 성실성, BF_E 외향성, "
+    "BF_A 우호성, BF_N 정서반응)을 파악하도록 이번 턴을 계획한다. "
+    "입력은 축별 커버리지(이미 신호를 확보한 축)·최근 대화·현재 사용자 메시지다. 판단할 것: "
+    "(1) mode — 사용자가 고민·감정·힘든 이야기를 꺼내 경청이 먼저면 'listening', 아니면 'interview'. "
+    "(2) newly_covered — 현재 사용자 메시지에 어떤 축의 성향 신호가 분명히 담겨 있으면 그 축 코드 목록(확실한 것만, 없으면 빈 배열). "
+    "(3) focus_axis — 다음으로 물어볼 미커버 축 1개(mode 가 listening 이면 null). "
+    "(4) focus_hint — 그 축을 대화 흐름에 맞게 자연스럽게 묻는 질문 각도 한 문장(한국어, focus_axis 없으면 null). "
+    'JSON 만 출력: {"mode": "interview"|"listening", "newly_covered": ["축코드"], '
+    '"focus_axis": "축코드"|null, "focus_hint": "문자열"|null}'
 )
 
 _COACH_SUMMARY_SYSTEM_PROMPT = (
@@ -268,6 +287,31 @@ def _parse_self_model_extract(raw: str | None) -> dict:
         "narrative": narrative,
         "evidence": evidence,
     }
+
+
+def _parse_interview_plan(content: str | None) -> dict:
+    """인터뷰 플랜 JSON 파싱 — 코드 검증·안전 기본값(실패 시 interview·빈 커버)."""
+    out: dict = {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None}
+    try:
+        data = json.loads(content or "{}")
+    except (TypeError, ValueError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    if data.get("mode") in ("interview", "listening"):
+        out["mode"] = data["mode"]
+    nc = data.get("newly_covered")
+    if isinstance(nc, list):
+        out["newly_covered"] = [c for c in nc if c in _INTERVIEW_AXIS_CODES]
+    if data.get("focus_axis") in _INTERVIEW_AXIS_CODES:
+        out["focus_axis"] = data["focus_axis"]
+    fh = data.get("focus_hint")
+    if isinstance(fh, str):
+        # 개행·연속 공백 축약 + 큰따옴표 치환(시스템 지침 인용 프레임 보호) 후 200자 클램프.
+        cleaned = " ".join(fh.split()).replace('"', "'")
+        if cleaned:
+            out["focus_hint"] = cleaned[:200]
+    return out
 
 
 def _parse_recommend_explain(
@@ -861,6 +905,27 @@ class LlmClient:
             ],
         )
         return (resp.choices[0].message.content or "").strip()
+
+    async def plan_interview(self, coverage: dict, recent: list[dict], message: str) -> dict:
+        """인터뷰 턴 계획 — 모드·신규 커버 축·다음 질문 축과 각도. 예외는 호출부 폴백."""
+        covered = [c for c in _INTERVIEW_AXIS_CODES if (coverage or {}).get(c)]
+        uncovered = [c for c in _INTERVIEW_AXIS_CODES if c not in covered]
+        convo = "\n".join(f"{m.get('role')}: {m.get('content')}" for m in (recent or [])[-6:])
+        user = (
+            f"[커버된 축] {', '.join(covered) or '없음'}\n"
+            f"[미커버 축] {', '.join(uncovered) or '없음'}\n"
+            f"[최근 대화]\n{convo or '(없음)'}\n\n[현재 사용자 메시지]\n{message}"
+        )
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _INTERVIEW_PLAN_SYSTEM_PROMPT},
+                {"role": "user", "content": user},
+            ],
+        )
+        return _parse_interview_plan(resp.choices[0].message.content)
 
     async def extract_self_model(self, messages: list[dict]) -> dict:
         """코치 대화(최근 미추출분)에서 자기모델 신호(RIASEC·Big Five·서사·근거)를 추출한다."""

@@ -13,6 +13,7 @@ from core.llm.client import _CONSULT_SYSTEM_PROMPT, LlmClient
 from domain.user_intelligence.hub.repositories.consult_context_repository import ConsultContextRepository
 from domain.user_intelligence.hub.repositories.consult_session_repository import ConsultSessionRepository
 from domain.user_intelligence.hub.services import consult_context
+from domain.user_intelligence.hub.services.self_model_extraction_service import SelfModelExtractionService
 from domain.user_intelligence.spokes.infra.consult_graph import build_consult_graph, disable_checkpointer, get_checkpointer
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,8 @@ class ConsultService:
         # 주입점(테스트 대체 가능). 기본은 실제 LLM.
         self._streamer = self._default_streamer
         self._summarizer = self._default_summarizer
+        self._planner = self._default_planner
+        self._extract_round = self._default_extract_round
         self._graph = None
 
     async def _default_streamer(self, messages: list[dict]):
@@ -63,6 +66,15 @@ class ConsultService:
     async def _default_summarizer(self, prior_summary, older):
         llm = LlmClient(api_key=self._api_key, model=self._model)
         return await llm.summarize_conversation(prior_summary, older)
+
+    async def _default_planner(self, coverage: dict, recent: list[dict], message: str) -> dict:
+        llm = LlmClient(api_key=self._api_key, model=self._model)
+        return await llm.plan_interview(coverage, recent, message)
+
+    async def _default_extract_round(self, user_id: str, session_id: str) -> None:
+        """라운드 완료 즉시 추출 — 독립 세션에서 force 로 임계 우회."""
+        async with AsyncSessionLocal() as db:
+            await SelfModelExtractionService(db).extract_session(user_id, session_id, force=True)
 
     async def create_session(self, user_id: str) -> str:
         return await ConsultSessionRepository(self.session).create_session(user_id)
@@ -161,7 +173,7 @@ class ConsultService:
         return self._graph
 
     async def stream_sse(self, user_id: str, session_id: str, message: str):
-        """사용자 메시지 저장 → LangGraph(prepare→respond→persist) 구동 → custom 델타를 SSE 로 중계."""
+        """사용자 메시지 저장 → LangGraph(prepare→plan→respond→persist→extract) 구동 → custom 델타를 SSE 로 중계."""
         async with AsyncSessionLocal() as db:
             await ConsultSessionRepository(db).add_message(session_id, "user", message)
 
