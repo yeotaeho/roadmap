@@ -82,3 +82,41 @@
 - 에이전트 프레임워크 최종 선택(`langchain.create_agent` vs 직접 LangGraph `StateGraph`) — Agent-3 착수 시 PoC로 확정.
 - `render_widget` 스펙 포맷(기존 visualize 위젯 규약 재사용 여부).
 - 웹 검색 provider·크롤러 선택 및 비용 모델.
+
+## 9. 메모리 계층 경계 + 코치 읽기 계약 (SP-8c — 계약 확정·코드 이연)
+
+> 2026-07-04. 상담실 리디자인(SP-8)에서 확정한 메모리 3계층과, **코치가 상담 맥락을 어떻게 읽을지의 계약**을
+> 미리 못박는다. 소비자인 코치가 아직 미구현이므로 **코드는 이연**하고 이 계약만 SSOT로 둔다(YAGNI — 코치
+> 착수 시 이 계약대로 읽기 서비스를 구현). 관련: [상담실 리디자인 스펙](../../../docs/superpowers/specs/2026-07-04-consult-redesign-langgraph-interview-design.md).
+
+### 9-1. 메모리 3계층 (상담실 SP-8 확정)
+
+```
+숏텀   — LangGraph state(+Postgres checkpointer). 인터뷰 커버리지·모드·최근 창. 세션 id = thread_id.
+미드텀 — consult_sessions.context_summary. 세션 롤링 요약.
+롱텀   — user_self_model + user_self_model_evidence. 정제된 자기모델(RIASEC·Big Five·서사·근거).
+```
+
+### 9-2. 코치 읽기 계약 (경계)
+
+**원칙 — 코치는 raw 대화(`consult_messages`)를 직접 읽지 않는다.** 상담과 코치는 분리된 도메인이며(상담=자기이해,
+코치=로드맵), 코치는 상담의 **정제층**만 소비한다. 이렇게 해야 도메인 결합을 막고, 코치가 상담 대화 원문에
+종속되지 않는다.
+
+코치가 읽어도 되는 것(정제층):
+| 소스 | 내용 | 도메인 |
+|---|---|---|
+| `user_self_model`(get_self_model) | RIASEC·Big Five 점수·서사·축별 provenance — **비민감** | user_intelligence |
+| `user_self_model_evidence` | 근거 문장 — **`is_sensitive=false` 만** | user_intelligence |
+| `consult_sessions.context_summary` | 최근 세션 요약 N개(대화 원문 아님) | user_intelligence |
+
+코치가 읽으면 안 되는 것:
+- `consult_messages`(대화 원문) — 감사·추출 전용 SSOT. 코치 컨텍스트에 원문 주입 금지.
+- 민감 근거(`is_sensitive=true`) — 상담 도메인이 격리하며, 코치를 포함한 어떤 소비자에도 미노출.
+
+### 9-3. 이연된 구현 (코치 착수 시)
+
+`user_intelligence`에 롱텀 읽기 서비스(예: `ConsultMemoryService.read_for_coach(user_id) -> {self_model, recent_summaries}`)
+를 두고, **코치 orchestrator가 도메인 간 직접 import 대신 이 서비스**를 호출한다(CLAUDE.md 교차 접근 원칙).
+지금 만들지 않는 이유 — 소비자(코치)가 없어 필요한 반환 모양이 확정되지 않았고, 무소비자 추상화는 헛수고
+위험이 크다. 코치 Agent-트랙 착수 시 이 계약을 출발점으로 구현·테스트한다.
