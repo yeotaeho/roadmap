@@ -75,7 +75,8 @@ async def run() -> int:
     cfg = {"configurable": {"thread_id": "t1"}}
     chunks = await collect(graph, {"user_id": "u1", "session_id": "s1", "message": "안녕하세요"}, cfg)
 
-    check("델타 2건 순서", chunks == [{"type": "delta", "content": "안"}, {"type": "delta", "content": "녕"}], str(chunks))
+    deltas = [c for c in chunks if c.get("type") == "delta"]
+    check("델타 2건 순서", deltas == [{"type": "delta", "content": "안"}, {"type": "delta", "content": "녕"}], str(deltas))
     check("어시스턴트 저장", svc.persisted == [("s1", "안녕")], str(svc.persisted))
     check("시스템 메시지 선두", svc.seen_messages[0]["role"] == "system" and "시스템 프롬프트" in svc.seen_messages[0]["content"], str(svc.seen_messages[0]))
     check("요약 블록 주입", any("요약본" in m["content"] for m in svc.seen_messages if m["role"] == "system"), str(svc.seen_messages))
@@ -124,11 +125,14 @@ async def run() -> int:
     svc4._planner = planner4
     graph4 = build_consult_graph(svc4, MemorySaver())
     cfg4 = {"configurable": {"thread_id": "t4"}}
-    await collect(graph4, {"user_id": "u1", "session_id": "s4", "message": "네"}, cfg4)
+    chunks4 = await collect(graph4, {"user_id": "u1", "session_id": "s4", "message": "네"}, cfg4)
     st4 = await graph4.aget_state(cfg4)
     check("plan 커버리지 병합", st4.values.get("coverage") == {"R": True, "I": True}, str(st4.values.get("coverage")))
     sys4 = svc4.seen_messages[0]["content"]
     check("인터뷰 지침 주입", "예술형" in sys4 and "표현 활동 각도" in sys4, sys4[-200:])
+    cov4 = [c for c in chunks4 if c.get("type") == "coverage"]
+    check("coverage 이벤트 방출", len(cov4) >= 1, str(cov4))
+    check("coverage covered=2 total=11", bool(cov4) and cov4[-1].get("covered") == 2 and cov4[-1].get("total") == 11, str(cov4))
 
     # 경청 모드
     svc5 = FakeService()

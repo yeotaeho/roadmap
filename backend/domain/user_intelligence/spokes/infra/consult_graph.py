@@ -107,6 +107,11 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         if focus is None and mode != "listening":
             focus = first_uncovered(coverage)
         hint = p.get("focus_hint") or (probe_hint(focus) if focus else None)
+        get_stream_writer()({
+            "type": "coverage",
+            "covered": sum(1 for a in ALL_AXES if coverage.get(a)),
+            "total": len(ALL_AXES),
+        })
         return {"coverage": coverage, "mode": mode, "plan": {"focus_axis": focus, "focus_hint": hint}}
 
     async def respond(state: ConsultState) -> dict:
