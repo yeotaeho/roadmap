@@ -158,6 +158,9 @@ class Settings(BaseSettings):
     llm_classify_model: str = Field(
         default="gpt-4o-mini", validation_alias="LLM_CLASSIFY_MODEL"
     )
+    gemini_api_key: Optional[str] = Field(default=None, validation_alias="GEMINI_API_KEY")
+    user_llm_provider: str = Field(default="gemini", validation_alias="USER_LLM_PROVIDER")
+    user_llm_model: str = Field(default="", validation_alias="USER_LLM_MODEL")
     llm_classify_confidence_min: float = Field(
         default=0.6, validation_alias="LLM_CLASSIFY_CONFIDENCE_MIN"
     )

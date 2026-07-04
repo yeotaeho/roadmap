@@ -8,6 +8,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
+os.environ.setdefault("USER_LLM_PROVIDER", "openai")
+
+import json  # noqa: E402
 
 from sqlalchemy import text
 
@@ -150,12 +153,12 @@ async def run() -> int:
         async with AsyncSessionLocal() as s5:
             check("종료 반영", (await ConsultSessionRepository(s5).get_session(sid))["status"] == "ended")
 
-        # 무키 — API 키 미설정이면 메시지 24개 초과라도 요약 없이 즉시 비활성 폴백.
+        # LLM 설정 오류 — _llm_error 설정 시 메시지 24개 초과라도 요약·스트림 없이 즉시 error SSE(폴백 없음).
         svc2 = ConsultService(s)
-        svc2._api_key = ""
+        svc2._llm_error = "테스트용 설정 오류"
 
         async def boom(prior, older):
-            raise AssertionError("summarizer must not run without key")
+            raise AssertionError("summarizer must not run when llm error set")
 
         svc2._summarizer = boom
         svc2._planner = fake_planner
@@ -165,9 +168,41 @@ async def run() -> int:
             for i in range(26):
                 await repo7.add_message(sid2, "user" if i % 2 == 0 else "assistant", f"k{i}")
         out2 = await _drain(svc2.stream_sse(uid, sid2, "질문"))
-        check("무키 시 비활성화 폴백 노출", "비활성화" in out2, out2[:200])
+        evs2 = [json.loads(l[5:]) for l in out2.splitlines() if l.startswith("data:")]
+        types2 = [e.get("type") for e in evs2]
+        check("_llm_error 시 error SSE(폴백 없음)", "error" in types2 and "delta" not in types2, str(types2))
 
         await svc2.end_session(uid, sid2)
+
+        # provider=gemini·GEMINI_API_KEY 없음 → stream_sse 가 error SSE(폴백 없음)
+        # 주의: `import core.config.settings as _st` 는 core/config/__init__.py 가
+        # `from .settings import settings` 로 패키지 속성 core.config.settings 를
+        # Settings 인스턴스로 덮어써 버려 _st.get_settings 가 실패한다 — get_settings 직접 import.
+        from core.config.settings import get_settings as _get_settings
+
+        _orig_env = (os.environ.get("USER_LLM_PROVIDER"), os.environ.get("GEMINI_API_KEY"))
+        os.environ["USER_LLM_PROVIDER"] = "gemini"
+        # .env 에 실키가 있으면 pop 만으로는 dotenv 소스로 폴백돼 키가 살아있다(env var > dotenv 우선순위) — 빈 문자열로 명시 오버라이드.
+        os.environ["GEMINI_API_KEY"] = ""
+        _get_settings.cache_clear()
+        try:
+            svc_err = ConsultService(s)
+            sid_err = await svc_err.get_or_create_session(uid)
+            out_err = await _drain(svc_err.stream_sse(uid, sid_err, "안녕"))
+            evs_err = [json.loads(l[5:]) for l in out_err.splitlines() if l.startswith("data:")]
+            types_err = [e.get("type") for e in evs_err]
+            check("gemini 키없음 → error SSE", "error" in types_err and "delta" not in types_err, str(types_err))
+            await svc_err.end_session(uid, sid_err)
+        finally:
+            if _orig_env[0] is not None:
+                os.environ["USER_LLM_PROVIDER"] = _orig_env[0]
+            else:
+                os.environ.pop("USER_LLM_PROVIDER", None)
+            if _orig_env[1] is not None:
+                os.environ["GEMINI_API_KEY"] = _orig_env[1]
+            else:
+                os.environ.pop("GEMINI_API_KEY", None)
+            _get_settings.cache_clear()
 
         # 요약 실패 — 롱세션(>24)에서 summarizer 가 raise 해도 스트림은 끝까지 완료되고
         # 어시스턴트 응답은 정상 저장된다(best-effort 요약, Codex P2).

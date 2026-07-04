@@ -1,5 +1,13 @@
 # user_intelligence 작업 기록
 
+## 2026-07-04 — SP-11: 상담·자기모델 추출 LLM을 Gemini 2.5 Flash로 (provider-flexible·fail-loud)
+- **무엇** — 상담(채팅·요약·플래너)과 자기모델 추출(RIASEC/Big Five 채점)이 쓰던 gpt-4o-mini(경량, 드리프트·반복 심함)를 **Gemini 2.5 Flash**로 교체 가능하게. `LlmClient`에 `base_url` 추가 → Google **OpenAI 호환 엔드포인트**로 기존 SDK에 물림. `core/llm/provider.py` `resolve_user_llm`(**fail-loud·폴백 없음**: provider=gemini인데 GEMINI_API_KEY 없으면 ValueError, provider별 모델 기본). settings `gemini_api_key`·`user_llm_provider`(기본 gemini)·`user_llm_model`. ConsultService·SelfModelExtractionService 배선 — 해석 실패는 `_llm_error`로 캡처(비-LLM 엔드포인트 유지), 상담=SSE error·추출=raise(즉시추출·일일배치 try/except 격리). **OpenAI 대체 없음** — 키·엔드포인트 문제가 표면화됨.
+- **왜** — Docker 라이브 대화에서 gpt-4o-mini가 SP-10 프롬프트를 잘 못 따라 커리어/아이디어 브레인스토밍으로 드리프트·질문 반복. Gemini 2.5 Flash는 지시 준수·추론(thinking)이 낫고 저렴 — 이 조향·채점 용도에 가성비 최적.
+- **어디** — [core/llm/client.py](../../../core/llm/client.py)(base_url)·[core/llm/provider.py](../../../core/llm/provider.py)(신설 resolve)·[core/config/settings.py](../../../core/config/settings.py)(gemini 필드)·[consult_service.py](../hub/services/consult_service.py)·[self_model_extraction_service.py](../hub/services/self_model_extraction_service.py). 스펙 [design](../../../docs/superpowers/specs/2026-07-04-consult-extraction-gemini-flash-design.md)·플랜 [plan](../../../docs/superpowers/plans/2026-07-04-consult-extraction-gemini-flash.md).
+- **검증** — SDD 2태스크 각 리뷰 Approved(적응 3건 정당: 제거된 폴백 테스트→_llm_error 교체·`core.config` 재수출 섀도잉 우회·실키 빈값 섀도). whole-branch(opus) Ready(코드)=Yes, 라이브 verify=배포 게이트. **Codex 클린**. resolve9·consult_service16·stream11·endpoint11·extraction18·graph25·memory12 green. **라이브 verify(실 GEMINI 키·Docker 마운트)**: PASS=4 — Gemini 2.5 Flash OpenAI-compat로 스트리밍·플래너 json_object·추출 json_object(RIASEC 6축 수치)까지 실동작 확인(opus Important 해소). 커밋 6470b0d..a1a5d56.
+- **배포 주의(기억)** — 기본 provider=gemini라 **GEMINI_API_KEY가 하드 필수**(없으면 상담 전면 error SSE·추출 raise). OpenAI로 되돌리려면 `USER_LLM_PROVIDER=openai`. Gemini 2.5는 thinking 모델이라 스트리밍 TTFT가 mini보다 큼(thinking budget 캡은 후속). 임베딩·세계-데이터 분류는 OpenAI 유지.
+- **후속** — 스트리밍 chat thinking budget 캡(TTFT)·규준 백분위·프롬프트 추가 조정.
+
 ## 2026-07-04 — SP-10: 상담사 프롬프트·조향 리파인 (드리프트 교정)
 - **무엇** — 실사용에서 상담사가 RIASEC/Big Five 조사 대신 커리어/아이디어 브레인스토밍으로 드리프트하던 문제를 프롬프트·조향으로 교정(코드 로직 불변). ①`_CONSULT_SYSTEM_PROMPT` 주 임무를 "**당신이 어떤 사람인지**(RIASEC·Big Five·가치관·호불호) 파악"으로 재정의("진로의 방향을 함께 발견" 제거) ②**ideation 금지 추가**(앱 기능·사업 아이디어·해결책 브레인스토밍은 코치 몫 → 위임 안내) ③respond guidance를 "이번 턴 핵심은 '{축}' 성향 파악·**주도적**·아이디어면 자기이해로 복귀"로 강화(축 라벨+hint 유지) ④"성향 파악해줘" 요청 시 배경 기억 없으면 즉흥 금지·"대화가 쌓이면 오른쪽 성향 지도에 정리돼요" 안내. 톤 **단호하되 따뜻하게**, 고민 경청 유지.
 - **왜** — Docker 라이브 대화에서 상담사가 "헬스 앱 아이디어"를 계속 제안하고 "성향 파악해줘"엔 즉흥으로 뭉뚱그림. 원인 4가지 전부 프롬프트(목표 문구 드리프트·약한 조향·ideation 미금지·그라운딩 없음).

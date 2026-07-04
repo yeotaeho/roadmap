@@ -1,4 +1,4 @@
-# 상담 세션 엔드포인트 — 생성·스트림(무키 경로)·messages·end·소유권 403/404·무토큰 401
+# 상담 세션 엔드포인트 — 생성·스트림(provider 해석: USER_LLM_PROVIDER=openai)·messages·end·소유권 403/404·무토큰 401
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
+os.environ.setdefault("USER_LLM_PROVIDER", "openai")
 
 import httpx
 from sqlalchemy import text
@@ -60,7 +61,7 @@ async def run() -> int:
         sid = r.json().get("sessionId")
         check("sessionId 반환", bool(sid))
 
-        # 스트림(무키 경로면 비활성 메시지 — 사용자 메시지는 저장됨)
+        # 스트림(provider 해석으로 OpenAI 고정 — 사용자 메시지 저장 + SSE 프레임 반환)
         r = await c.post("/api/consult/stream", headers=h, json={"sessionId": sid, "message": "안녕"})
         check("스트림 200", r.status_code == 200, str(r.status_code))
         check("SSE 프레임", "data:" in r.text, r.text[:80])
