@@ -18,6 +18,10 @@ from domain.user_intelligence.hub.services.consult_interview_bank import (
 
 logger = logging.getLogger(__name__)
 
+# 상담사 종료 신호(plan.complete)로 즉시 추출을 인정하는 최소 진행 — recent 윈도우 길이 기준
+# (turn1=0·turn2=2·turn3=4개). 개시 직후 조기 종료(turn 1~2)를 차단한다.
+_MIN_RECENT_FOR_COMPLETE = 4
+
 _CHECKPOINTER: Any = None  # None=미시도, False=비활성 확정, 그 외=AsyncPostgresSaver
 _CHECKPOINTER_CM: Any = None  # from_conn_string 컨텍스트 매니저 — GC 로 커넥션이 닫히지 않게 프로세스 수명 보관
 _CHECKPOINTER_LOCK = asyncio.Lock()
@@ -136,12 +140,13 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         if focus is None and mode != "listening":
             focus = first_uncovered(coverage)
         hint = p.get("focus_hint") or (probe_hint(focus) if focus else None)
+        complete = bool(p.get("complete")) and mode == "interview"  # 경청 턴은 종료로 보지 않음
         get_stream_writer()({
             "type": "coverage",
             "covered": sum(1 for a in ALL_AXES if coverage.get(a)),
             "total": len(ALL_AXES),
         })
-        return {"coverage": coverage, "mode": mode, "plan": {"focus_axis": focus, "focus_hint": hint}}
+        return {"coverage": coverage, "mode": mode, "plan": {"focus_axis": focus, "focus_hint": hint, "complete": complete}}
 
     async def respond(state: ConsultState) -> dict:
         from domain.user_intelligence.hub.services import consult_context
@@ -150,6 +155,11 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         guidance = ""
         if state.get("mode") == "listening":
             guidance = "\n\n[이번 턴 지침] 사용자가 고민을 꺼냈다. 조사 질문을 멈추고 경청·공감·반영에 집중하라."
+        elif (state.get("plan") or {}).get("complete"):
+            guidance = (
+                "\n\n[이번 턴 지침] 성향 파악이 충분하다. 새 질문을 던지지 말고, 지금까지 파악한 강점·흥미를 "
+                "따뜻하게 요약해 확인한 뒤, 구체적 진로·실행 계획은 로드맵 코치에서 이어감을 안내하며 자연스럽게 마무리하라."
+            )
         else:
             plan_info = state.get("plan") or {}
             focus = plan_info.get("focus_axis")
@@ -182,7 +192,12 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         if state.get("round_done"):
             return {}
         coverage = state.get("coverage") or {}
-        if not all(coverage.get(c) for c in ALL_AXES):
+        all_covered = all(coverage.get(c) for c in ALL_AXES)
+        # 종료 트리거: 전 11축 커버(기계적) 또는 상담사의 종료 판단(LLM 종료 신호). 후자는 조기
+        # 종료 방지를 위해 최소 진행(recent ≥ _MIN_RECENT_FOR_COMPLETE) 조건에서만 인정한다.
+        plan_complete = bool((state.get("plan") or {}).get("complete"))
+        progressed = len(state.get("recent") or []) >= _MIN_RECENT_FOR_COMPLETE
+        if not (all_covered or (plan_complete and progressed)):
             return {}
         writer = get_stream_writer()
         try:

@@ -148,8 +148,10 @@ _INTERVIEW_PLAN_SYSTEM_PROMPT = (
     "(2) newly_covered — 현재 사용자 메시지에 어떤 축의 성향 신호가 분명히 담겨 있으면 그 축 코드 목록(확실한 것만, 없으면 빈 배열). "
     "(3) focus_axis — 다음으로 물어볼 미커버 축 1개(mode 가 listening 이면 null). "
     "(4) focus_hint — 그 축을 대화 흐름에 맞게 자연스럽게 묻는 질문 각도 한 문장(한국어, focus_axis 없으면 null). "
+    "(5) complete — 인터뷰를 마무리할 시점이면 true. 주요 흥미·성격 축이 충분히 다뤄졌고 사용자가 정리에 "
+    "수긍하거나 대화를 닫으려는 신호(감사·'좋다'·동의)를 보이면 true, 아직 탐색 중이면 false. "
     'JSON 만 출력: {"mode": "interview"|"listening", "newly_covered": ["축코드"], '
-    '"focus_axis": "축코드"|null, "focus_hint": "문자열"|null}'
+    '"focus_axis": "축코드"|null, "focus_hint": "문자열"|null, "complete": true|false}'
 )
 
 _COACH_SUMMARY_SYSTEM_PROMPT = (
@@ -299,7 +301,7 @@ def _parse_self_model_extract(raw: str | None) -> dict:
 
 def _parse_interview_plan(content: str | None) -> dict:
     """인터뷰 플랜 JSON 파싱 — 코드 검증·안전 기본값(실패 시 interview·빈 커버)."""
-    out: dict = {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None}
+    out: dict = {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None, "complete": False}
     try:
         data = json.loads(content or "{}")
     except (TypeError, ValueError):
@@ -319,6 +321,7 @@ def _parse_interview_plan(content: str | None) -> dict:
         cleaned = " ".join(fh.split()).replace('"', "'")
         if cleaned:
             out["focus_hint"] = cleaned[:200]
+    out["complete"] = bool(data.get("complete"))
     return out
 
 

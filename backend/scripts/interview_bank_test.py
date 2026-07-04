@@ -52,7 +52,7 @@ def run() -> int:
     check("파서 focus", p["focus_axis"] == "I" and p["focus_hint"] == "원리 파기", str(p))
     # 파서 — 불량 입력 안전 기본값
     bad = _parse_interview_plan("망가진 json")
-    check("파서 불량 기본값", bad == {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None}, str(bad))
+    check("파서 불량 기본값", bad == {"mode": "interview", "newly_covered": [], "focus_axis": None, "focus_hint": None, "complete": False}, str(bad))
     check("파서 미지 mode 기본", _parse_interview_plan('{"mode": "chaos"}')["mode"] == "interview")
     check("파서 미지 focus 제외", _parse_interview_plan('{"focus_axis": "ZZ"}')["focus_axis"] is None)
 
