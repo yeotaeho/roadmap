@@ -81,11 +81,12 @@ async def get_checkpointer():
                 await saver.setup()  # 최초 1회 스키마·마이그레이션 생성
             except Exception as se:
                 # langgraph setup() 은 이미 마이그레이션된 Neon(pgbouncer) DB 에 재실행되면 버전 감지가
-                # 어긋나 checkpoint_migrations 중복키로 실패할 수 있다. 스키마가 이미 존재하면 saver 는
-                # 그대로 사용 가능 — setup 실패로 체크포인터를 강등하지 않는다(재시작 시 영구 비활성 방지).
-                if not await _checkpoint_schema_ready():
+                # 어긋나 checkpoint_migrations 중복키로 실패할 수 있다 — 스키마가 이미 존재하는 이 경우만
+                # 관용해 saver 를 유지하고 재시작 시 영구 비활성을 막는다. 그 외 실패(스키마 미생성·신규
+                # 마이그레이션 적용 실패 등)는 재-raise 해 fail-open(무체크포인트) 으로 강등한다.
+                if "checkpoint_migrations" not in str(se) or not await _checkpoint_schema_ready():
                     raise
-                logger.info(f"체크포인터 setup 스킵(이미 초기화됨): {se}")
+                logger.warning(f"체크포인터 setup 스킵(이미 초기화된 스키마·중복키 무시): {se}")
             _CHECKPOINTER_CM = cm  # GC 파이널라이저가 커넥션을 닫지 않게 참조 유지
             _CHECKPOINTER = saver
         except Exception as e:

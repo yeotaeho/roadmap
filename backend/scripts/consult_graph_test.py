@@ -264,6 +264,20 @@ async def run() -> int:
         ck2 = await consult_graph.get_checkpointer()
         check("스키마 없으면 fail-open(None)", ck2 is None, str(ck2))
     finally:
+        consult_graph._CHECKPOINTER = None
+        consult_graph._CHECKPOINTER_CM = None
+
+    # (c) 마이그레이션 무관 에러는 스키마가 있어도 강등(fail-open) — 관용 범위를 중복키로 좁힘
+    class _FakeSaverOther:
+        async def setup(self):
+            raise Exception("connection reset by peer")
+
+    _aio.AsyncPostgresSaver.from_conn_string = classmethod(lambda cls, dsn: _FakeCM(_FakeSaverOther()))
+    consult_graph._checkpoint_schema_ready = _ready_true
+    try:
+        ck3 = await consult_graph.get_checkpointer()
+        check("마이그레이션 무관 에러 fail-open(None)", ck3 is None, str(ck3))
+    finally:
         _aio.AsyncPostgresSaver.from_conn_string = _orig_from
         consult_graph._checkpoint_schema_ready = _orig_ready
         consult_graph._CHECKPOINTER = None
