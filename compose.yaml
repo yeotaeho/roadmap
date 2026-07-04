@@ -1,0 +1,26 @@
+# api·worker 역할 분할 — 단일 backend 이미지를 환경변수만 달리해 두 컨테이너로 실행한다.
+# api 는 HTTP 서빙(배치 off·마이그레이션 담당), worker 는 스케줄러 배치(딱 하나·마이그레이션 skip).
+
+services:
+  api:
+    build: ./backend            # backend/Dockerfile 을 여기서 한 번 빌드해 아래 image 태그로 남긴다.
+    image: roadmap-backend:local
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      SCHEDULER_ENABLED: "false"  # API 는 배치 미실행 — 여러 개로 스케일해도 잡 중복 없음.
+      RUN_MIGRATIONS: "true"      # 마이그레이션은 api 만 수행.
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  worker:
+    image: roadmap-backend:local  # api 가 빌드한 이미지를 재사용(재빌드 없음).
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      SCHEDULER_ENABLED: "true"   # 배치는 worker 하나에서만.
+      RUN_MIGRATIONS: "false"     # 마이그레이션 중복·경합 방지(api 담당).
+    depends_on:
+      - api
+    restart: unless-stopped
