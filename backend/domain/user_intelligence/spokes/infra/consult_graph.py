@@ -44,6 +44,20 @@ def _psycopg_dsn(url: str) -> str:
     return dsn.replace("ssl=true", "sslmode=require").replace("ssl=require", "sslmode=require")
 
 
+async def _checkpoint_schema_ready() -> bool:
+    """체크포인트 핵심 테이블(checkpoints)이 이미 존재하는지 확인 — setup() 실패 시 강등 여부 판단용."""
+    from sqlalchemy import text
+
+    from core.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
+            reg = (await db.execute(text("SELECT to_regclass('public.checkpoints')"))).scalar()
+            return reg is not None
+    except Exception:
+        return False
+
+
 async def get_checkpointer():
     """AsyncPostgresSaver 프로세스 싱글턴 — 실패 시 경고 후 무체크포인트(fail-open, 상담 불능 방지)."""
     global _CHECKPOINTER, _CHECKPOINTER_CM
@@ -59,7 +73,15 @@ async def get_checkpointer():
 
             cm = AsyncPostgresSaver.from_conn_string(_psycopg_dsn(get_settings().database_url))
             saver = await cm.__aenter__()  # 프로세스 수명 동안 유지(의도적 미종료)
-            await saver.setup()  # 멱등 — 테이블은 Task 1 PoC 승인 시 이미 생성됨
+            try:
+                await saver.setup()  # 최초 1회 스키마·마이그레이션 생성
+            except Exception as se:
+                # langgraph setup() 은 이미 마이그레이션된 Neon(pgbouncer) DB 에 재실행되면 버전 감지가
+                # 어긋나 checkpoint_migrations 중복키로 실패할 수 있다. 스키마가 이미 존재하면 saver 는
+                # 그대로 사용 가능 — setup 실패로 체크포인터를 강등하지 않는다(재시작 시 영구 비활성 방지).
+                if not await _checkpoint_schema_ready():
+                    raise
+                logger.info(f"체크포인터 setup 스킵(이미 초기화됨): {se}")
             _CHECKPOINTER_CM = cm  # GC 파이널라이저가 커넥션을 닫지 않게 참조 유지
             _CHECKPOINTER = saver
         except Exception as e:
