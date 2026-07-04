@@ -321,7 +321,7 @@ def _parse_interview_plan(content: str | None) -> dict:
         cleaned = " ".join(fh.split()).replace('"', "'")
         if cleaned:
             out["focus_hint"] = cleaned[:200]
-    out["complete"] = bool(data.get("complete"))
+    out["complete"] = data.get("complete") is True  # 문자열 "false" 등 비-불리언은 종료로 보지 않음
     return out
 
 

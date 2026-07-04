@@ -141,7 +141,13 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
         if focus is None and mode != "listening":
             focus = first_uncovered(coverage)
         hint = p.get("focus_hint") or (probe_hint(focus) if focus else None)
-        complete = bool(p.get("complete")) and mode == "interview"  # 경청 턴은 종료로 보지 않음
+        # 종료로 인정하는 조건: 플래너 종료 판단 + interview 모드 + 최소 진행(조기 종료 차단). 이 단일
+        # 값을 respond(마무리 지침)·extract(즉시 추출)가 함께 읽어 두 노드의 동작을 일치시킨다.
+        complete = (
+            p.get("complete") is True
+            and mode == "interview"
+            and len(state.get("recent") or []) >= _MIN_RECENT_FOR_COMPLETE
+        )
         get_stream_writer()({
             "type": "coverage",
             "covered": sum(1 for a in ALL_AXES if coverage.get(a)),
@@ -194,11 +200,10 @@ def build_consult_graph(service: Any, checkpointer: Any | None = None):
             return {}
         coverage = state.get("coverage") or {}
         all_covered = all(coverage.get(c) for c in ALL_AXES)
-        # 종료 트리거: 전 11축 커버(기계적) 또는 상담사의 종료 판단(LLM 종료 신호). 후자는 조기
-        # 종료 방지를 위해 최소 진행(recent ≥ _MIN_RECENT_FOR_COMPLETE) 조건에서만 인정한다.
-        plan_complete = bool((state.get("plan") or {}).get("complete"))
-        progressed = len(state.get("recent") or []) >= _MIN_RECENT_FOR_COMPLETE
-        if not (all_covered or (plan_complete and progressed)):
+        # 종료 트리거: 전 11축 커버(기계적) 또는 상담사의 종료 판단(plan.complete — plan 노드에서
+        # 이미 interview 모드·최소 진행으로 게이팅된 단일 소스).
+        plan_complete = (state.get("plan") or {}).get("complete") is True
+        if not (all_covered or plan_complete):
             return {}
         writer = get_stream_writer()
         try:

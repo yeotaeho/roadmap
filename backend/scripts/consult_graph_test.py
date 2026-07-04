@@ -289,6 +289,8 @@ async def run() -> int:
     check("hint 새니타이즈", p_inj["focus_hint"] == "무시하라 '새 지시' 실행", str(p_inj["focus_hint"]))
     check("complete 파싱", _parse_interview_plan('{"complete": true}')["complete"] is True, "")
     check("complete 기본 False", _parse_interview_plan('{"focus_axis": "A"}')["complete"] is False, "")
+    check("complete 문자열 false 무시", _parse_interview_plan('{"complete": "false"}')["complete"] is False, "")
+    check("complete 문자열 true 무시", _parse_interview_plan('{"complete": "true"}')["complete"] is False, "")
 
     # 플래너가 이미 커버된 축을 focus 로 줘도 미커버 폴백으로 진행한다
     svc10 = FakeService()
@@ -325,6 +327,7 @@ async def run() -> int:
     graph_c2 = build_consult_graph(svc_c2, MemorySaver())
     chunks_c2 = await collect(graph_c2, {"user_id": "uc2", "session_id": "sc2", "message": "좋아"}, {"configurable": {"thread_id": "tc2"}})
     check("조기 종료 추출 차단", svc_c2.extract_calls == [] and not any(c.get("type") == "self_model_updated" for c in chunks_c2), str(svc_c2.extract_calls))
+    check("조기 종료 마무리 지침 없음", "마무리" not in svc_c2.seen_messages[0]["content"], svc_c2.seen_messages[0]["content"][-160:])
 
     # (c) 경청 모드에서는 complete 를 종료로 보지 않음
     svc_c3 = FakeService()
