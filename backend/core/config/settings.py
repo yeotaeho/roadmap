@@ -176,6 +176,10 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     coach_llm_model: str = Field(default="claude-sonnet-5", validation_alias="COACH_LLM_MODEL")
 
+    # 코치 웹 tool (C-2)
+    tavily_api_key: Optional[str] = Field(default=None, validation_alias="TAVILY_API_KEY")
+    watercrawl_api_key: Optional[str] = Field(default=None, validation_alias="WATERCRAWL_API_KEY")
+
     # Pulse 방향성 modifier 튜닝(감성·시장 방향 가산 이동) — 실사용 데이터 축적 후 .env 로 재조정.
     pulse_sentiment_k: float = Field(default=15.0, validation_alias="PULSE_SENTIMENT_K")
     pulse_modifier_window_days: int = Field(
