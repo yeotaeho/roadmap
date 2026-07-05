@@ -3,19 +3,13 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Compass, Map, Route } from "lucide-react";
-import { useState } from "react";
 import { GrowthArchiveTab } from "./GrowthArchiveTab";
 import { JourneyMapTab } from "./JourneyMapTab";
-
-type RoadmapSubTab = "journey" | "archive";
-
-const SUB_TABS: { id: RoadmapSubTab; label: string; hint: string }[] = [
-  { id: "journey", label: "여정 개요", hint: "Journey Map" },
-  { id: "archive", label: "성장 아카이브", hint: "Growth Calendar" },
-];
+import { useRoadmapNav } from "./RoadmapNavContext";
 
 export function RoadmapView() {
-  const [subTab, setSubTab] = useState<RoadmapSubTab>("journey");
+  // 좌측 사이드바(셸)와 공유하는 서브탭 상태.
+  const { subTab } = useRoadmapNav();
 
   return (
     <div className="space-y-6">
@@ -41,36 +35,6 @@ export function RoadmapView() {
           L2 서브탭 2종
         </div>
       </header>
-
-      <nav
-        className="flex gap-1 rounded-2xl border border-slate-200 bg-[#F8FAFC] p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900"
-        aria-label="로드맵 하위 탭"
-      >
-        {SUB_TABS.map((t) => {
-          const active = subTab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSubTab(t.id)}
-              className={`relative flex-1 rounded-xl px-3 py-2.5 text-left transition ${
-                active
-                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
-                  : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
-              }`}
-            >
-              <span className="block text-sm font-bold">{t.label}</span>
-              <span className="block text-[11px] text-slate-500 dark:text-slate-500">{t.hint}</span>
-              {active ? (
-                <motion.span
-                  layoutId="roadmapSubTabIndicator"
-                  className="absolute bottom-1 left-3 right-3 h-0.5 rounded-full bg-indigo-600"
-                />
-              ) : null}
-            </button>
-          );
-        })}
-      </nav>
 
       <AnimatePresence mode="wait">
         <motion.div

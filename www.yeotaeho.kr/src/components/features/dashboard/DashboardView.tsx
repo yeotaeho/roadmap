@@ -1,35 +1,22 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
-import {
-  Activity,
-  Compass,
-  Link2,
-  MoveRight,
-  Rocket,
-  TrendingUp,
-  Workflow,
-} from "lucide-react";
+import { MoveRight, TrendingUp, Workflow } from "lucide-react";
 import { useStore } from "@/store";
 import { useChanceMatches, useGapIssues, useOpportunities, useSyncHistory, useSyncScores } from "@/hooks/useDashboard";
 import { ddayLabel } from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PanelStatus } from "./PanelStatus";
 import { PulseTab } from "./PulseTab";
 import { Sparkline, SyncGauge } from "./PulseViz";
-
-const SUB_TABS = [
-  { id: "pulse", label: "펄스", fullLabel: "실시간 펄스", icon: Activity },
-  { id: "gap", label: "블루오션", fullLabel: "블루오션", icon: Compass },
-  { id: "sync", label: "싱크", fullLabel: "싱크로율", icon: Link2 },
-  { id: "chance", label: "찬스", fullLabel: "다이렉트 찬스", icon: Rocket },
-] as const;
+import { useDashboardNav } from "./DashboardNavContext";
 
 export function DashboardView() {
+  // 좌측 사이드바(셸)와 공유하는 네비게이션 상태 — 선택된 탭·펄스 세부 섹션.
+  const { activeTab, pulseSection } = useDashboardNav();
+
   return (
     <div className="space-y-7">
       <div>
@@ -41,42 +28,12 @@ export function DashboardView() {
         </p>
       </div>
 
-      <Tabs defaultValue="pulse">
-        <TabsList className="flex flex-wrap h-auto gap-1 p-1.5 bg-indigo-50/70 rounded-2xl border border-indigo-100 dark:bg-slate-900 dark:border-slate-700">
-          {SUB_TABS.map(({ id, label, fullLabel, icon: Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              className={cn(
-                "flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition",
-                "text-slate-600 dark:text-slate-300",
-                "data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-indigo-100",
-                "dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-indigo-300 dark:data-[state=active]:ring-slate-700",
-                "hover:text-indigo-700 hover:bg-white/70 dark:hover:text-indigo-300 dark:hover:bg-slate-800/80"
-              )}
-            >
-              <Icon className="w-4 h-4 shrink-0" aria-hidden />
-              <span className="hidden sm:inline">{fullLabel}</span>
-              <span className="sm:hidden">{label}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(15,23,42,0.08)] min-h-[420px] dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
-          <TabsContent value="pulse" className="mt-0">
-            <PulseTab />
-          </TabsContent>
-          <TabsContent value="gap" className="mt-0">
-            <GapPanel />
-          </TabsContent>
-          <TabsContent value="sync" className="mt-0">
-            <SyncPanel />
-          </TabsContent>
-          <TabsContent value="chance" className="mt-0">
-            <ChancePanel />
-          </TabsContent>
-        </div>
-      </Tabs>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(15,23,42,0.08)] min-h-[420px] dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
+        {activeTab === "pulse" && <PulseTab section={pulseSection} />}
+        {activeTab === "gap" && <GapPanel />}
+        {activeTab === "sync" && <SyncPanel />}
+        {activeTab === "chance" && <ChancePanel />}
+      </div>
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-400">
         모든 데이터는 백엔드 실시간 연동입니다. 실데이터가 없거나 실패하면 에러로 표시됩니다.

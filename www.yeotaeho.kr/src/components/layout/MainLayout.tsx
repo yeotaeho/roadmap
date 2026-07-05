@@ -5,13 +5,21 @@ import { getCurrentUser } from "@/lib/api/user";
 import { getUserName } from "@/utils/tokenStorage";
 import { useAuth } from "@/hooks/useStore";
 import { useStore } from "@/store";
+import { usePathname } from "next/navigation";
 import { Header } from "./Header";
 import { MainTabBar } from "./MainTabBar";
 import { Footer } from "./Footer";
+import { DashboardNavProvider } from "@/components/features/dashboard/DashboardNavContext";
+import { DashboardSidebar } from "@/components/features/dashboard/DashboardSidebar";
+import { RoadmapNavProvider } from "@/components/features/roadmap/RoadmapNavContext";
+import { RoadmapSidebar } from "@/components/features/roadmap/RoadmapSidebar";
+import { ConsultSidebar } from "@/components/features/consult/ConsultSidebar";
+import { CoachSidebar } from "@/components/features/coach/CoachSidebar";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null);
   const { token, isAuthenticated } = useAuth();
+  const pathname = usePathname();
   // 개별 액션 셀렉트 — zustand 액션은 고정 참조. 객체 셀렉터(useUserActions)는 매 렌더 새 객체라 무한 루프.
   const setProfile = useStore((s) => s.setProfile);
   const clearProfile = useStore((s) => s.clearProfile);
@@ -44,17 +52,40 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     fetchUserInfo();
   }, [token, isAuthenticated, setProfile, clearProfile]);
 
+  const shell = (sidebar: React.ReactNode) => (
+    <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+      {sidebar}
+      <div className="flex flex-1 min-w-0 flex-col">
+        <MainTabBar />
+        <main className="flex-1 w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {children}
+        </main>
+        <Footer />
+      </div>
+    </div>
+  );
+
+  // 라우트별 좌측 사이드바 — 상태를 쓰는 페이지는 해당 Provider로 감싸 공유.
+  let body: React.ReactNode;
+  if (pathname === "/") {
+    body = <DashboardNavProvider>{shell(<DashboardSidebar />)}</DashboardNavProvider>;
+  } else if (pathname === "/roadmap") {
+    body = <RoadmapNavProvider>{shell(<RoadmapSidebar />)}</RoadmapNavProvider>;
+  } else if (pathname === "/consult") {
+    body = shell(<ConsultSidebar />);
+  } else if (pathname?.startsWith("/coach")) {
+    body = shell(<CoachSidebar />);
+  } else {
+    body = shell(null);
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 font-sans dark:bg-slate-950">
       <Header
         userName={userName}
         onLogout={() => setUserName(null)}
       />
-      <MainTabBar />
-      <main className="flex-1 w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {children}
-      </main>
-      <Footer />
+      {body}
     </div>
   );
 }

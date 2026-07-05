@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from "react";
-import { ChevronDown, Crown } from "lucide-react";
+import { Crown } from "lucide-react";
 import {
   useBriefing,
   useCausalChains,
@@ -36,27 +36,24 @@ function DataPendingBadge() {
   );
 }
 
-// 점진적 공개 섹션 — 기본 접힘. 부차 시각화로 첫 화면 과부하를 막는다.
-function Disclosure({
-  title,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
+// LNB에서 선택 가능한 펄스 세부 섹션 식별자. DashboardView와 공유.
+export type PulseSectionId =
+  | "overview"
+  | "forecast"
+  | "causal"
+  | "momentum"
+  | "share"
+  | "heatmap"
+  | "crossover"
+  | "keywords";
+
+// 선택된 세부 섹션 공통 래퍼 — 제목 헤딩 + 카드 테두리.
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details
-      open={defaultOpen}
-      className="group rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
-    >
-      <summary className="flex items-center justify-between cursor-pointer select-none px-6 py-4 list-none [&::-webkit-details-marker]:hidden">
-        <span className="text-base font-bold text-slate-800 dark:text-slate-100">{title}</span>
-        <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
-      </summary>
-      <div className="px-6 pb-6">{children}</div>
-    </details>
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+      <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h2>
+      {children}
+    </section>
   );
 }
 
@@ -160,7 +157,7 @@ function Heatmap({ buckets, rows }: { buckets: string[]; rows: PulseHeatmapRow[]
   );
 }
 
-export function PulseTab() {
+export function PulseTab({ section = "overview" }: { section?: PulseSectionId }) {
   const { data: livePulse, isLoading, isError } = usePulse();
   const { data: overview, isLoading: ovLoading, isError: ovError } = usePulseOverview();
   const { data: keywords, isLoading: kwLoading, isError: kwError } = useTrendingKeywords();
@@ -200,6 +197,8 @@ export function PulseTab() {
 
   return (
     <div className="w-full flex flex-col gap-6 font-sans">
+      {section === "overview" && (
+        <>
       {/* 1. 히어로 — 오늘의 모멘텀 리더 */}
       <PanelStatus isLoading={ovLoading} isError={ovError} isEmpty={!g} label="모멘텀 리더">
         <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900/50 bg-white dark:bg-slate-900 p-5 sm:p-6">
@@ -329,13 +328,15 @@ export function PulseTab() {
           })}
         </div>
       </PanelStatus>
+        </>
+      )}
 
       {/* 3.5 14일 시장 전망 — 현재 트렌드의 미래(선행 지표) */}
-      <ForecastSection />
+      {section === "forecast" && <ForecastSection />}
 
       {/* 4. 인과관계 체인 — 거시에서 나의 기회까지 */}
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">인과관계 체인</h2>
+      {section === "causal" && (
+      <SectionCard title="인과관계 체인">
         <PanelStatus
           isLoading={ccLoading}
           isError={ccError}
@@ -355,10 +356,12 @@ export function PulseTab() {
             ))}
           </div>
         </PanelStatus>
-      </section>
+      </SectionCard>
+      )}
 
-      {/* 5. 더 깊이 — 점진적 공개 */}
-      <Disclosure title="연간 모멘텀 트렌드">
+      {/* 5. 세부 섹션 — LNB에서 선택 */}
+      {section === "momentum" && (
+      <SectionCard title="연간 모멘텀 트렌드">
         <PanelStatus
           isLoading={ovLoading}
           isError={ovError}
@@ -367,9 +370,11 @@ export function PulseTab() {
         >
           <MomentumChart points={overview?.momentum_series ?? []} />
         </PanelStatus>
-      </Disclosure>
+      </SectionCard>
+      )}
 
-      <Disclosure title="관심 점유율">
+      {section === "share" && (
+      <SectionCard title="관심 점유율">
         <PanelStatus
           isLoading={ovLoading}
           isError={ovError}
@@ -390,9 +395,11 @@ export function PulseTab() {
             ))}
           </div>
         </PanelStatus>
-      </Disclosure>
+      </SectionCard>
+      )}
 
-      <Disclosure title="Top 섹터 히트맵 (분야 × 시간)">
+      {section === "heatmap" && (
+      <SectionCard title="Top 섹터 히트맵 (분야 × 시간)">
         <PanelStatus
           isLoading={ovLoading}
           isError={ovError}
@@ -401,9 +408,11 @@ export function PulseTab() {
         >
           <Heatmap buckets={overview?.heatmap.buckets ?? []} rows={overview?.heatmap.rows ?? []} />
         </PanelStatus>
-      </Disclosure>
+      </SectionCard>
+      )}
 
-      <Disclosure title="세대교체 · 크로스오버">
+      {section === "crossover" && (
+      <SectionCard title="세대교체 · 크로스오버">
         <div className="mb-3 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-0.5 bg-slate-400" />
@@ -424,9 +433,11 @@ export function PulseTab() {
             data={crossover ?? { legacy_label: "전통", emerging_label: "신흥", series: [] }}
           />
         </PanelStatus>
-      </Disclosure>
+      </SectionCard>
+      )}
 
-      <Disclosure title="트렌딩 키워드">
+      {section === "keywords" && (
+      <SectionCard title="트렌딩 키워드">
         <PanelStatus
           isLoading={kwLoading}
           isError={kwError}
@@ -469,7 +480,8 @@ export function PulseTab() {
             )}
           </div>
         </PanelStatus>
-      </Disclosure>
+      </SectionCard>
+      )}
     </div>
   );
 }
