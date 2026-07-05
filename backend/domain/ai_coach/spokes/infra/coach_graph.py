@@ -11,6 +11,9 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from domain.ai_coach.spokes.agents.tools.internal_tools import TOOL_LABELS
+from domain.ai_coach.spokes.agents.tools.web_tools import WEB_TOOL_LABELS
+
+_ALL_TOOL_LABELS = {**TOOL_LABELS, **WEB_TOOL_LABELS}
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +99,7 @@ def build_coach_graph(service: Any, checkpointer: Any | None = None):
                 messages.append(final)
                 for tc in calls:
                     name = tc.get("name")
-                    writer({"type": "tool_call", "name": name, "label": TOOL_LABELS.get(name, name)})
+                    writer({"type": "tool_call", "name": name, "label": _ALL_TOOL_LABELS.get(name, name)})
                     tool_obj = tool_map.get(name)
                     if tool_obj is None:
                         result: Any = {"error": f"알 수 없는 tool: {name}"}

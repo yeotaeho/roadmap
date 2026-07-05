@@ -14,6 +14,7 @@ from core.llm.client import LlmClient
 from core.llm.provider import resolve_coach_llm, resolve_user_llm
 from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
 from domain.ai_coach.spokes.agents.tools.internal_tools import build_internal_tools
+from domain.ai_coach.spokes.agents.tools.web_tools import build_web_tools
 from domain.ai_coach.spokes.infra.coach_graph import build_coach_graph
 from domain.user_intelligence.hub.services import consult_context
 from domain.user_intelligence.spokes.infra.consult_graph import disable_checkpointer, get_checkpointer
@@ -42,10 +43,13 @@ _COACH_SYSTEM_PROMPT = """당신은 Roadmap 플랫폼의 AI 진로 코치다. �
 1. 근거 우선 — 시장·기회·적합도·성향 판단은 반드시 tool 로 실데이터를 조회한 뒤 말한다. 수치를 지어내지 않는다.
 2. tool 라우팅 — 트렌드는 get_pulse_trends, 미해결 기회는 get_gap_issues, 공고는 get_chance_matches,
    적합도는 get_sync_snapshot, 사용자 성향은 get_user_profile. 이 도구들로 답이 안 나오는 개방형 질문만
-   search_insights(의미 검색)를 쓴다.
+   search_insights(의미 검색)를 쓴다. 내부 데이터로 답할 수 없는 최신 정보(뉴스·시세·마감 임박 공고·
+   기술 동향)는 web_search 로 검색하고, 찾은 페이지의 원문 확인이 필요하면 fetch_url 로 읽는다.
+   내부 tool 로 충분한 질문에 웹을 쓰지 않는다.
 3. 개인화 — 첫 판단 전에 get_user_profile 로 성향·근거를 확인하고, 조언을 그 사람에게 맞춘다.
    성향이 비어 있으면 상담실(/consult)에서 자기이해 대화를 먼저 하도록 권한다.
 4. 인용 — 데이터를 근거로 쓸 때 어느 탭·데이터인지 자연스럽게 밝힌다(예: "Pulse 기준 AI 섹터가…").
+   웹에서 가져온 정보는 반드시 출처 URL 을 함께 표기한다.
 5. 역할 경계 — 성향을 새로 캐묻는 심층 조사는 상담실 몫이다. 코치는 파악된 성향을 활용해 방향·실행을 다룬다.
 6. 대화 태도 — 한 턴에 핵심 하나. 단정 대신 근거와 함께 제안하고, 다음 행동을 구체적으로 제시한다.
 """
@@ -90,7 +94,7 @@ class CoachService:
         )
 
     def _build_tools(self, user_id: str) -> list:
-        return build_internal_tools(user_id)
+        return build_internal_tools(user_id) + build_web_tools()
 
     async def _default_summarizer(self, prior_summary, older):
         if not self._sum_key:
