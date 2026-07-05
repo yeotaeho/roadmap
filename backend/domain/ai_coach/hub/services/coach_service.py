@@ -78,7 +78,16 @@ class CoachService:
     def _chat_model(self):
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model=self._coach_model, api_key=self._anthropic_key, max_tokens=2048)
+        # thinking 미지정 시 Sonnet 5는 adaptive thinking이 기본 활성화된다(4.6까지는 꺼져 있었음).
+        # display 기본값 "omitted"로 thinking 텍스트가 항상 빈 문자열이 되고, tool 라운드 재전송 시
+        # 그 블록이 불완전한 형태로 나가 "content.0.thinking.thinking: Field required" 400 을 유발한다.
+        # 코치는 확장 사고가 필요 없으므로(순수 tool-calling) 명시적으로 비활성화한다.
+        return ChatAnthropic(
+            model=self._coach_model,
+            api_key=self._anthropic_key,
+            max_tokens=2048,
+            thinking={"type": "disabled"},
+        )
 
     def _build_tools(self, user_id: str) -> list:
         return build_internal_tools(user_id)
