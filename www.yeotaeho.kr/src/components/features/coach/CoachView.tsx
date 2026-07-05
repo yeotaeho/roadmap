@@ -39,19 +39,35 @@ export function CoachView() {
 
   // 로그인 상태에서 세션 재개(get-or-create) + 히스토리 로드
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setSessionId(null);
+      setMessages([GREETING]);
+      setToolActivity(null);
+      setSessionError(false);
+      return;
+    }
+    let cancelled = false;
+    setSessionId(null);
+    setMessages([GREETING]);
+    setToolActivity(null);
+    setSessionError(false);
     (async () => {
       const sid = await createCoachSession();
+      if (cancelled) return;
       if (!sid) {
         setSessionError(true);
         return;
       }
-      setSessionId(sid);
       const msgs = await fetchCoachMessages(sid);
+      if (cancelled) return;
       if (msgs.length > 0) {
         setMessages(msgs.map((m) => ({ id: uid(), role: m.role, text: m.content })));
       }
+      setSessionId(sid);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated]);
 
   const send = useCallback(async () => {
