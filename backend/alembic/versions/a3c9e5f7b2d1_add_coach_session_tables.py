@@ -14,7 +14,12 @@ def upgrade() -> None:
     op.create_table(
         "coach_sessions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", name="fk_coach_session_user", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("status", sa.String(10), nullable=False, server_default="active"),
         sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
@@ -24,21 +29,26 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         comment="AI 코치 대화 세션 — 재개 가능·롤링 요약",
     )
-    op.create_index("ix_coach_sessions_user_id", "coach_sessions", ["user_id"])
+    op.create_index("ix_coach_sessions_user", "coach_sessions", ["user_id"])
     op.create_table(
         "coach_messages",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
-        sa.Column("session_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("coach_sessions.id"), nullable=False),
+        sa.Column(
+            "session_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("coach_sessions.id", name="fk_coach_message_session", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("role", sa.String(10), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         comment="AI 코치 턴별 메시지(append-only)",
     )
-    op.create_index("ix_coach_messages_session_id", "coach_messages", ["session_id"])
+    op.create_index("ix_coach_messages_session", "coach_messages", ["session_id", "created_at"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_coach_messages_session_id", table_name="coach_messages")
+    op.drop_index("ix_coach_messages_session", table_name="coach_messages")
     op.drop_table("coach_messages")
-    op.drop_index("ix_coach_sessions_user_id", table_name="coach_sessions")
+    op.drop_index("ix_coach_sessions_user", table_name="coach_sessions")
     op.drop_table("coach_sessions")

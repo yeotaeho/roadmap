@@ -38,6 +38,11 @@ def run() -> int:
     check("메시지 컬럼", {"id", "session_id", "role", "content", "created_at"} <= mcols)
     fk = list(CoachMessage.__table__.columns["session_id"].foreign_keys)[0]
     check("메시지 FK → coach_sessions", "coach_sessions" in str(fk.target_fullname))
+    check("메시지 FK ondelete=CASCADE", fk.ondelete == "CASCADE")
+    check(
+        "복합 인덱스 ix_coach_messages_session",
+        "ix_coach_messages_session" in {i.name for i in CoachMessage.__table__.indexes},
+    )
 
     print(f"\n합계: PASS {PASS} / FAIL {FAIL}")
     return 1 if FAIL else 0

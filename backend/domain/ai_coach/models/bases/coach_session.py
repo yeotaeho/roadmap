@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,10 +14,17 @@ from core.database import Base
 
 class CoachSession(Base):
     __tablename__ = "coach_sessions"
-    __table_args__ = {"comment": "AI 코치 대화 세션 — 재개 가능·롤링 요약"}
+    __table_args__ = (
+        Index("ix_coach_sessions_user", "user_id"),
+        {"comment": "AI 코치 대화 세션 — 재개 가능·롤링 요약"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_coach_session_user", ondelete="CASCADE"),
+        nullable=False,
+    )
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="active")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
