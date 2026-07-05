@@ -1,5 +1,12 @@
 # ai_coach 작업 기록
 
+## 2026-07-05 — C-2 코치 웹 tool — Tavily 검색·WaterCrawl 본문 추출 라이브
+- **무엇** — 코치에 웹 tool 2종 추가. `web_search`(Tavily raw HTTP — 최대 5건·스니펫 300자·15s·행마다 출처 URL 보장)와 `fetch_url`(watercrawl-py 동기 클라이언트를 `asyncio.to_thread`+45s로 — 본문 8000자 상한·중첩/평면 응답 방어·http/https 공인 호스트 검증 가드). 키 없는 tool은 목록에서 제외하는 fail-closed 게이팅, 호출 실패는 error dict 관찰로 대화 지속. 코치 프롬프트에 웹 라우팅("내부 tool 로 충분한 질문에 웹을 쓰지 않는다")·출처 URL 필수 표기 지침. 프론트 무변경(tool_call `label` 소비).
+- **왜** — 스펙 §2-⑥ 확정 사항(Tavily+WaterCrawl, Naver 미도입·provider 플러거블). 훈련 컷오프 이후의 뉴스·시세·마감 임박 공고를 출처와 함께 답변에 반영하기 위한 C-2 단계.
+- **어디** — [web_tools.py](../spokes/agents/tools/web_tools.py)(신규 — provider 격리 지점), [coach_service.py](../hub/services/coach_service.py)(`_build_tools` 합성·프롬프트 원칙 2/4), [coach_graph.py](../spokes/infra/coach_graph.py)(`_ALL_TOOL_LABELS` 병합만·캡 로직 무변경), settings 2필드(`TAVILY_API_KEY`/`WATERCRAWL_API_KEY`), `watercrawl-py>=0.9.2` 의존성. 플랜 [plan](../../../docs/superpowers/plans/2026-07-05-coach-web-tools.md). 커밋 4ba679d..487c081(4커밋). 부수: Sonnet 5 `thinking` 기본 활성화로 인한 tool 라운드 400 수정(9cc8eb0 — `thinking={"type":"disabled"}` 명시).
+- **검증** — 단위 32체크(web_tools 24·통합 8) + 기존 코치 스위트(그래프 12·내부 tool 11·엔드포인트 4) 회귀 무 + **라이브 verify PASS 8/0**(Tavily 실검색→WaterCrawl 본문 ~5300자→코치 턴 `web_search` 발동·출처 포함 답변). 도커 러닝 컨테이너 pip 반영. 이중 리뷰: 태스크별 3건 Approved → 전체 리뷰 Ready → **Codex 3라운드**(P2 fetch_url URL 무검증 → 스킴·사설망 가드 / 수정 커밋의 478개 무관 파일 오염 → reset 후 2파일 재커밋 / DNS 리졸브 지적은 기각 — fetch egress 가 WaterCrawl 클라우드라 리바인딩 도달점이 우리망 아님·사전 리졸브는 TOCTOU).
+- **후속** — R-1 deepagents 로드맵 딥 에이전트(`launch_roadmap_generation`). 웹 tool 하드닝 통합 티켓: 스크랩 본문 새니타이즈(간접 프롬프트 인젝션)·턴당 웹호출 상한+SSE 턴 데드라인·레이트리밋·도메인 allowlist([AGENT_ROADMAP.md](./AGENT_ROADMAP.md) 원 의도)·키 부재 warning 1회화·verify SKIP 표시. 도커 recreate 시 pip 재설치 필요(다음 이미지 빌드부터 자동).
+
 ## 2026-07-05 — C-1 코치 채팅 코어 — Sonnet tool-calling 에이전트 수직슬라이스 라이브
 - **무엇** — 스캐폴딩만 남았던 도메인에 코치 채팅 코어를 구축. Sonnet(`claude-sonnet-5`) tool-calling LangGraph(`prepare→agent→persist`, tool 4라운드+**강제 최종응답 라운드**), 내부 read-only tool 6종(Pulse·Gap·Chance·Sync·자기모델·RAG 의미검색, user_id 클로저 고정), §9 읽기 계약 관문 `read_for_coach()`(민감 근거 SQL+셰이핑 2중 차단), `coach_sessions`/`coach_messages` 재신설, `/api/coach` SSE 4종(이벤트 delta·tool_call·tool_result·error·done), 프론트 `/coach` 준비중 → 대화 UI(tool 활동 인디케이터) 전환.
 - **왜** — 스펙([design](../../../docs/superpowers/specs/2026-07-05-ai-coach-roadmap-agent-design.md)) 하이브리드 결정(채팅=가벼운 tool-calling, 로드맵 생성=deepagents)의 1단계. AGENT_ROADMAP의 "채팅엔 ReAct" 방향 계승 — 상담실이 파악한 성향+시장 데이터를 근거로 진로·기회·실행을 판단하는 코치의 최소 라이브 수직.
