@@ -58,12 +58,16 @@ export function CoachView() {
         setSessionError(true);
         return;
       }
-      const msgs = await fetchCoachMessages(sid);
-      if (cancelled) return;
-      if (msgs.length > 0) {
-        setMessages(msgs.map((m) => ({ id: uid(), role: m.role, text: m.content })));
-      }
       setSessionId(sid);
+      try {
+        const msgs = await fetchCoachMessages(sid);
+        if (cancelled) return;
+        if (msgs.length > 0) {
+          setMessages(msgs.map((m) => ({ id: uid(), role: m.role, text: m.content })));
+        }
+      } catch {
+        // 히스토리 로드 실패는 대화 시작을 막지 않는다.
+      }
     })();
     return () => {
       cancelled = true;
