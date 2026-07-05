@@ -12,6 +12,7 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 from domain.ai_coach.spokes.agents.tools.web_tools import (
     WEB_TOOL_LABELS,
     build_web_tools,
+    is_fetchable_url,
     shape_page,
     shape_search_results,
 )
@@ -68,6 +69,16 @@ def run() -> int:
 
     only_search = build_web_tools(SimpleNamespace(tavily_api_key="tk", watercrawl_api_key=None))
     check("검색 키만 → web_search만", [t.name for t in only_search] == ["web_search"])
+
+    # fetch_url URL 검증 계약
+    check("https 허용", is_fetchable_url("https://example.com/page"))
+    check("http 허용", is_fetchable_url("http://example.com"))
+    check("file 스킴 거부", not is_fetchable_url("file:///etc/passwd"))
+    check("javascript 스킴 거부", not is_fetchable_url("javascript:alert(1)"))
+    check("localhost 거부", not is_fetchable_url("http://localhost:8000/admin"))
+    check("사설 IP 거부", not is_fetchable_url("http://192.168.0.1/"))
+    check("루프백 IP 거부", not is_fetchable_url("http://127.0.0.1/"))
+    check("스킴 없음 거부", not is_fetchable_url("example.com/page"))
 
     # 라벨 계약
     check("라벨 전수", set(WEB_TOOL_LABELS.keys()) == {"web_search", "fetch_url"})

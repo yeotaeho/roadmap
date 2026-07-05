@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
+from urllib.parse import urlparse
 
 import httpx
 from langchain_core.tools import tool
@@ -50,6 +52,26 @@ def shape_page(url: str, result: dict) -> dict:
     return {"url": url, "content": markdown[:_PAGE_MAX_CHARS], "truncated": truncated}
 
 
+def is_fetchable_url(url: str) -> bool:
+    """fetch_url 허용 검사 — http/https 공인 호스트만. 사설/루프백/비표준 스킴은 거부한다."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    if host == "localhost" or host.endswith((".local", ".internal")):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False
+    except ValueError:
+        pass  # 도메인명은 통과 — 공인 웹 대상이 원칙이고 실제 fetch 는 WaterCrawl 클라우드가 수행한다.
+    return True
+
+
 def build_web_tools(settings=None) -> list:
     """키가 등록된 웹 tool 만 생성한다 — 미설정 tool 은 목록에서 제외(모델이 호출 시도조차 안 하게)."""
     if settings is None:
@@ -91,6 +113,9 @@ def build_web_tools(settings=None) -> list:
         @tool
         async def fetch_url(url: str) -> dict:
             """웹 검색으로 찾은 특정 페이지의 본문을 읽는다(공고 원문·기사 전문 확인용)."""
+
+            if not is_fetchable_url(url):
+                return {"error": "지원하지 않는 URL 입니다(http/https 공인 주소만 가능)."}
 
             def _scrape() -> dict:
                 # watercrawl-py 는 동기(requests) 클라이언트 — 스레드에서 생성·호출해 루프를 막지 않는다.
