@@ -33,6 +33,9 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 2. **딥 에이전트 발주 경로 = 코치 채팅 + /roadmap 탭 양쪽.** 같은 엔드포인트로 수렴. 목업 플래너는 폴백으로 강등.
 3. **코치 v1 tool 범위 = 내부 조회 + 웹(web_search/fetch_url).** render_widget은 v2 이연.
 4. **딥 에이전트 실행 = SSE 인프로세스.** consult처럼 API 프로세스 내 실행, 진행률 SSE 스트림, LangGraph 체크포인터로 재개. 워커 큐 이전은 v2 후보.
+5. **코치 메인 LLM = Claude Sonnet(`claude-sonnet-5`).** consult는 Gemini 2.5 Flash 유지(수직별 모델 분리). 딥 에이전트는 모델 믹스 — 오케스트레이터·`quest_designer`=Sonnet, `market_analyst`·`opportunity_scout`=저렴 모델(Gemini Flash 또는 Haiku).
+6. **웹 tool = Tavily(검색) + WaterCrawl(본문 추출).** Naver API 미도입. provider 인터페이스는 플러거블로 유지 — 한국어 로컬 콘텐츠 커버리지가 부족해지면 보조 provider 재도입 가능.
+7. **RAG = 구조화 우선, 벡터는 보조.** §4.1 참고.
 
 ## 3. 전체 아키텍처
 
@@ -67,9 +70,20 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 | `get_user_profile()` | 신규 `ConsultMemoryService.read_for_coach()` | §9 계약 구현. 자기모델 + 비민감 근거 + 최근 상담 요약 |
 | `search_insights(query, sector?)` | `document_embeddings` pgvector 유사도 검색 | 쿼리 임베딩은 text-embedding-3-large |
 | `get_ncs_competencies(keyword)` | `ncs_competency_master` 조회 | 퀘스트 설계용 (딥 에이전트 위주) |
-| `web_search(query)` | Naver 검색 API 우선, 폴백 Tavily — provider 플러거블(설정값) | 출처 URL 필수 반환 |
-| `fetch_url(url)` | httpx + trafilatura 본문 추출 | 타임아웃·응답 크기 상한 |
+| `web_search(query)` | **Tavily** — 쿼리 → URL·제목·스니펫 목록 (provider 플러거블 인터페이스) | 출처 URL 필수 반환, `TAVILY_API_KEY` |
+| `fetch_url(url)` | **WaterCrawl** scrape — URL → LLM-ready 마크다운 (셀프호스트 이전 여지) | 타임아웃·응답 크기 상한, `WATERCRAWL_API_KEY` |
 | `launch_roadmap_generation(focus?)` | 딥 에이전트 잡 핸들 반환 | 코치 채팅 전용 |
+
+### 4.1 RAG 전략 (`search_insights`)
+
+기반: `document_embeddings`(gap_issues·chance_opportunities·refined_innovation_signal 청크, halfvec 3072, HNSW cosine, text-embedding-3-large 고정).
+
+1. **구조화 우선, RAG 보조** — 구조화 tool(Pulse·Gap·Chance·Sync)이 답할 수 있는 질문은 RAG를 쓰지 않는다. RAG는 개방형 의미 질문 전용. 이 라우팅을 코치 시스템 프롬프트에 명시.
+2. **검색 파이프라인** — 에이전트 생성 한국어 쿼리 → text-embedding-3-large 임베딩(저장 모델과 일치 필수) → HNSW cosine top-K(K=8) + 필터(`sector_slug`, `source_table`, 최근 90일 기본·에이전트가 확장 가능) → 거리 임계값 컷 → `(source_table, source_id)` dedupe(문서당 최고 청크만).
+3. **반환 계약** — 청크 텍스트 + `source_table/source_id` + 섹터. 코치는 이를 인용하고 필요 시 구조화 상세 조회(`get_gap_issues(issue_id)` 등)로 **승격**하는 2단 패턴(벡터로 찾고 → 구조화로 확정). 리니지(`raw_table_ref`)로 원문 출처 링크 제시 가능.
+4. **개인화는 벡터로 하지 않음** — `user_embeddings`는 Sync 전용 유지. 코치 개인화는 `read_for_coach()` 구조 주입으로 (설명 가능성·중복 방지).
+5. **신선도는 기존 임베딩 배치에 위임** — 코치 쪽 재임베딩 없음, recency 필터만 기본 적용.
+6. **v2 여지** — Postgres FTS 하이브리드 + 리랭커. v1 미포함(YAGNI).
 
 ## 5. 코치 채팅 에이전트
 
@@ -80,7 +94,7 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
   - `tool_call` {name, label} — "시장 데이터 조회 중…" UI 표시용
   - `tool_result` {name, summary} — 요약만 (원본 페이로드 미노출)
   - `roadmap_job` {job_id} — 딥 에이전트 발주 알림 (프론트가 로드맵 진행 스트림 구독 트리거)
-- **LLM**: `resolve_user_llm` 그대로 (기본 Gemini 2.5 Flash, OpenAI 호환 엔드포인트). **리스크**: tool-calling이 OpenAI 호환 레이어에서 안정 동작하는지 C-1 초기에 라이브 검증 — 불안정 시 langchain-google-genai 직결로 전환.
+- **LLM**: Claude Sonnet(`claude-sonnet-5`), `langchain-anthropic` 직결 (LangGraph tool-calling 네이티브). `resolve_user_llm`은 건드리지 않고 코치 전용 settings(`COACH_LLM_PROVIDER`/`COACH_LLM_MODEL` + `ANTHROPIC_API_KEY`) 추가. consult는 Gemini 2.5 Flash 유지.
 - **API**: `api/v1/coach/coach_routor.py` — consult와 동일 4종 (`POST /coach/sessions`, `POST /coach/stream`, `POST /coach/sessions/{id}/end`, `GET /coach/sessions/{id}/messages`).
 - **프론트**: `/coach` 준비중 페이지를 ConsultView 구조를 재사용한 CoachView로 교체. tool 활동 인디케이터 + 발주 시 로드맵 진행 배너. SSE 소비는 기존 `getReader()` 패턴.
 
@@ -89,10 +103,11 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 - **의존성**: `deepagents` 패키지 신규 도입 (LangGraph 위에 구축된 하네스 — 기존 체크포인터·스트리밍과 호환).
 - **위치**: `hrowth_journey/spokes/agents/roadmap_deep_agent.py` — 산출물(user_roadmaps) 소유 도메인 기준. tool 레이어는 ai_coach 공유 모듈 import.
 - **구성**: `create_deep_agent(model, tools=[내부 tool + web], subagents=[...])`
-  - 서브에이전트 3종:
-    - `market_analyst` — Pulse·Gap·causal·전망 종합 → 유망 방향 후보 도출
-    - `opportunity_scout` — Chance 매칭 + 웹 검색으로 실행 가능한 기회·요건 수집
-    - `quest_designer` — 자기모델·NCS 역량 기반 퀘스트 트리 설계
+  - 서브에이전트 3종 (deepagents 서브에이전트별 모델 오버라이드 활용 — 비용 최적화):
+    - `market_analyst` — Pulse·Gap·causal·전망 종합 → 유망 방향 후보 도출 (저렴 모델)
+    - `opportunity_scout` — Chance 매칭 + 웹 검색으로 실행 가능한 기회·요건 수집 (저렴 모델)
+    - `quest_designer` — 자기모델·NCS 역량 기반 퀘스트 트리 설계 (Sonnet)
+  - 오케스트레이터 모델: Sonnet.
   - 플래닝: 빌트인 `write_todos` — todo 변경을 SSE `progress` 이벤트로 중계.
   - 파일시스템: StateBackend(메모리 내) — 서브에이전트 간 중간 산출물 교환용.
 - **산출 계약**: 최종 출력을 기존 `save_roadmap()` 스키마(title·summary·skill_pillars·bridge_keywords·퀘스트 트리)로 구조화 검증 후 저장. 검증 실패·에이전트 실패 시 `template_roadmap()` 폴백 — 사용자는 항상 유효한 로드맵을 받는다.
@@ -118,14 +133,16 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 ## 9. 검증 전략
 
 - **pytest** — consult 스위트 패턴 준용: tool 단위(반환 스키마), 그래프 단위(노드 전이·tool 루프 상한), SSE 계약(이벤트 타입·순서), read_for_coach 민감정보 필터.
-- **라이브 verify 스크립트** — 실 DB 대상 tool 반환 확인 + Gemini tool-calling 실동작 확인 (SP-11 verify 패턴).
+- **라이브 verify 스크립트** — 실 DB 대상 tool 반환 확인 + Sonnet tool-calling·Tavily/WaterCrawl 실동작 확인 (SP-11 verify 패턴).
 - **폴백 경로 테스트** — 딥 에이전트 강제 실패 시 template_roadmap 폴백 동작.
 
 ## 10. 리스크
 
 | 리스크 | 대응 |
 |---|---|
-| Gemini OpenAI 호환 레이어에서 tool-calling 불안정 | C-1 초기 라이브 검증, 실패 시 langchain-google-genai 전환 |
+| Tavily의 한국어 로컬 콘텐츠(국내 커뮤니티·공고 원문) 커버리지 부족 | provider 인터페이스 플러거블 유지 — 필요 시 보조 provider(Naver 등) 재도입 |
+| Sonnet 비용 (코치 대화량 증가 시) | 수직별 모델 분리로 consult는 저렴 유지, 딥 에이전트는 서브에이전트 모델 믹스, 사용량 모니터링 |
+| WaterCrawl 클라우드 의존 | 셀프호스트 옵션 존재 — 비용·안정성 이슈 시 compose에 추가 |
 | 딥 에이전트 토큰 비용·소요 시간 폭주 | recursion_limit·호출 상한 settings, progress 이벤트로 체감 완화 |
 | SSE 인프로세스 장기 실행 중 배포/재시작 | 체크포인터 재개 + 폴백 로드맵 보장. 빈도 높아지면 v2에서 워커 큐 이전 |
 | deepagents 신규 의존성의 LangGraph 버전 충돌 | 도입 시 기존 consult 스위트 전체 green 확인 후 진행 |
