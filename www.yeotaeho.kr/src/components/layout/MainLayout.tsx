@@ -66,6 +66,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   );
 
   // 라우트별 좌측 사이드바 — 상태를 쓰는 페이지는 해당 Provider로 감싸 공유.
+  // 계약: 컨텍스트 소비 뷰(DashboardView·RoadmapView)는 각 단일 라우트에서만 마운트된다.
+  // 하위 라우트를 추가하면(예: /roadmap/[id]) 해당 브랜치를 startsWith로 넓혀 Provider 밖 렌더(throw)를 막을 것.
   let body: React.ReactNode;
   if (pathname === "/") {
     body = <DashboardNavProvider>{shell(<DashboardSidebar />)}</DashboardNavProvider>;

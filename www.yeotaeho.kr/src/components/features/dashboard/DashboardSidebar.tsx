@@ -5,15 +5,17 @@
 import React from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SideNav } from "@/components/layout/SideNav";
 import { SUB_TABS, PULSE_SECTIONS, useDashboardNav } from "./DashboardNavContext";
 
+// 펄스 탭의 접이식 하위 섹션 때문에 SideNavButton 대신 버튼을 직접 렌더하되,
+// 컨테이너(aside/nav)는 공유 SideNav로 통일해 스타일 단일 소스를 유지한다.
 export function DashboardSidebar() {
   const { activeTab, setActiveTab, pulseSection, setPulseSection, pulseOpen, setPulseOpen } =
     useDashboardNav();
 
   return (
-    <aside className="shrink-0 border-b border-indigo-100 bg-indigo-50/70 dark:border-slate-700 dark:bg-slate-900 lg:w-56 lg:border-b-0 lg:border-r">
-      <nav className="flex h-full flex-col gap-0.5 p-2.5">
+    <SideNav>
         {SUB_TABS.map(({ id, fullLabel, icon: Icon }) => {
           const isActive = activeTab === id;
           const isPulse = id === "pulse";
@@ -60,7 +62,7 @@ export function DashboardSidebar() {
                         setActiveTab("pulse");
                         setPulseSection(s.id);
                       }}
-                      aria-current={pulseSection === s.id ? "true" : undefined}
+                      aria-current={pulseSection === s.id ? "page" : undefined}
                       className={cn(
                         "rounded-md px-3 py-1.5 text-[13px] text-left transition",
                         pulseSection === s.id
@@ -76,7 +78,6 @@ export function DashboardSidebar() {
             </React.Fragment>
           );
         })}
-      </nav>
-    </aside>
+    </SideNav>
   );
 }
