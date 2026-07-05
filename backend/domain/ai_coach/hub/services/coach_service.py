@@ -23,9 +23,17 @@ logger = logging.getLogger(__name__)
 _WINDOW_N = 20
 _THRESHOLD_T = 24
 
-_PLATFORM_CONTEXT = (Path(__file__).resolve().parents[2] / "docs" / "platform_context.md").read_text(
-    encoding="utf-8"
-)
+def _load_platform_context() -> str:
+    """플랫폼 컨텍스트 문서 로드 — 파일 누락/읽기 실패 시 앱 부팅을 죽이지 않고 빈 문자열로 fail-open."""
+    path = Path(__file__).resolve().parents[2] / "docs" / "platform_context.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"플랫폼 컨텍스트 문서 로드 실패(빈 문자열로 대체): {e}")
+        return ""
+
+
+_PLATFORM_CONTEXT = _load_platform_context()
 
 _COACH_SYSTEM_PROMPT = """당신은 Roadmap 플랫폼의 AI 진로 코치다. 상담실이 파악한 사용자의 성향과
 플랫폼이 수집·정제한 시장 데이터를 근거로, 사용자의 진로 방향·기회·실행 방법을 함께 판단한다.
@@ -190,7 +198,10 @@ class CoachService:
                 if chunk.get("type") == "delta":
                     acc += chunk.get("content") or ""
                 yield _sse(chunk)
-        except Exception as e:  # 그래프 실행 실패 — 체크포인터 강등하고 부분 응답 보존.
+        except Exception as e:
+            # LLM·tool 오류는 agent 노드 내부에서 error 이벤트로 처리되고 여기는
+            # 인프라(체크포인터·prepare/persist) 실패 전용 안전망이다.
+            # 그래프 실행 실패 — 체크포인터 강등하고 부분 응답 보존.
             logger.warning(f"코치 그래프 실행 실패(체크포인터 비활성 강등): {e}")
             disable_checkpointer()
             self._graph = None

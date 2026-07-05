@@ -29,7 +29,10 @@ class CoachState(TypedDict, total=False):
 
 
 def _chunk_text(chunk: Any) -> str:
-    """AIMessageChunk.content(str | block list) → 순수 텍스트. Anthropic 은 블록 리스트를 준다."""
+    """AIMessageChunk.content(str | block list) → 순수 텍스트. Anthropic 은 블록 리스트를 준다.
+
+    thinking 블록은 의도적으로 delta 스트림에서 제외한다.
+    """
     content = getattr(chunk, "content", "")
     if isinstance(content, str):
         return content
@@ -71,18 +74,25 @@ def build_coach_graph(service: Any, checkpointer: Any | None = None):
             state["system_content"], state.get("summary"), state["recent"], state["message"]
         )
         acc = ""
+
+        async def _stream_once() -> Any:
+            """messages 로 1회 스트림 → 델타 이벤트 방출 + 누적 텍스트 갱신, 최종 합성 청크 반환."""
+            nonlocal acc
+            final = None
+            async for chunk in llm.astream(messages):
+                text = _chunk_text(chunk)
+                if text:
+                    acc += text
+                    writer({"type": "delta", "content": text})
+                final = chunk if final is None else final + chunk
+            return final
+
         try:
-            for _ in range(_MAX_TOOL_ROUNDS + 1):
-                final = None
-                async for chunk in llm.astream(messages):
-                    text = _chunk_text(chunk)
-                    if text:
-                        acc += text
-                        writer({"type": "delta", "content": text})
-                    final = chunk if final is None else final + chunk
+            for _ in range(_MAX_TOOL_ROUNDS):
+                final = await _stream_once()
                 calls = list(getattr(final, "tool_calls", None) or [])
                 if not calls:
-                    break
+                    return {"response": acc, "error": None}
                 messages.append(final)
                 for tc in calls:
                     name = tc.get("name")
@@ -103,10 +113,26 @@ def build_coach_graph(service: Any, checkpointer: Any | None = None):
                             tool_call_id=tc.get("id") or "",
                         )
                     )
+            # 캡 도달 — 도구 없이 답만 하도록 안내 후 마지막 1회 스트림.
+            # 최종 라운드에서 모델이 또 tool_calls 를 반환해도 실행하지 말고 무시한다
+            # (미실행 tool_use 를 messages 에 append 하지 않으므로 API 정합성 문제 없음).
+            messages.append(
+                HumanMessage(
+                    content=(
+                        "(안내) 도구 사용 한도에 도달했다. 추가 도구 호출 없이 지금까지의 조회 결과만으로"
+                        " 최종 답변을 완성하라."
+                    )
+                )
+            )
+            await _stream_once()
+            if not acc:
+                # 최종 라운드마저 텍스트가 없으면(계속 tool 만 시도) 침묵 소실 대신 에러를 표면화한다.
+                writer({"type": "error", "message": "도구 호출 한도 초과로 답변 생성에 실패했습니다."})
+                return {"response": acc, "error": "tool_round_cap_exceeded"}
+            return {"response": acc, "error": None}
         except Exception as e:  # 스트림 도중 실패 — 에러 이벤트로 알리고 부분 응답은 보존.
             writer({"type": "error", "message": str(e)})
             return {"response": acc, "error": str(e)}
-        return {"response": acc, "error": None}
 
     async def persist(state: CoachState) -> dict:
         if state.get("response"):
