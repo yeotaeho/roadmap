@@ -1,0 +1,23 @@
+# 코치 대화 메시지 ORM — append-only 턴 로그
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from core.database import Base
+
+
+class CoachMessage(Base):
+    __tablename__ = "coach_messages"
+    __table_args__ = {"comment": "AI 코치 턴별 메시지(append-only)"}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("coach_sessions.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(10), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=True)

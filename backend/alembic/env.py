@@ -91,6 +91,8 @@ from domain.market_insight.models.bases.refined_market_forecast_silver import ( 
 from domain.market_insight.models.bases.market_forecast_log import (  # Gold
     MarketForecastLog,
 )
+from domain.ai_coach.models.bases.coach_session import CoachSession  # 코치 세션
+from domain.ai_coach.models.bases.coach_message import CoachMessage  # 코치 메시지
 
 target_metadata = Base.metadata
 
