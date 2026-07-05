@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # include_router(..., prefix="/api") 와 결합 시 최종 경로는 /api/oauth, ...
 # ---------------------------------------------------------------------------
 from api.v1.chance.chance_routor import router as chance_v1_router
+from api.v1.coach.coach_routor import router as coach_v1_router
 from api.v1.consult.consult_routor import router as consult_v1_router
 from api.v1.insight.insight_routor import router as insight_v1_router
 from api.v1.master.master_routor import router as master_v1_router
@@ -108,6 +109,7 @@ app.include_router(sync_v1_router, prefix=API_V1_PREFIX)
 app.include_router(roadmap_v1_router, prefix=API_V1_PREFIX)
 app.include_router(persona_v1_router, prefix=API_V1_PREFIX)
 app.include_router(preferences_v1_router, prefix=API_V1_PREFIX)
+app.include_router(coach_v1_router, prefix=API_V1_PREFIX)
 app.include_router(consult_v1_router, prefix=API_V1_PREFIX)
 app.include_router(task_v1_router, prefix=API_V1_PREFIX)
 logger.info(
