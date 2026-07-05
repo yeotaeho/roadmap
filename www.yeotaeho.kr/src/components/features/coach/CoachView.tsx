@@ -58,7 +58,6 @@ export function CoachView() {
         setSessionError(true);
         return;
       }
-      setSessionId(sid);
       try {
         const msgs = await fetchCoachMessages(sid);
         if (cancelled) return;
@@ -68,6 +67,8 @@ export function CoachView() {
       } catch {
         // 히스토리 로드 실패는 대화 시작을 막지 않는다.
       }
+      if (cancelled) return;
+      setSessionId(sid);
     })();
     return () => {
       cancelled = true;
