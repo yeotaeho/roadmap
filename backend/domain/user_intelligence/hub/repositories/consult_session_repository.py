@@ -49,6 +49,11 @@ _FETCH_EXTRACTABLE = text(
     LIMIT :limit
     """
 )
+_RECENT_SUMMARIES = text(
+    "SELECT context_summary FROM consult_sessions "
+    "WHERE user_id = CAST(:uid AS UUID) AND context_summary IS NOT NULL "
+    "ORDER BY created_at DESC LIMIT :n"
+)
 
 
 class ConsultSessionRepository(BaseRepository):
@@ -106,3 +111,7 @@ class ConsultSessionRepository(BaseRepository):
             )
         ).all()
         return [{"id": str(r.id), "user_id": str(r.user_id)} for r in rows]
+
+    async def fetch_recent_summaries(self, user_id: str, limit: int = 3) -> list[str]:
+        rows = (await self.session.execute(_RECENT_SUMMARIES, {"uid": user_id, "n": limit})).all()
+        return [r[0] for r in rows]
