@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from langchain_core.tools import tool
 
 from core.database import AsyncSessionLocal
@@ -16,15 +17,22 @@ TOOL_LABELS: dict[str, str] = {
 }
 
 
-async def _embed_query(query: str) -> list[float]:
-    """쿼리 임베딩 — 저장 임베딩과 동일 모델(text-embedding-3-large) 강제."""
+@lru_cache(maxsize=1)
+def _embed_client():
+    """프로세스 싱글턴 임베딩 클라이언트 — 호출마다 커넥션 풀 재생성 방지."""
     from openai import AsyncOpenAI
 
     from core.config.settings import get_settings
 
-    settings = get_settings()
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    res = await client.embeddings.create(model=settings.llm_embed_model, input=query)
+    return AsyncOpenAI(api_key=get_settings().openai_api_key)
+
+
+async def _embed_query(query: str) -> list[float]:
+    """쿼리 임베딩 — 저장 임베딩과 동일 모델(text-embedding-3-large) 강제."""
+    from core.config.settings import get_settings
+
+    client = _embed_client()
+    res = await client.embeddings.create(model=get_settings().llm_embed_model, input=query)
     return res.data[0].embedding
 
 
