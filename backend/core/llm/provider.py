@@ -18,3 +18,12 @@ def resolve_user_llm(settings) -> tuple[str, str, str | None]:
     if not settings.openai_api_key:
         raise ValueError("OPENAI_API_KEY 미설정 — OpenAI provider 사용 불가.")
     return settings.openai_api_key, model, None
+
+
+def resolve_coach_llm(settings) -> tuple[str, str]:
+    """코치(Anthropic) LLM 해석 — (api_key, model). 키 없으면 fail-loud(폴백 없음)."""
+    api_key = getattr(settings, "anthropic_api_key", None)
+    if not api_key:
+        raise RuntimeError("코치 LLM 설정 오류 — ANTHROPIC_API_KEY 가 필요합니다.")
+    model = getattr(settings, "coach_llm_model", None) or "claude-sonnet-5"
+    return api_key, model
