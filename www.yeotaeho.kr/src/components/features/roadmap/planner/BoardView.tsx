@@ -68,6 +68,7 @@ function Column({
   onDeleteSprint,
   onTaskClick,
   progress,
+  headerExtra,
 }: {
   id: string;
   title: string;
@@ -79,6 +80,7 @@ function Column({
   onDeleteSprint?: () => void;
   onTaskClick?: (t: PlannerTask) => void;
   progress?: number; // 0~100
+  headerExtra?: React.ReactNode;
 }) {
   return (
     <section className="flex w-72 shrink-0 flex-col rounded-2xl border border-slate-200 bg-[#F8FAFC] p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -112,6 +114,7 @@ function Column({
           ) : null}
         </div>
       </div>
+      {headerExtra}
       {progress != null ? (
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
           <div
@@ -155,6 +158,7 @@ export function BoardView({
   onAddSprint,
   onDeleteSprint,
   onTaskClick,
+  decomposeSlot,
 }: {
   board: PlannerBoard;
   questTitles: Map<string, string>;
@@ -165,6 +169,7 @@ export function BoardView({
   onAddSprint: () => void;
   onDeleteSprint: (id: number) => void;
   onTaskClick: (t: PlannerTask) => void;
+  decomposeSlot?: React.ReactNode;
 }) {
   const [activeTask, setActiveTask] = useState<PlannerTask | null>(null);
   // 드래그 중 로컬 배치 상태 — 서버 확정 전 선반영
@@ -255,6 +260,7 @@ export function BoardView({
           readOnly={readOnly}
           onAddTask={readOnly ? undefined : () => onAddTask(null)}
           onTaskClick={onTaskClick}
+          headerExtra={decomposeSlot}
         />
         {board.sprints.map((s: Sprint) => {
           const list = byColumn.get(colId(s.id)) ?? [];

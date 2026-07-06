@@ -2,7 +2,7 @@
 
 // 플래너 탭 — 보드/타임라인 토글 셸 + 데이터 로드·목업 폴백·생성/편집 다이얼로그
 
-import { KanbanSquare, X } from "lucide-react";
+import { KanbanSquare, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PLANNER_MOCK } from "@/data/plannerMock";
 import { flattenQuestTitles, QUEST_TREE } from "@/data/roadmapQuestMap";
@@ -10,6 +10,7 @@ import { useJourney } from "@/hooks/useRoadmap";
 import {
   useCreateSprint,
   useCreateTask,
+  useDecomposeQuest,
   useDeleteSprint,
   useDeleteTask,
   usePatchTask,
@@ -57,6 +58,25 @@ export function PlannerTab() {
   const patchTask = usePatchTask();
   const deleteTask = useDeleteTask();
   const reorder = useReorderTasks();
+  const decompose = useDecomposeQuest();
+  const [decomposeKey, setDecomposeKey] = useState("");
+
+  const questOptions = useMemo(
+    () => Array.from(questTitles.entries()).filter(([k]) => k !== "root"),
+    [questTitles],
+  );
+
+  const handleDecompose = () => {
+    if (!decomposeKey) return;
+    const existing = board.tasks.filter((t) => t.questKey === decomposeKey).length;
+    if (
+      existing > 0 &&
+      !window.confirm(`이 퀘스트는 이미 ${existing}개 태스크로 분해되어 있습니다. 추가로 분해할까요?`)
+    ) {
+      return;
+    }
+    decompose.mutate(decomposeKey);
+  };
 
   const handleMove = (sprintId: number | null, taskIds: number[]) => {
     if (!enabled) return;
@@ -114,6 +134,33 @@ export function PlannerTab() {
             }
           }}
           onTaskClick={(t) => setEditing(t)}
+          decomposeSlot={
+            enabled ? (
+              <div className="mt-2 space-y-1.5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-2 dark:border-indigo-900/40 dark:bg-indigo-900/15">
+                <select
+                  value={decomposeKey}
+                  onChange={(e) => setDecomposeKey(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  <option value="">퀘스트 선택…</option>
+                  {questOptions.map(([key, title]) => (
+                    <option key={key} value={key}>
+                      {title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleDecompose}
+                  disabled={!decomposeKey || decompose.isPending}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {decompose.isPending ? "분해 중…" : "AI로 분해"}
+                </button>
+              </div>
+            ) : null
+          }
         />
       ) : (
         <TimelineView board={board} onTaskClick={(t) => setEditing(t)} />

@@ -2,12 +2,14 @@
 
 import { motion } from "framer-motion";
 import { Hexagon, Sparkles, Triangle } from "lucide-react";
+import { useMemo } from "react";
 import type { QuestTreeNode } from "@/data/roadmapQuestMap";
 import {
   BRIDGE_KEYWORDS,
   QUEST_TREE,
   SKILL_TRIANGLE,
 } from "@/data/roadmapQuestMap";
+import { usePlannerBoard } from "@/hooks/usePlanner";
 import { useJourney, useRefreshRoadmap } from "@/hooks/useRoadmap";
 import { useStore } from "@/store";
 
@@ -25,8 +27,17 @@ const STATE_STYLE: Record<string, string> = {
   locked: "border-slate-100 bg-slate-50 opacity-75 dark:border-slate-700 dark:bg-slate-900",
 };
 
-function QuestTreeCard({ node, depth }: { node: QuestTreeNode; depth: number }) {
+function QuestTreeCard({
+  node,
+  depth,
+  taskCounts,
+}: {
+  node: QuestTreeNode;
+  depth: number;
+  taskCounts?: Map<string, { done: number; total: number }>;
+}) {
   const isRoot = node.state === "start";
+  const counts = taskCounts?.get(node.id);
 
   return (
     <div className={depth > 0 ? "mt-3 border-l-2 border-slate-200 pl-4 dark:border-slate-700" : ""}>
@@ -47,6 +58,11 @@ function QuestTreeCard({ node, depth }: { node: QuestTreeNode; depth: number }) 
             >
               {node.difficulty}
             </span>
+            {counts && counts.total > 0 ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/35 dark:text-sky-300">
+                태스크 {counts.done}/{counts.total}
+              </span>
+            ) : null}
             {isRoot ? (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:bg-indigo-900/35 dark:text-indigo-300">
                 <Sparkles className="h-3 w-3" />
@@ -69,7 +85,7 @@ function QuestTreeCard({ node, depth }: { node: QuestTreeNode; depth: number }) 
       {node.children?.length ? (
         <div className="space-y-1">
           {node.children.map((ch) => (
-            <QuestTreeCard key={ch.id} node={ch} depth={depth + 1} />
+            <QuestTreeCard key={ch.id} node={ch} depth={depth + 1} taskCounts={taskCounts} />
           ))}
         </div>
       ) : null}
@@ -82,12 +98,25 @@ export function JourneyMapTab() {
   const loggedIn = !!profile?.id;
   const { data, isLoading } = useJourney(loggedIn);
   const refresh = useRefreshRoadmap();
+  const { data: plannerData } = usePlannerBoard(loggedIn);
 
   // 로그인 사용자에게 생성된 로드맵이 있으면 라이브, 없으면 로컬 목업으로 폴백.
   const pillars = data?.roadmap?.skillPillars ?? SKILL_TRIANGLE;
   const bridge = data?.roadmap?.bridgeKeywords ?? BRIDGE_KEYWORDS;
   const tree = data?.questTree ?? QUEST_TREE;
   const isLive = Boolean(data?.questTree);
+
+  const taskCounts = useMemo(() => {
+    const m = new Map<string, { done: number; total: number }>();
+    for (const t of plannerData?.tasks ?? []) {
+      if (!t.questKey) continue;
+      const cur = m.get(t.questKey) ?? { done: 0, total: 0 };
+      cur.total += 1;
+      if (t.status === "done") cur.done += 1;
+      m.set(t.questKey, cur);
+    }
+    return m;
+  }, [plannerData]);
 
   return (
     <div className="space-y-8 pb-4">
@@ -194,7 +223,7 @@ export function JourneyMapTab() {
           </p>
         ) : null}
         <div className="mt-6">
-          <QuestTreeCard node={tree} depth={0} />
+          <QuestTreeCard node={tree} depth={0} taskCounts={taskCounts} />
         </div>
       </section>
     </div>
