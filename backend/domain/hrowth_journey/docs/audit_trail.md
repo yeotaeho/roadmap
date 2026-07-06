@@ -1,5 +1,12 @@
 # hrowth_journey (Roadmap) 작업 기록
 
+## 2026-07-06 — 플래너(WBS)·노트 탭 풀스택 신설
+- **무엇** — Roadmap 탭에 플래너(백로그·스프린트 보드 + 주간 간트 타임라인)와 노트(마크다운 + `[[링크]]` + 백링크) 탭을 풀스택 추가. AI 퀘스트 분해(LLM+결정론 폴백)·여정 지도 "태스크 n/m" 진행률 배지 포함.
+- **왜** — 퀘스트 트리(장기 방향)에 실행 계층이 없어 일정 관리 불가. 사용자 요구: WBS + 노션/옵시디언식 메모. 스펙 `docs/superpowers/specs/2026-07-06-roadmap-planner-notes-design.md` · 플랜 `docs/superpowers/plans/2026-07-06-roadmap-planner-notes.md`.
+- **어디** — 테이블 3종 마이그레이션 [e7b3a1c5d9f2](../../../alembic/versions/e7b3a1c5d9f2_add_planner_and_notes_tables.py): `planner_sprints`·`planner_tasks`(sprint_id NULL=백로그, FK SET NULL)·`roadmap_notes`(user_id+title 유니크). 백엔드 [planner_repository.py](../hub/repositories/planner_repository.py)·[planner_service.py](../hub/services/planner_service.py)·[note_repository.py](../hub/repositories/note_repository.py)·[note_service.py](../hub/services/note_service.py)·[roadmap_routor.py](../../../api/v1/roadmap/roadmap_routor.py) API 14종·[client.py](../../../core/llm/client.py) `decompose_quest`. 프론트 `www.yeotaeho.kr/src/components/features/roadmap/planner/`(PlannerTab·BoardView·TimelineView·TaskCard)·`notes/`(NotesTab·NoteEditor)·`lib/api/planner.ts`·`notes.ts`·`hooks/usePlanner.ts`·`useNotes.ts`·`data/plannerMock.ts`. 의존성: @dnd-kit 3종·react-markdown.
+- **검증** — 순수 테스트 5스크립트 59/59 PASS. 라이브 verify 18/18 PASS([planner_notes_live_verify.py](../../../scripts/planner_notes_live_verify.py) — 실 Neon 보드 CRUD·소유권 가드·FK SET NULL 복귀·decompose 폴백·백링크·중복 제목, 잔여물 0). 프론트 tsc 0·build 성공·프로덕션 라이브 확인(4탭·보드·간트·위키링크/백링크). 커밋 84161d2..dce0a86(17커밋). 태스크별 리뷰 전건 Approved — 수정 5건 반영(스프린트 소유권 가드·PATCH null 날짜 400·드래그 로컬 상태 리셋·노트 입력 보존/선택 동기화·분해 슬롯 라이브 게이팅).
+- **후속** — 타임라인 bar 드래그-리사이즈 · 노트 자동저장 디바운스 · 노트 연결 편집 picker+태스크 카드 노트 아이콘 · @tailwindcss/typography(prose 스타일) · patch_sprint 역전 날짜범위 검증 · 라우터 TestClient 테스트 · pnpm lint 선재 파손 수정 · 타임라인 today 자정 갱신.
+
 ## 2026-06-28 — RoadmapPlanner 맥락에 Pulse movers·Gap 주입
 - **무엇** — RoadmapPlanner LLM 입력 맥락에 최신 Pulse 상위 모멘텀 섹터·최근 활성 Gap 미해결 기회를 추가. 페르소나+목표+관심사만 쓰던 것을 시장 트렌드 반영으로 강화.
 - **왜** — 개인화 로드맵이 사용자 데이터뿐 아니라 시장 흐름과 연결되도록.
