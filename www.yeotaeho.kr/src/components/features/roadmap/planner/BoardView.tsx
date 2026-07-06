@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Inbox, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PlannerBoard, PlannerTask, Sprint } from "@/lib/api/planner";
 import { TaskCard } from "./TaskCard";
 
@@ -171,6 +171,11 @@ export function BoardView({
   const [local, setLocal] = useState<PlannerTask[] | null>(null);
   const tasks = local ?? board.tasks;
 
+  // 서버 보드가 갱신되면 로컬 선반영을 해제(서버가 진실원). reorder 성공은 refetch가 없어 로컬 유지.
+  useEffect(() => {
+    setLocal(null);
+  }, [board.tasks]);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const byColumn = useMemo(() => {
@@ -202,6 +207,7 @@ export function BoardView({
     setActiveTask(null);
     const { active, over } = e;
     if (!over) return;
+    if (String(over.id) === String(active.id)) return;
     const fromCol = findColumnOf(String(active.id));
     // over 가 태스크면 그 태스크의 컬럼, 컬럼 컨테이너면 그대로
     const overIsColumn = String(over.id) === BACKLOG || String(over.id).startsWith("sprint-");
@@ -219,7 +225,7 @@ export function BoardView({
     }
     target.splice(insertAt, 0, { ...moved, sprintId: parseCol(toCol) });
 
-    // 로컬 선반영: 대상 컬럼 position 재부여
+    // 로컬 선반영: 대상 컬럼만 position 재부여. 원본 컬럼의 갭은 의도적 — 정렬키(position, id)로 순서 안정, 다음 reorder 시 치유.
     const targetIds = new Set(target.map((t) => t.id));
     setLocal(
       tasks
