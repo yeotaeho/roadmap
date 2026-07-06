@@ -165,7 +165,9 @@ def _sprint_fields(req: SprintPatchRequest) -> dict:
     raw = req.model_dump(exclude_unset=True)
     out: dict = {}
     if "title" in raw:
-        out["title"] = raw["title"]
+        if not (raw["title"] or "").strip():
+            raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
+        out["title"] = raw["title"].strip()
     if "goal" in raw:
         out["goal"] = raw["goal"]
     if "startDate" in raw:
@@ -193,6 +195,10 @@ def _task_fields(req: TaskPatchRequest) -> dict:
     ]:
         if camel in raw:
             out[snake] = raw[camel]
+    if "title" in out:
+        if not (out["title"] or "").strip():
+            raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
+        out["title"] = out["title"].strip()
     if "startDate" in raw:
         out["start_date"] = _parse_iso_date(raw["startDate"], "startDate") if raw["startDate"] else None
     if "dueDate" in raw:
@@ -221,6 +227,8 @@ async def create_sprint(
     db: AsyncSession = Depends(get_db),
 ):
     """스프린트 생성."""
+    if not request.title.strip():
+        raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
     start = _parse_iso_date(request.startDate, "startDate")
     end = _parse_iso_date(request.endDate, "endDate")
     if end < start:
@@ -280,6 +288,8 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ):
     """태스크 생성(수동)."""
+    if not request.title.strip():
+        raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
     fields = {
         "title": request.title.strip(),
         "description": request.description,
@@ -430,6 +440,8 @@ async def create_note(
     db: AsyncSession = Depends(get_db),
 ):
     """노트 생성 — 저장 시 [[링크]] 파싱."""
+    if not request.title.strip():
+        raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
     try:
         note = await NoteService(db).create_note(
             user_id, request.title, request.content, request.taskId, request.questKey
@@ -453,6 +465,8 @@ async def update_note(
 ):
     """노트 저장 — [[링크]] 재파싱."""
     raw = request.model_dump(exclude_unset=True)
+    if "title" in raw and not (raw["title"] or "").strip():
+        raise HTTPException(status_code=400, detail="title 은 비울 수 없습니다.")
     fields = {
         k_snake: raw[k_camel]
         for k_camel, k_snake in [
@@ -461,6 +475,8 @@ async def update_note(
         ]
         if k_camel in raw
     }
+    if "title" in fields:
+        fields["title"] = fields["title"].strip()
     try:
         note = await NoteService(db).update_note(user_id, note_id, fields)
     except ValueError as e:

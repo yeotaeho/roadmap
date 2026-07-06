@@ -9,6 +9,7 @@ import {
   DragStartEvent,
   PointerSensor,
   closestCorners,
+  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -82,6 +83,7 @@ function Column({
   progress?: number; // 0~100
   headerExtra?: React.ReactNode;
 }) {
+  const { setNodeRef } = useDroppable({ id });
   return (
     <section className="flex w-72 shrink-0 flex-col rounded-2xl border border-slate-200 bg-[#F8FAFC] p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-start justify-between gap-2 px-1">
@@ -128,7 +130,7 @@ function Column({
         items={tasks.map((t) => String(t.id))}
         strategy={verticalListSortingStrategy}
       >
-        <div className="mt-3 flex min-h-[80px] flex-1 flex-col gap-2" data-column={id}>
+        <div ref={setNodeRef} className="mt-3 flex min-h-[80px] flex-1 flex-col gap-2" data-column={id}>
           {tasks.map((t) => (
             <SortableTask
               key={t.id}

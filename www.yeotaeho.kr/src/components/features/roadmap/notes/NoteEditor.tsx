@@ -9,8 +9,10 @@ import type { NoteDetail } from "@/lib/api/notes";
 
 /** [[제목]] → 마크다운 링크(#note=제목)로 전처리 — 미리보기 클릭 이동용 */
 function preprocessWikiLinks(content: string): string {
-  return content.replace(/\[\[([^\[\]]+?)\]\]/g, (_, t: string) => {
+  return content.replace(/\[\[([^\[\]]+?)\]\]/g, (match, t: string) => {
     const title = t.trim();
+    // 백엔드 파서와 동일 규칙 — 120자 초과 제목은 링크로 취급하지 않는다.
+    if (!title || title.length > 120) return match;
     return `[${title}](#note=${encodeURIComponent(title)})`;
   });
 }
