@@ -1,6 +1,6 @@
 "use client";
 
-// 플래너 탭 — 보드/타임라인/성장 아카이브 토글 셸 + 데이터 로드·목업 폴백·생성/편집 다이얼로그
+// 플래너 탭 — 보드/타임라인 토글 셸 + 데이터 로드·목업 폴백·생성/편집 다이얼로그 (타임라인에 Daily Log 흡수)
 
 import { KanbanSquare, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -19,16 +19,14 @@ import {
 } from "@/hooks/usePlanner";
 import type { PlannerTask, TaskStatus } from "@/lib/api/planner";
 import { useStore } from "@/store";
-import { GrowthArchiveTab } from "../GrowthArchiveTab";
 import { BoardView } from "./BoardView";
 import { TimelineView } from "./TimelineView";
 
-type PlannerView = "board" | "timeline" | "archive";
+type PlannerView = "board" | "timeline";
 
 const VIEW_LABELS: Record<PlannerView, string> = {
   board: "보드",
   timeline: "타임라인",
-  archive: "성장 아카이브",
 };
 
 function isoToday(offset = 0): string {
@@ -110,7 +108,7 @@ export function PlannerTab() {
             </span>
           ) : null}
           <div className="flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700">
-            {(["board", "timeline", "archive"] as const).map((v) => (
+            {(["board", "timeline"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -170,10 +168,8 @@ export function PlannerTab() {
             ) : null
           }
         />
-      ) : view === "timeline" ? (
-        <TimelineView board={board} onTaskClick={(t) => setEditing(t)} />
       ) : (
-        <GrowthArchiveTab />
+        <TimelineView board={board} enabled={enabled} onTaskClick={(t) => setEditing(t)} />
       )}
 
       {/* 태스크 추가 폼 */}
