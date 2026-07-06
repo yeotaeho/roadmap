@@ -1506,6 +1506,8 @@ async def create_task(
     try:
         task = await PlannerService(db).create_task(user_id, fields)
         return {"success": True, "task": task}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="대상 스프린트를 찾을 수 없습니다.")
     except Exception as e:
         logger.error(f"태스크 생성 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"태스크 생성 실패: {str(e)}")
@@ -1524,6 +1526,8 @@ async def patch_task(
         raise HTTPException(status_code=400, detail="수정할 필드가 없습니다.")
     try:
         ok = await PlannerService(db).update_task(user_id, task_id, fields)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="대상 스프린트를 찾을 수 없습니다.")
     except Exception as e:
         logger.error(f"태스크 수정 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"태스크 수정 실패: {str(e)}")
@@ -1561,6 +1565,8 @@ async def reorder_tasks(
     try:
         moved = await PlannerService(db).reorder_tasks(user_id, request.sprintId, request.taskIds)
         return {"success": True, "moved": moved}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="대상 스프린트를 찾을 수 없습니다.")
     except Exception as e:
         logger.error(f"태스크 재정렬 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"태스크 재정렬 실패: {str(e)}")
