@@ -169,8 +169,12 @@ def _sprint_fields(req: SprintPatchRequest) -> dict:
     if "goal" in raw:
         out["goal"] = raw["goal"]
     if "startDate" in raw:
+        if not raw["startDate"]:
+            raise HTTPException(status_code=400, detail="startDate 는 비울 수 없습니다.")
         out["start_date"] = _parse_iso_date(raw["startDate"], "startDate")
     if "endDate" in raw:
+        if not raw["endDate"]:
+            raise HTTPException(status_code=400, detail="endDate 는 비울 수 없습니다.")
         out["end_date"] = _parse_iso_date(raw["endDate"], "endDate")
     if "state" in raw:
         out["state"] = raw["state"]
