@@ -36,13 +36,14 @@ export function NoteEditor({
   const [autocomplete, setAutocomplete] = useState<{ query: string; at: number } | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // 다른 노트 선택 시 로컬 상태 리셋
+  // 다른 노트 선택 시 로컬 상태 리셋 — key 리마운트와 이중 안전망. 저장 성공(detail.content 갱신)에는 반응하지 않아 편집 중 입력·모드를 보존한다.
   useEffect(() => {
     setTitle(detail.title);
     setContent(detail.content);
     setAutocomplete(null);
     setMode("preview");
-  }, [detail.id, detail.title, detail.content]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail.id]);
 
   const dirty = title !== detail.title || content !== detail.content;
   const existingTitles = useMemo(() => new Set(allTitles), [allTitles]);

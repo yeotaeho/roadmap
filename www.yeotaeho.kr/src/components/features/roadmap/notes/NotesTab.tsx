@@ -3,7 +3,7 @@
 // 노트 탭 — 좌측 목록(검색·생성) + 우측 마크다운 에디터, 비로그인 목업 폴백
 
 import { NotebookPen, Plus, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NOTES_MOCK_DETAIL, NOTES_MOCK_LIST } from "@/data/plannerMock";
 import {
   useCreateNote,
@@ -25,6 +25,14 @@ export function NotesTab() {
 
   const [selectedId, setSelectedId] = useState<number | null>(list[0]?.id ?? null);
   const [query, setQuery] = useState("");
+
+  // 라이브 목록 도착 시 선택 동기화 — 목업 id 잔존·삭제된 노트 참조를 방지한다.
+  useEffect(() => {
+    if (!enabled || !liveList) return;
+    setSelectedId((prev) =>
+      prev != null && liveList.some((n) => n.id === prev) ? prev : (liveList[0]?.id ?? null),
+    );
+  }, [enabled, liveList]);
 
   const { data: liveDetail } = useNote(selectedId, enabled);
   const detail: NoteDetail | null = enabled
