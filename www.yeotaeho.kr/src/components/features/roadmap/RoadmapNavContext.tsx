@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useMemo, useState } from "react";
 
-export type RoadmapSubTab = "journey" | "planner" | "notes" | "archive";
+export type RoadmapSubTab = "journey" | "planner" | "notes";
 
 interface RoadmapNavValue {
   subTab: RoadmapSubTab;

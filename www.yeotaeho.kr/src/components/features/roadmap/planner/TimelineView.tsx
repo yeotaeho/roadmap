@@ -1,37 +1,34 @@
 "use client";
 
-// 플래너 주간 타임라인(간트) 뷰 — CSS Grid 7열, 태스크 기간 bar·스프린트 음영 밴드
+// 플래너 월간 타임라인 — 달력 격자(주 단위 행)에 태스크를 날짜 칩으로 배치
 
 import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlannerBoard, PlannerTask } from "@/lib/api/planner";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+const MAX_CHIPS = 3;
 
 // 스프린트별 순환 pastel 팔레트 — 라이트 100번대 / 다크 900번대
-const BAR_PALETTE = [
-  "bg-sky-100 text-sky-900 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-800",
-  "bg-emerald-100 text-emerald-900 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-800",
-  "bg-violet-100 text-violet-900 border-violet-200 dark:bg-violet-900/40 dark:text-violet-200 dark:border-violet-800",
-  "bg-rose-100 text-rose-900 border-rose-200 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800",
+const CHIP_PALETTE = [
+  "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200",
+  "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200",
+  "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200",
+  "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-200",
 ];
-const BACKLOG_BAR =
-  "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
+const BACKLOG_CHIP = "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300";
 
-function startOfWeek(base: Date): Date {
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
-  d.setDate(d.getDate() - d.getDay()); // 일요일 시작
-  return d;
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function toKey(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function parseDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
-}
-
-function dayDiff(a: Date, b: Date): number {
-  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
 }
 
 export function TimelineView({
@@ -41,60 +38,66 @@ export function TimelineView({
   board: PlannerBoard;
   onTaskClick: (t: PlannerTask) => void;
 }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
   const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => {
-    const s = startOfWeek(today);
-    s.setDate(s.getDate() + weekOffset * 7);
-    return s;
-  }, [today, weekOffset]);
-
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * DAY_MS)),
-    [weekStart],
+  const viewMonth = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    [today, monthOffset],
   );
-  const weekEnd = days[6];
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // 달력 셀 6주(42칸) — 앞뒤 달 채움(성장 아카이브와 동일 규약)
+  const cells = useMemo(() => {
+    const arr: { date: Date; inMonth: boolean }[] = [];
+    for (let i = firstDow - 1; i >= 0; i--) {
+      arr.push({ date: new Date(year, month, -i), inMonth: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      arr.push({ date: new Date(year, month, d), inMonth: true });
+    }
+    while (arr.length % 7 !== 0 || arr.length < 42) {
+      const last = arr[arr.length - 1]!.date;
+      const next = new Date(last);
+      next.setDate(next.getDate() + 1);
+      arr.push({ date: next, inMonth: false });
+    }
+    return arr;
+  }, [year, month, firstDow, daysInMonth]);
 
   const sprintColor = useMemo(() => {
     const m = new Map<number, string>();
-    board.sprints.forEach((s, i) => m.set(s.id, BAR_PALETTE[i % BAR_PALETTE.length]));
+    board.sprints.forEach((s, i) => m.set(s.id, CHIP_PALETTE[i % CHIP_PALETTE.length]!));
     return m;
   }, [board.sprints]);
 
-  // 이번 주와 겹치는 기간 태스크만 bar 로
-  const bars = useMemo(() => {
-    return board.tasks
-      .filter((t) => t.startDate && t.dueDate)
-      .map((t) => {
-        const s = parseDate(t.startDate as string);
-        const e = parseDate(t.dueDate as string);
-        return { task: t, start: s, end: e };
-      })
-      .filter(({ start, end }) => start <= weekEnd && end >= weekStart)
-      .map(({ task, start, end }) => {
-        const colStart = Math.max(0, dayDiff(weekStart, start));
-        const colEnd = Math.min(6, dayDiff(weekStart, end));
-        return { task, colStart, span: colEnd - colStart + 1, days: dayDiff(start, end) + 1 };
-      });
-  }, [board.tasks, weekStart, weekEnd]);
+  const chipColor = (t: PlannerTask) =>
+    t.sprintId != null ? sprintColor.get(t.sprintId) ?? BACKLOG_CHIP : BACKLOG_CHIP;
 
-  // 이번 주와 겹치는 스프린트 음영 밴드
-  const bands = useMemo(() => {
-    return board.sprints
-      .map((s) => ({ s, start: parseDate(s.startDate), end: parseDate(s.endDate) }))
-      .filter(({ start, end }) => start <= weekEnd && end >= weekStart)
-      .map(({ s, start, end }) => ({
-        sprint: s,
-        colStart: Math.max(0, dayDiff(weekStart, start)),
-        span: Math.min(6, dayDiff(weekStart, end)) - Math.max(0, dayDiff(weekStart, start)) + 1,
-      }));
-  }, [board.sprints, weekStart, weekEnd]);
+  // 날짜별 태스크 배치 — [startDate, dueDate] 범위의 각 날에 칩. 역전 범위는 자연 스킵.
+  const taskByDay = useMemo(() => {
+    const m = new Map<string, PlannerTask[]>();
+    for (const t of board.tasks) {
+      if (!t.startDate || !t.dueDate) continue;
+      let cur = parseDate(t.startDate);
+      const end = parseDate(t.dueDate);
+      let guard = 0;
+      while (cur <= end && guard < 366) {
+        const key = toKey(cur);
+        if (!m.has(key)) m.set(key, []);
+        m.get(key)!.push(t);
+        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+        guard += 1;
+      }
+    }
+    return m;
+  }, [board.tasks]);
 
   const unscheduled = board.tasks.filter((t) => !t.startDate || !t.dueDate);
-  const isToday = (d: Date) =>
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate();
+  const isToday = (d: Date) => toKey(d) === toKey(today);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
@@ -102,29 +105,29 @@ export function TimelineView({
         <div className="flex items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
             <CalendarClock className="h-4 w-4 text-indigo-600" />
-            {weekStart.getFullYear()}년 {weekStart.getMonth() + 1}월
+            {year}년 {month + 1}월
           </h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setWeekOffset((x) => x - 1)}
+              onClick={() => setMonthOffset((x) => x - 1)}
               className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
-              aria-label="이전 주"
+              aria-label="이전 달"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
-              onClick={() => setWeekOffset(0)}
+              onClick={() => setMonthOffset(0)}
               className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
             >
               오늘
             </button>
             <button
               type="button"
-              onClick={() => setWeekOffset((x) => x + 1)}
+              onClick={() => setMonthOffset((x) => x + 1)}
               className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
-              aria-label="다음 주"
+              aria-label="다음 달"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -132,60 +135,62 @@ export function TimelineView({
         </div>
 
         {/* 요일 헤더 */}
-        <div className="mt-4 grid grid-cols-7 gap-1">
-          {days.map((d, i) => (
-            <div
-              key={i}
-              className={`rounded-lg py-1.5 text-center text-[11px] font-semibold ${
-                isToday(d)
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              {WEEK_LABELS[d.getDay()]} {d.getDate()}
+        <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-500">
+          {WEEK_LABELS.map((w) => (
+            <div key={w} className="py-1">
+              {w}
             </div>
           ))}
         </div>
 
-        {/* 스프린트 음영 밴드 */}
-        <div className="relative mt-1">
-          {bands.map(({ sprint, colStart, span }) => (
-            <div key={sprint.id} className="grid grid-cols-7 gap-1">
+        {/* 날짜 격자 */}
+        <div className="mt-1 grid grid-cols-7 gap-1">
+          {cells.map(({ date, inMonth }) => {
+            const key = toKey(date);
+            const dayTasks = taskByDay.get(key) ?? [];
+            return (
               <div
-                className="mb-1 rounded-md bg-indigo-50/70 px-2 py-0.5 text-[10px] font-semibold text-indigo-500 dark:bg-indigo-900/15 dark:text-indigo-400"
-                style={{ gridColumn: `${colStart + 1} / span ${span}` }}
+                key={key}
+                className={`flex min-h-[92px] flex-col gap-1 rounded-xl border p-1.5 ${
+                  !inMonth
+                    ? "border-transparent bg-slate-50/40 dark:bg-slate-900/40"
+                    : isToday(date)
+                      ? "border-indigo-300 bg-indigo-50/40 dark:border-indigo-800 dark:bg-indigo-900/15"
+                      : "border-slate-100 bg-white dark:border-slate-700 dark:bg-slate-900/60"
+                }`}
               >
-                {sprint.title}
-              </div>
-            </div>
-          ))}
-
-          {/* 태스크 bar */}
-          <div className="mt-1 space-y-1.5">
-            {bars.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400 dark:border-slate-700">
-                이번 주에 걸친 일정이 없습니다. 카드에 시작일·마감일을 넣어보세요.
-              </p>
-            ) : (
-              bars.map(({ task, colStart, span, days: totalDays }) => (
-                <div key={task.id} className="grid grid-cols-7 gap-1">
+                <span
+                  className={`text-[11px] font-semibold ${
+                    !inMonth
+                      ? "text-slate-300 dark:text-slate-600"
+                      : isToday(date)
+                        ? "text-indigo-700 dark:text-indigo-300"
+                        : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  {date.getDate()}
+                </span>
+                {dayTasks.slice(0, MAX_CHIPS).map((t) => (
                   <button
+                    key={t.id}
                     type="button"
-                    onClick={() => onTaskClick(task)}
-                    style={{ gridColumn: `${colStart + 1} / span ${span}` }}
-                    className={`truncate rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-semibold shadow-sm transition hover:shadow ${
-                      task.sprintId != null
-                        ? sprintColor.get(task.sprintId) ?? BACKLOG_BAR
-                        : BACKLOG_BAR
-                    } ${task.status === "done" ? "line-through opacity-60" : ""}`}
+                    onClick={() => onTaskClick(t)}
+                    title={t.title}
+                    className={`truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-semibold transition hover:opacity-80 ${chipColor(
+                      t,
+                    )} ${t.status === "done" ? "line-through opacity-60" : ""}`}
                   >
-                    {task.title}
-                    <span className="ml-1.5 font-normal opacity-70">{totalDays}일</span>
+                    {t.title}
                   </button>
-                </div>
-              ))
-            )}
-          </div>
+                ))}
+                {dayTasks.length > MAX_CHIPS ? (
+                  <span className="px-1 text-[9px] font-medium text-slate-400">
+                    +{dayTasks.length - MAX_CHIPS}건
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </section>
 

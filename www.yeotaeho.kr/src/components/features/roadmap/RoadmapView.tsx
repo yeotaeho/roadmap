@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Compass } from "lucide-react";
-import { GrowthArchiveTab } from "./GrowthArchiveTab";
 import { JourneyMapTab } from "./JourneyMapTab";
 import { NotesTab } from "./notes/NotesTab";
 import { PlannerTab } from "./planner/PlannerTab";
@@ -27,10 +26,8 @@ export function RoadmapView() {
             <JourneyMapTab />
           ) : subTab === "planner" ? (
             <PlannerTab />
-          ) : subTab === "notes" ? (
-            <NotesTab />
           ) : (
-            <GrowthArchiveTab />
+            <NotesTab />
           )}
         </motion.div>
       </AnimatePresence>
