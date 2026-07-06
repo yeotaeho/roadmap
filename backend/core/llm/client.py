@@ -112,6 +112,15 @@ _ROADMAP_SYSTEM_PROMPT = (
     "사용자의 현재 스킬 수준에 맞춰 난이도를 배분하고 관심 키워드·시장 트렌드를 반영하라."
 )
 
+_DECOMPOSE_SYSTEM_PROMPT = """당신은 진로 성장 플래너입니다. 주어진 퀘스트(학습 과제)를 실행 가능한 태스크 3~6개로 분해하세요.
+
+규칙:
+- 각 태스크는 1~2주 안에 혼자 끝낼 수 있는 구체적 행동 단위여야 합니다.
+- title 은 25자 이내 한국어 동사형, description 은 산출물이 드러나는 1문장.
+- estimated_days 는 1~30 사이 정수.
+- 반드시 JSON 으로만 응답: {"tasks": [{"title": str, "description": str, "estimated_days": int}]}
+"""
+
 _COACH_SYSTEM_PROMPT = (
     "너는 청년 진로 내비게이터의 'AI 코치'다. 사용자의 페르소나·로드맵·관심 섹터를 근거로 "
     "구체적이고 실천 가능한 조언을 한국어로 한다. 막연한 응원 대신 다음 한 걸음을 제시하라. "
@@ -759,6 +768,39 @@ def _parse_roadmap(raw: str | None) -> dict:
     }
 
 
+def _parse_decompose(raw: str | None) -> list[dict]:
+    """퀘스트 분해 응답 JSON → 태스크 목록. 무효/실패 시 []."""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    items = data.get("tasks") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return []
+    out: list[dict] = []
+    for it in items:
+        if len(out) >= 6:
+            break
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title") or "").strip()
+        if not title:
+            continue
+        days = it.get("estimated_days")
+        if not isinstance(days, int) or isinstance(days, bool) or not (1 <= days <= 30):
+            days = 3
+        out.append(
+            {
+                "title": title[:200],
+                "description": str(it.get("description") or "").strip(),
+                "estimated_days": days,
+            }
+        )
+    return out
+
+
 class LlmClient:
     """OpenAI Chat Completions 기반 분류 클라이언트. ai_coach 등 타 도메인이 재사용 가능."""
 
@@ -991,6 +1033,19 @@ class LlmClient:
             ],
         )
         return _parse_roadmap(resp.choices[0].message.content)
+
+    async def decompose_quest(self, context: str) -> list[dict]:
+        """퀘스트 맥락을 실행 태스크 3~6개로 분해한다. 무효/실패 시 []."""
+        resp = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _DECOMPOSE_SYSTEM_PROMPT},
+                {"role": "user", "content": context},
+            ],
+        )
+        return _parse_decompose(resp.choices[0].message.content)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """텍스트 목록을 임베딩 벡터 목록으로 변환한다(text-embedding-3-large, 3072차원)."""
