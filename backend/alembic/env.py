@@ -82,6 +82,9 @@ from domain.user_intelligence.models.bases.consult_message import ConsultMessage
 from domain.hrowth_journey.models.bases.user_roadmap import UserRoadmap  # Roadmap
 from domain.hrowth_journey.models.bases.roadmap_quest import RoadmapQuest  # Roadmap
 from domain.hrowth_journey.models.bases.growth_log import GrowthLog  # Roadmap
+from domain.hrowth_journey.models.bases.planner_sprint import PlannerSprint  # Roadmap 플래너
+from domain.hrowth_journey.models.bases.planner_task import PlannerTask  # Roadmap 플래너
+from domain.hrowth_journey.models.bases.roadmap_note import RoadmapNote  # Roadmap 노트
 from domain.market_insight.models.bases.sector_master import Sector, SubSector  # Sector master
 from domain.task.models.bases.task import Task  # Task
 from domain.master.models.bases.ncs_competency_master import NcsCompetencyMaster  # NCS 마스터
