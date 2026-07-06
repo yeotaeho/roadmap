@@ -1,6 +1,6 @@
 "use client";
 
-// 플래너 주간 타임라인 — 가로 간트(요일 컬럼 위 기간 bar·세로 그리드선·오늘 강조)
+// 플래너 월간 타임라인 — 가로 간트(한 달치 날짜 컬럼 위 기간 bar·세로 그리드선·오늘/주말 강조)
 
 import {
   CalendarClock,
@@ -15,7 +15,8 @@ import { useMemo, useState } from "react";
 import type { PlannerBoard, PlannerTask, TaskStatus } from "@/lib/api/planner";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const WEEK_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+const COL_W = 40; // 날짜 컬럼 최소 폭(px) — 한 달치를 가로 스크롤로 펼친다
 
 // 스프린트별 순환 pastel — bar 배경·텍스트·아이콘 칩
 type Palette = { bar: string; text: string; chip: string };
@@ -53,12 +54,6 @@ const STATUS_ICON: Record<TaskStatus, LucideIcon> = {
   done: CheckCircle2,
 };
 
-function startOfWeek(base: Date): Date {
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
-  d.setDate(d.getDate() - d.getDay()); // 일요일 시작
-  return d;
-}
-
 function parseDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -75,19 +70,23 @@ export function TimelineView({
   board: PlannerBoard;
   onTaskClick: (t: PlannerTask) => void;
 }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
   const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => {
-    const s = startOfWeek(today);
-    s.setDate(s.getDate() + weekOffset * 7);
-    return s;
-  }, [today, weekOffset]);
-
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * DAY_MS)),
-    [weekStart],
+  const viewMonth = useMemo(
+    () => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1),
+    [today, monthOffset],
   );
-  const weekEnd = days[6]!;
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthStart = useMemo(() => new Date(year, month, 1), [year, month]);
+  const monthEnd = useMemo(() => new Date(year, month, daysInMonth), [year, month, daysInMonth]);
+
+  const dayCols = useMemo(
+    () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+    [year, month, daysInMonth],
+  );
+  const gridTemplate = `repeat(${daysInMonth}, minmax(0, 1fr))`;
 
   const sprintColor = useMemo(() => {
     const m = new Map<number, Palette>();
@@ -98,53 +97,54 @@ export function TimelineView({
   const paletteOf = (t: PlannerTask): Palette =>
     t.sprintId != null ? sprintColor.get(t.sprintId) ?? BACKLOG_PALETTE : BACKLOG_PALETTE;
 
-  // 이번 주와 겹치는 기간 태스크만 bar 로 (시작일 오름차순)
+  // 이번 달과 겹치는 기간 태스크만 bar 로 (시작일 오름차순)
   const bars = useMemo(() => {
     return board.tasks
       .filter((t) => t.startDate && t.dueDate)
       .map((t) => ({ task: t, start: parseDate(t.startDate!), end: parseDate(t.dueDate!) }))
-      .filter(({ start, end }) => start <= weekEnd && end >= weekStart)
+      .filter(({ start, end }) => start <= monthEnd && end >= monthStart)
       .sort((a, b) => a.start.getTime() - b.start.getTime())
       .map(({ task, start, end }) => {
-        const colStart = Math.max(0, dayDiff(weekStart, start));
-        const colEnd = Math.min(6, dayDiff(weekStart, end));
+        const colStart = Math.max(0, dayDiff(monthStart, start));
+        const colEnd = Math.min(daysInMonth - 1, dayDiff(monthStart, end));
         return { task, colStart, span: colEnd - colStart + 1, totalDays: dayDiff(start, end) + 1 };
       });
-  }, [board.tasks, weekStart, weekEnd]);
+  }, [board.tasks, monthStart, monthEnd, daysInMonth]);
 
   const unscheduled = board.tasks.filter((t) => !t.startDate || !t.dueDate);
   const isToday = (d: Date) => dayDiff(today, d) === 0 && d.getMonth() === today.getMonth();
+  const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
   return (
     <div className="space-y-4">
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        {/* 상단 바 — 월 라벨 + 주 이동 */}
+        {/* 상단 바 — 월 라벨 + 월 이동 */}
         <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <h3 className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
             <CalendarClock className="h-4 w-4 text-indigo-600" />
-            {weekStart.getFullYear()}년 {weekStart.getMonth() + 1}월
+            {year}년 {month + 1}월
           </h3>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setWeekOffset((x) => x - 1)}
+              onClick={() => setMonthOffset((x) => x - 1)}
               className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
-              aria-label="이전 주"
+              aria-label="이전 달"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
-              onClick={() => setWeekOffset(0)}
+              onClick={() => setMonthOffset(0)}
               className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
             >
               오늘
             </button>
             <button
               type="button"
-              onClick={() => setWeekOffset((x) => x + 1)}
+              onClick={() => setMonthOffset((x) => x + 1)}
               className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
-              aria-label="다음 주"
+              aria-label="다음 달"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -152,38 +152,57 @@ export function TimelineView({
         </div>
 
         <div className="overflow-x-auto">
-          <div className="min-w-[640px]">
-            {/* 요일 헤더 */}
-            <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-700">
-              {days.map((d, i) => (
+          <div style={{ minWidth: daysInMonth * COL_W }}>
+            {/* 날짜 헤더 — 요일 + 일 */}
+            <div
+              className="grid border-b border-slate-100 dark:border-slate-700"
+              style={{ gridTemplateColumns: gridTemplate }}
+            >
+              {dayCols.map((d, i) => (
                 <div
                   key={i}
-                  className={`border-r border-slate-100 px-2 py-2.5 text-center last:border-r-0 dark:border-slate-700 ${
-                    isToday(d) ? "bg-indigo-50/60 dark:bg-indigo-900/15" : ""
+                  className={`border-r border-slate-100 py-1.5 text-center last:border-r-0 dark:border-slate-700 ${
+                    isToday(d)
+                      ? "bg-indigo-50/60 dark:bg-indigo-900/15"
+                      : isWeekend(d)
+                        ? "bg-slate-50/70 dark:bg-slate-900/40"
+                        : ""
                   }`}
                 >
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  <div className="text-[9px] font-medium text-slate-400 dark:text-slate-500">
+                    {WEEK_LABELS[d.getDay()]}
+                  </div>
+                  <div
+                    className={`mx-auto mt-0.5 grid h-5 w-5 place-items-center rounded-full text-[11px] font-semibold ${
                       isToday(d)
                         ? "bg-indigo-600 text-white"
-                        : "text-slate-400 dark:text-slate-500"
+                        : isWeekend(d)
+                          ? "text-slate-400 dark:text-slate-500"
+                          : "text-slate-600 dark:text-slate-300"
                     }`}
                   >
-                    {WEEK_LABELS[d.getDay()]} {d.getDate()}
-                  </span>
+                    {d.getDate()}
+                  </div>
                 </div>
               ))}
             </div>
 
             {/* 간트 본문 — 배경 그리드선 + 기간 bar */}
             <div className="relative">
-              {/* 세로 그리드선 + 오늘 컬럼 음영 (전체 높이) */}
-              <div className="pointer-events-none absolute inset-0 grid grid-cols-7">
-                {days.map((d, i) => (
+              {/* 세로 그리드선 + 오늘/주말 컬럼 음영(전체 높이) */}
+              <div
+                className="pointer-events-none absolute inset-0 grid"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
+                {dayCols.map((d, i) => (
                   <div
                     key={i}
                     className={`border-r border-slate-100 last:border-r-0 dark:border-slate-700/70 ${
-                      isToday(d) ? "bg-indigo-50/40 dark:bg-indigo-900/10" : ""
+                      isToday(d)
+                        ? "bg-indigo-50/40 dark:bg-indigo-900/10"
+                        : isWeekend(d)
+                          ? "bg-slate-50/50 dark:bg-slate-900/30"
+                          : ""
                     }`}
                   />
                 ))}
@@ -193,20 +212,20 @@ export function TimelineView({
               <div className="relative space-y-1.5 py-3">
                 {bars.length === 0 ? (
                   <p className="px-4 py-10 text-center text-xs text-slate-400">
-                    이번 주에 걸친 일정이 없습니다. 카드에 시작일·마감일을 넣어보세요.
+                    이번 달에 걸친 일정이 없습니다. 카드에 시작일·마감일을 넣어보세요.
                   </p>
                 ) : (
                   bars.map(({ task, colStart, span, totalDays }) => {
                     const p = paletteOf(task);
                     const Icon = STATUS_ICON[task.status];
                     return (
-                      <div key={task.id} className="grid grid-cols-7 px-1.5">
+                      <div key={task.id} className="grid" style={{ gridTemplateColumns: gridTemplate }}>
                         <button
                           type="button"
                           onClick={() => onTaskClick(task)}
                           style={{ gridColumn: `${colStart + 1} / span ${span}` }}
-                          title={task.title}
-                          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left shadow-sm transition hover:brightness-95 dark:hover:brightness-110 ${
+                          title={`${task.title} · ${totalDays}일`}
+                          className={`mx-0.5 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left shadow-sm transition hover:brightness-95 dark:hover:brightness-110 ${
                             p.bar
                           } ${task.status === "done" ? "opacity-70" : ""}`}
                         >
