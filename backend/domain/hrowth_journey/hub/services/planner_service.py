@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.hrowth_journey.hub.repositories.planner_repository import PlannerRepository
+
+logger = logging.getLogger(__name__)
 
 
 def _iso(d: date | None) -> str | None:
@@ -141,6 +144,7 @@ class PlannerService:
                 if items:
                     source = "llm"
             except Exception:
+                logger.warning("퀘스트 분해 LLM 호출 실패 — 템플릿 폴백", exc_info=True)
                 items = []
         if not items:
             items = template_decompose(quest)

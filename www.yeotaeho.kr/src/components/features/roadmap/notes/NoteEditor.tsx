@@ -78,7 +78,7 @@ export function NoteEditor({
   };
 
   const save = () => {
-    if (!readOnly && dirty) onSave({ title: title.trim(), content });
+    if (!readOnly && dirty && title.trim()) onSave({ title: title.trim(), content });
   };
 
   return (

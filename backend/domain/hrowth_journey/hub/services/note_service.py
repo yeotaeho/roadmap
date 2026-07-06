@@ -72,6 +72,8 @@ class NoteService:
         self, user_id: str, title: str, content: str = "",
         task_id: int | None = None, quest_key: str | None = None,
     ) -> dict:
+        if task_id is not None and not await self.repo.owns_task(user_id, task_id):
+            raise ValueError("task-not-found")
         try:
             row = await self.repo.insert_note(
                 user_id, title.strip(), content, parse_note_links(content), task_id, quest_key
@@ -89,6 +91,8 @@ class NoteService:
         content = fields.get("content") if fields.get("content") is not None else current["content"]
         task_id = fields.get("task_id") if "task_id" in fields else current["task_id"]
         quest_key = fields.get("quest_key") if "quest_key" in fields else current["quest_key"]
+        if task_id is not None and not await self.repo.owns_task(user_id, task_id):
+            raise ValueError("task-not-found")
         try:
             row = await self.repo.update_note(
                 user_id, note_id, title, content, parse_note_links(content), task_id, quest_key

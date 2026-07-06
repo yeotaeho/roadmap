@@ -435,7 +435,9 @@ async def create_note(
             user_id, request.title, request.content, request.taskId, request.questKey
         )
         return {"success": True, "note": note}
-    except ValueError:
+    except ValueError as e:
+        if str(e) == "task-not-found":
+            raise HTTPException(status_code=404, detail="연결할 태스크를 찾을 수 없습니다.")
         raise HTTPException(status_code=409, detail="같은 제목의 노트가 이미 있습니다.")
     except Exception as e:
         logger.error(f"노트 생성 실패: {e}", exc_info=True)
@@ -461,7 +463,9 @@ async def update_note(
     }
     try:
         note = await NoteService(db).update_note(user_id, note_id, fields)
-    except ValueError:
+    except ValueError as e:
+        if str(e) == "task-not-found":
+            raise HTTPException(status_code=404, detail="연결할 태스크를 찾을 수 없습니다.")
         raise HTTPException(status_code=409, detail="같은 제목의 노트가 이미 있습니다.")
     except Exception as e:
         logger.error(f"노트 저장 실패: {e}", exc_info=True)

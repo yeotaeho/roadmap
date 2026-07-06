@@ -59,6 +59,13 @@ _DELETE_NOTE = text(
     "DELETE FROM roadmap_notes WHERE id = :note_id AND user_id = CAST(:user_id AS UUID)"
 )
 
+_OWNS_TASK = text(
+    """
+    SELECT 1 FROM planner_tasks
+    WHERE id = :task_id AND user_id = CAST(:user_id AS UUID)
+    """
+)
+
 
 class NoteRepository(BaseRepository):
     async def list_notes(self, user_id: str) -> list[dict]:
@@ -112,3 +119,9 @@ class NoteRepository(BaseRepository):
         res = await self.session.execute(_DELETE_NOTE, {"user_id": user_id, "note_id": note_id})
         await self.session.commit()
         return res.rowcount > 0
+
+    async def owns_task(self, user_id: str, task_id: int) -> bool:
+        row = (
+            await self.session.execute(_OWNS_TASK, {"user_id": user_id, "task_id": task_id})
+        ).first()
+        return row is not None
