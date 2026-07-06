@@ -1,22 +1,22 @@
 "use client";
 
-// 플래너 월간 타임라인 — 달력 격자(주 단위 행)에 태스크를 날짜 칩으로 배치
+// 플래너 월간 타임라인 — 달력 격자에 다일 태스크를 걸친 만큼 연속 bar 로 표시(주 경계에서만 이어짐)
 
 import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlannerBoard, PlannerTask } from "@/lib/api/planner";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
-const MAX_CHIPS = 3;
 
 // 스프린트별 순환 pastel 팔레트 — 라이트 100번대 / 다크 900번대
-const CHIP_PALETTE = [
-  "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200",
-  "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200",
-  "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200",
-  "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-200",
+const BAR_PALETTE = [
+  "bg-sky-100 text-sky-900 dark:bg-sky-900/50 dark:text-sky-200",
+  "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-200",
+  "bg-violet-100 text-violet-900 dark:bg-violet-900/50 dark:text-violet-200",
+  "bg-rose-100 text-rose-900 dark:bg-rose-900/50 dark:text-rose-200",
 ];
-const BACKLOG_CHIP = "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300";
+const BACKLOG_BAR = "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -30,6 +30,19 @@ function parseDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
+
+function dayDiff(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
+}
+
+type Segment = {
+  task: PlannerTask;
+  startIdx: number; // 0~6 (주 내 시작 컬럼)
+  endIdx: number; // 0~6 (주 내 끝 컬럼)
+  realStart: boolean; // 태스크 실제 시작이 이 주 안
+  realEnd: boolean; // 태스크 실제 끝이 이 주 안
+  totalDays: number;
+};
 
 export function TimelineView({
   board,
@@ -50,51 +63,77 @@ export function TimelineView({
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  // 달력 셀 6주(42칸) — 앞뒤 달 채움(성장 아카이브와 동일 규약)
-  const cells = useMemo(() => {
-    const arr: { date: Date; inMonth: boolean }[] = [];
+  // 6주 × 7일 셀을 주 단위로 묶는다(성장 아카이브와 동일 규약)
+  const weeks = useMemo(() => {
+    const cells: { date: Date; inMonth: boolean }[] = [];
     for (let i = firstDow - 1; i >= 0; i--) {
-      arr.push({ date: new Date(year, month, -i), inMonth: false });
+      cells.push({ date: new Date(year, month, -i), inMonth: false });
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      arr.push({ date: new Date(year, month, d), inMonth: true });
+      cells.push({ date: new Date(year, month, d), inMonth: true });
     }
-    while (arr.length % 7 !== 0 || arr.length < 42) {
-      const last = arr[arr.length - 1]!.date;
+    while (cells.length % 7 !== 0 || cells.length < 42) {
+      const last = cells[cells.length - 1]!.date;
       const next = new Date(last);
       next.setDate(next.getDate() + 1);
-      arr.push({ date: next, inMonth: false });
+      cells.push({ date: next, inMonth: false });
     }
-    return arr;
+    const grouped: { date: Date; inMonth: boolean }[][] = [];
+    for (let i = 0; i < cells.length; i += 7) grouped.push(cells.slice(i, i + 7));
+    return grouped;
   }, [year, month, firstDow, daysInMonth]);
 
   const sprintColor = useMemo(() => {
     const m = new Map<number, string>();
-    board.sprints.forEach((s, i) => m.set(s.id, CHIP_PALETTE[i % CHIP_PALETTE.length]!));
+    board.sprints.forEach((s, i) => m.set(s.id, BAR_PALETTE[i % BAR_PALETTE.length]!));
     return m;
   }, [board.sprints]);
 
-  const chipColor = (t: PlannerTask) =>
-    t.sprintId != null ? sprintColor.get(t.sprintId) ?? BACKLOG_CHIP : BACKLOG_CHIP;
+  const barColor = (t: PlannerTask) =>
+    t.sprintId != null ? sprintColor.get(t.sprintId) ?? BACKLOG_BAR : BACKLOG_BAR;
 
-  // 날짜별 태스크 배치 — [startDate, dueDate] 범위의 각 날에 칩. 역전 범위는 자연 스킵.
-  const taskByDay = useMemo(() => {
-    const m = new Map<string, PlannerTask[]>();
-    for (const t of board.tasks) {
-      if (!t.startDate || !t.dueDate) continue;
-      let cur = parseDate(t.startDate);
-      const end = parseDate(t.dueDate);
-      let guard = 0;
-      while (cur <= end && guard < 366) {
-        const key = toKey(cur);
-        if (!m.has(key)) m.set(key, []);
-        m.get(key)!.push(t);
-        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
-        guard += 1;
-      }
+  // 기간 태스크(시작~마감) 목록
+  const dated = useMemo(
+    () =>
+      board.tasks
+        .filter((t) => t.startDate && t.dueDate)
+        .map((t) => ({ task: t, start: parseDate(t.startDate!), end: parseDate(t.dueDate!) }))
+        .filter(({ start, end }) => end >= start),
+    [board.tasks],
+  );
+
+  // 한 주에 걸치는 태스크를 세그먼트로 자르고 겹치지 않게 레인 배치
+  const lanesOfWeek = (week: { date: Date }[]): Segment[][] => {
+    const ws = week[0]!.date;
+    const we = week[6]!.date;
+    const segs: Segment[] = [];
+    for (const { task, start, end } of dated) {
+      if (start > we || end < ws) continue;
+      const startIdx = Math.max(0, dayDiff(ws, start));
+      const endIdx = Math.min(6, dayDiff(ws, end));
+      if (endIdx < startIdx) continue;
+      segs.push({
+        task,
+        startIdx,
+        endIdx,
+        realStart: start >= ws,
+        realEnd: end <= we,
+        totalDays: dayDiff(start, end) + 1,
+      });
     }
-    return m;
-  }, [board.tasks]);
+    segs.sort(
+      (a, b) => a.startIdx - b.startIdx || b.endIdx - b.startIdx - (a.endIdx - a.startIdx),
+    );
+    const lanes: Segment[][] = [];
+    for (const seg of segs) {
+      const lane = lanes.find((L) =>
+        L.every((x) => seg.startIdx > x.endIdx || seg.endIdx < x.startIdx),
+      );
+      if (lane) lane.push(seg);
+      else lanes.push([seg]);
+    }
+    return lanes;
+  };
 
   const unscheduled = board.tasks.filter((t) => !t.startDate || !t.dueDate);
   const isToday = (d: Date) => toKey(d) === toKey(today);
@@ -143,51 +182,70 @@ export function TimelineView({
           ))}
         </div>
 
-        {/* 날짜 격자 */}
-        <div className="mt-1 grid grid-cols-7 gap-1">
-          {cells.map(({ date, inMonth }) => {
-            const key = toKey(date);
-            const dayTasks = taskByDay.get(key) ?? [];
+        {/* 주 단위 격자 — 배경 셀 + 연속 bar 레인 */}
+        <div className="mt-1 space-y-1">
+          {weeks.map((week, wi) => {
+            const lanes = lanesOfWeek(week);
             return (
-              <div
-                key={key}
-                className={`flex min-h-[92px] flex-col gap-1 rounded-xl border p-1.5 ${
-                  !inMonth
-                    ? "border-transparent bg-slate-50/40 dark:bg-slate-900/40"
-                    : isToday(date)
-                      ? "border-indigo-300 bg-indigo-50/40 dark:border-indigo-800 dark:bg-indigo-900/15"
-                      : "border-slate-100 bg-white dark:border-slate-700 dark:bg-slate-900/60"
-                }`}
-              >
-                <span
-                  className={`text-[11px] font-semibold ${
-                    !inMonth
-                      ? "text-slate-300 dark:text-slate-600"
-                      : isToday(date)
-                        ? "text-indigo-700 dark:text-indigo-300"
-                        : "text-slate-600 dark:text-slate-400"
-                  }`}
-                >
-                  {date.getDate()}
-                </span>
-                {dayTasks.slice(0, MAX_CHIPS).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => onTaskClick(t)}
-                    title={t.title}
-                    className={`truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-semibold transition hover:opacity-80 ${chipColor(
-                      t,
-                    )} ${t.status === "done" ? "line-through opacity-60" : ""}`}
-                  >
-                    {t.title}
-                  </button>
-                ))}
-                {dayTasks.length > MAX_CHIPS ? (
-                  <span className="px-1 text-[9px] font-medium text-slate-400">
-                    +{dayTasks.length - MAX_CHIPS}건
-                  </span>
-                ) : null}
+              <div key={wi} className="relative" style={{ minHeight: 96 }}>
+                {/* 배경 날짜 셀 */}
+                <div className="absolute inset-0 grid grid-cols-7 gap-1">
+                  {week.map(({ date, inMonth }, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-xl border ${
+                        !inMonth
+                          ? "border-transparent bg-slate-50/40 dark:bg-slate-900/40"
+                          : isToday(date)
+                            ? "border-indigo-300 bg-indigo-50/40 dark:border-indigo-800 dark:bg-indigo-900/15"
+                            : "border-slate-100 bg-white dark:border-slate-700 dark:bg-slate-900/60"
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* 전경 — 날짜 숫자 + 연속 bar 레인 */}
+                <div className="relative">
+                  <div className="grid grid-cols-7 gap-1">
+                    {week.map(({ date, inMonth }, i) => (
+                      <div
+                        key={i}
+                        className={`px-1.5 pt-1.5 text-[11px] font-semibold ${
+                          !inMonth
+                            ? "text-slate-300 dark:text-slate-600"
+                            : isToday(date)
+                              ? "text-indigo-700 dark:text-indigo-300"
+                              : "text-slate-600 dark:text-slate-400"
+                        }`}
+                      >
+                        {date.getDate()}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-0.5 space-y-0.5 pb-1.5">
+                    {lanes.map((lane, li) => (
+                      <div key={li} className="grid grid-cols-7 gap-1">
+                        {lane.map((seg) => (
+                          <button
+                            key={seg.task.id}
+                            type="button"
+                            onClick={() => onTaskClick(seg.task)}
+                            title={`${seg.task.title} · ${seg.totalDays}일`}
+                            style={{ gridColumn: `${seg.startIdx + 1} / span ${seg.endIdx - seg.startIdx + 1}` }}
+                            className={`mx-0.5 truncate px-1.5 py-0.5 text-left text-[10px] font-semibold shadow-sm transition hover:opacity-80 ${barColor(
+                              seg.task,
+                            )} ${seg.realStart ? "rounded-l-md" : "rounded-l-none"} ${
+                              seg.realEnd ? "rounded-r-md" : "rounded-r-none"
+                            } ${seg.task.status === "done" ? "line-through opacity-60" : ""}`}
+                          >
+                            {seg.task.title}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             );
           })}
