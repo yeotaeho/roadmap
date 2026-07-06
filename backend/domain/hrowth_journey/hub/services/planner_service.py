@@ -101,10 +101,16 @@ class PlannerService:
         return await self.repo.delete_sprint(user_id, sprint_id)
 
     async def create_task(self, user_id: str, fields: dict) -> dict:
+        sprint_id = fields.get("sprint_id")
+        if sprint_id is not None and not await self.repo.owns_sprint(user_id, sprint_id):
+            raise ValueError("sprint-not-found")
         row = await self.repo.insert_task(user_id, fields)
         return serialize_task(row)
 
     async def update_task(self, user_id: str, task_id: int, fields: dict) -> bool:
+        sprint_id = fields.get("sprint_id")
+        if sprint_id is not None and not await self.repo.owns_sprint(user_id, sprint_id):
+            raise ValueError("sprint-not-found")
         return await self.repo.update_task(user_id, task_id, fields)
 
     async def delete_task(self, user_id: str, task_id: int) -> bool:
@@ -113,6 +119,8 @@ class PlannerService:
     async def reorder_tasks(
         self, user_id: str, sprint_id: int | None, task_ids: list[int]
     ) -> int:
+        if sprint_id is not None and not await self.repo.owns_sprint(user_id, sprint_id):
+            raise ValueError("sprint-not-found")
         return await self.repo.reorder_tasks(user_id, sprint_id, task_ids)
 
     async def decompose(self, user_id: str, quest_key: str) -> dict:

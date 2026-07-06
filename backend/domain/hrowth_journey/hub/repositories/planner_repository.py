@@ -75,6 +75,13 @@ _REORDER_TASK = text(
     """
 )
 
+_OWNS_SPRINT = text(
+    """
+    SELECT 1 FROM planner_sprints
+    WHERE id = :sprint_id AND user_id = CAST(:user_id AS UUID)
+    """
+)
+
 # 퀘스트 조회 — 사용자 활성 로드맵에서 quest_key 매칭(분해 컨텍스트용)
 _FETCH_QUEST = text(
     """
@@ -172,6 +179,14 @@ class PlannerRepository(BaseRepository):
             moved += res.rowcount
         await self.session.commit()
         return moved
+
+    async def owns_sprint(self, user_id: str, sprint_id: int) -> bool:
+        row = (
+            await self.session.execute(
+                _OWNS_SPRINT, {"user_id": user_id, "sprint_id": sprint_id}
+            )
+        ).first()
+        return row is not None
 
     async def fetch_quest(self, user_id: str, quest_key: str) -> dict | None:
         row = (
