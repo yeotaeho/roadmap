@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Compass, Map, Route } from "lucide-react";
+import { Compass } from "lucide-react";
 import { GrowthArchiveTab } from "./GrowthArchiveTab";
 import { JourneyMapTab } from "./JourneyMapTab";
+import { PlannerTab } from "./planner/PlannerTab";
 import { useRoadmapNav } from "./RoadmapNavContext";
 
 export function RoadmapView() {
@@ -12,30 +13,7 @@ export function RoadmapView() {
   const { subTab } = useRoadmapNav();
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-indigo-100 p-3 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-            <Route className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">전략 로드맵</h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              일정 감시가 아니라,{" "}
-              <strong className="font-semibold text-slate-800 dark:text-slate-200">기회(퀘스트) 지도</strong>와{" "}
-              <strong className="font-semibold text-slate-800 dark:text-slate-200">성장 기록</strong>을 나란히 둡니다.
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
-              목표 브릿지: 에너지·ESG × AI 엔지니어링 (방향만 고정, 마감은 강제하지 않음)
-            </p>
-          </div>
-        </div>
-        <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          <Map className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-300" />
-          L2 서브탭 2종
-        </div>
-      </header>
-
+    <div className="min-h-[calc(100vh-220px)] space-y-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={subTab}
@@ -44,7 +22,13 @@ export function RoadmapView() {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.2 }}
         >
-          {subTab === "journey" ? <JourneyMapTab /> : <GrowthArchiveTab />}
+          {subTab === "journey" ? (
+            <JourneyMapTab />
+          ) : subTab === "planner" ? (
+            <PlannerTab />
+          ) : (
+            <GrowthArchiveTab />
+          )}
         </motion.div>
       </AnimatePresence>
 
