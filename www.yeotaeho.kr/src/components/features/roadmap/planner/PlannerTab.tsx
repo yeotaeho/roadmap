@@ -19,6 +19,7 @@ import {
 import type { PlannerTask, TaskStatus } from "@/lib/api/planner";
 import { useStore } from "@/store";
 import { BoardView } from "./BoardView";
+import { TimelineView } from "./TimelineView";
 
 type PlannerView = "board" | "timeline";
 
@@ -115,9 +116,7 @@ export function PlannerTab() {
           onTaskClick={(t) => setEditing(t)}
         />
       ) : (
-        <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400 dark:border-slate-700">
-          타임라인 뷰는 다음 단계에서 열립니다.
-        </p>
+        <TimelineView board={board} onTaskClick={(t) => setEditing(t)} />
       )}
 
       {/* 태스크 추가 폼 */}
