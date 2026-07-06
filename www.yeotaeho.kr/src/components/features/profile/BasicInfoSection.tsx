@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import ChipSelect from "./ChipSelect";
 import {
@@ -29,14 +29,16 @@ export default function BasicInfoSection({ className = "" }: { className?: strin
 
   const currentYear = new Date().getFullYear();
 
-  useEffect(() => {
-    if (!data) return;
+  // 서버 데이터 도착/갱신 시 입력값 동기화 — 렌더 중 이전 data 와 비교(효과 대체).
+  const [prevData, setPrevData] = useState(data);
+  if (data && data !== prevData) {
+    setPrevData(data);
     setBirthYear(data.birthYear ? String(data.birthYear) : "");
     setGender(data.gender ?? "");
     setRegion(data.region ?? "");
     setCurrentStatus(data.currentStatus ?? "");
     setEducationLevel(data.educationLevel ?? "");
-  }, [data]);
+  }
 
   const save = async () => {
     // 출생연도 검증 — 4자리 연도만(생년월일 8자리 등 잘못된 입력 차단).

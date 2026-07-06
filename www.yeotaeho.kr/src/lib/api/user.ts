@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiClient } from './client';
 
 /**
@@ -25,10 +26,11 @@ export const getCurrentUser = async (): Promise<UserInfo | null> => {
   try {
     const response = await apiClient.get<UserInfo>('/api/oauth/me');
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     console.error('사용자 정보 조회 실패:', error);
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
     // 401 에러는 인증 문제이므로 null 반환
-    if (error.response?.status === 401 || error.response?.status === 404) {
+    if (status === 401 || status === 404) {
       return null;
     }
     // 기타 에러도 null 반환 (fallback 처리)
@@ -62,12 +64,11 @@ export const updateUserProfile = async (data: UpdateProfileRequest): Promise<Use
     console.log('[API 클라이언트] 응답 데이터:', response.data);
     
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API 클라이언트] 프로필 업데이트 실패:', error);
-    console.error('[API 클라이언트] 에러 상태 코드:', error.response?.status);
-    console.error('[API 클라이언트] 에러 메시지:', error.response?.data || error.message);
-    if (error.response?.status === 401 || error.response?.status === 404) {
-      return null;
+    if (axios.isAxiosError(error)) {
+      console.error('[API 클라이언트] 에러 상태 코드:', error.response?.status);
+      console.error('[API 클라이언트] 에러 메시지:', error.response?.data || error.message);
     }
     return null;
   }
@@ -94,7 +95,7 @@ export const uploadProfileImage = async (file: File): Promise<string | null> => 
     );
 
     return response.data.url;
-  } catch (error: any) {
+  } catch (error) {
     console.error('프로필 이미지 업로드 실패:', error);
     return null;
   }
@@ -104,8 +105,9 @@ export const getSyncProfile = async (): Promise<UserSyncProfile | null> => {
   try {
     const response = await apiClient.get<UserSyncProfile>('/api/user/sync-profile');
     return response.data;
-  } catch (error: any) {
-    if (error.response?.status === 401 || error.response?.status === 404) {
+  } catch (error) {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    if (status === 401 || status === 404) {
       return null;
     }
     console.error('싱크 프로필 조회 실패:', error);
@@ -119,7 +121,7 @@ export const upsertSyncProfile = async (
   try {
     const response = await apiClient.put<UserSyncProfile>('/api/user/sync-profile', data);
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     console.error('싱크 프로필 저장 실패:', error);
     return null;
   }

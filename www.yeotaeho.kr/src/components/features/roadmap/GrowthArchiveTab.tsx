@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { CalendarDays, ChevronLeft, ChevronRight, Save } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ARCHIVE_ACTIVITY_SEED,
   flattenQuestTitles,
@@ -55,11 +55,13 @@ export function GrowthArchiveTab() {
   const month = viewMonth.getMonth();
   const monthKey = `${year}-${pad2(month + 1)}`;
 
-  // 보고 있는 달의 로그를 백엔드에서 받아 로컬 state 에 병합(서버가 진실원).
+  // 보고 있는 달의 로그를 백엔드에서 받아 로컬 state 에 병합(서버가 진실원) — 렌더 중 이전 값 비교(효과 대체).
   const { data: monthLogs } = useArchive(monthKey, enabled);
-  useEffect(() => {
-    if (monthLogs) setLogs((prev) => ({ ...prev, ...monthLogs }));
-  }, [monthLogs]);
+  const [prevMonthLogs, setPrevMonthLogs] = useState(monthLogs);
+  if (monthLogs && monthLogs !== prevMonthLogs) {
+    setPrevMonthLogs(monthLogs);
+    setLogs((prev) => ({ ...prev, ...monthLogs }));
+  }
 
   const upsertDay = useUpsertArchiveDay();
   const firstDow = new Date(year, month, 1).getDay();

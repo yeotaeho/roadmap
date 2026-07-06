@@ -18,6 +18,9 @@ export function ThemeToggle() {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
     const initial =
       stored ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    // 마운트 후 브라우저 저장값으로 테마 초기화 — localStorage·matchMedia·DOM 접근은
+    // 렌더 중 실행 불가(SSR 하이드레이션 안전)하므로 효과 안 setState 가 불가피하다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(initial);
     applyTheme(initial);
   }, []);

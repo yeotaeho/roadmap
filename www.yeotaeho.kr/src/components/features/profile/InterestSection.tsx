@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import ChipSelect from "./ChipSelect";
@@ -48,14 +48,16 @@ export default function InterestSection({ className = "" }: { className?: string
   const [saveFailed, setSaveFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!data) return;
+  // 서버 데이터 도착/갱신 시 입력값 동기화 — 렌더 중 이전 data 와 비교(효과 대체).
+  const [prevData, setPrevData] = useState(data);
+  if (data && data !== prevData) {
+    setPrevData(data);
     setTargetJob(data.targetJob ?? "");
     const kws = data.interestKeywords ?? [];
     setSelectedSectors(kws.filter((k) => SECTOR_VALUES.has(k)));
     setSelectedJobs(kws.filter((k) => JOB_VALUES.has(k)));
     setCustomKeywords(kws.filter((k) => !SECTOR_VALUES.has(k) && !JOB_VALUES.has(k)));
-  }, [data]);
+  }
 
   const addCustom = () => {
     const v = customInput.trim();
