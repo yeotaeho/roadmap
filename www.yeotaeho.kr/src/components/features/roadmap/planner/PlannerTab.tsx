@@ -38,6 +38,7 @@ export function PlannerTab() {
   const { data: journey } = useJourney(enabled);
   const board = enabled && data ? data : PLANNER_MOCK;
   const isLive = enabled && Boolean(data);
+  const hasLiveQuests = Boolean(journey?.questTree);
 
   const [view, setView] = useState<PlannerView>("board");
   const [editing, setEditing] = useState<PlannerTask | null>(null);
@@ -135,7 +136,7 @@ export function PlannerTab() {
           }}
           onTaskClick={(t) => setEditing(t)}
           decomposeSlot={
-            enabled ? (
+            enabled && isLive && hasLiveQuests ? (
               <div className="mt-2 space-y-1.5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-2 dark:border-indigo-900/40 dark:bg-indigo-900/15">
                 <select
                   value={decomposeKey}

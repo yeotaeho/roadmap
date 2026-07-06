@@ -223,7 +223,7 @@ export function JourneyMapTab() {
           </p>
         ) : null}
         <div className="mt-6">
-          <QuestTreeCard node={tree} depth={0} taskCounts={taskCounts} />
+          <QuestTreeCard node={tree} depth={0} taskCounts={isLive ? taskCounts : undefined} />
         </div>
       </section>
     </div>
