@@ -16,10 +16,8 @@ logger = logging.getLogger(__name__)
 
 connect_args: dict = {}
 
-if "neon.tech" in settings.database_url or "neon" in settings.database_url.lower():
-    connect_args["ssl"] = True
-else:
-    connect_args["ssl"] = True
+# Neon 여부와 무관하게 SSL 고정(과거 분기 양쪽이 동일 값이라 단일화).
+connect_args["ssl"] = True
 
 # 주의: Neon pooler(pgbouncer) 경유라 server_settings 의 timezone 등 startup 파라미터는 무시된다
 # (실측: 직결 asyncpg 도 GMT 유지). 날짜 귀속의 KST 정렬은 각 SQL 의 명시 캐스팅으로 처리.

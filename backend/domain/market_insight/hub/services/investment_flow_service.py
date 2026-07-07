@@ -159,6 +159,9 @@ class InvestmentFlowRefineService:
                     logger.warning(
                         "DART 기업개황 비정상 status=%s corp_code=%s", status, r.corp_code
                     )
+                    # 쿼터 초과(020)는 이 실행의 잔여 호출을 즉시 중단 — 소진된 키를 계속 두드리지 않는다.
+                    if status == "020":
+                        break
                     # 영구 실패(013 데이터 없음·100 잘못된 요청)는 tombstone 적재로 일일 재호출 누수 차단.
                     # 키·쿼터·점검 등 일시 오류는 미저장 → 다음 실행 재시도.
                     if status in ("013", "100"):
