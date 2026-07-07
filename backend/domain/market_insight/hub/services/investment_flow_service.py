@@ -49,7 +49,7 @@ _KSIC_SECTOR_PREFIX: dict[str, str] = {
     # 뷰티·패션
     "2042": "beauty-fashion",  # 세제·화장품
     "13": "beauty-fashion", "14": "beauty-fashion", "15": "beauty-fashion",
-    # 에너지·기후
+    # 에너지·기후 — 35 는 가스·증기 공급 포함(에너지 인프라 전반을 이 섹터로 보는 의도적 범위).
     "35": "energy-climate", "38": "energy-climate", "39": "energy-climate",
     # 물류·유통
     "49": "logistics", "50": "logistics", "51": "logistics", "52": "logistics",
@@ -146,13 +146,34 @@ class InvestmentFlowRefineService:
                 except Exception:
                     logger.warning("DART 기업개황 조회 실패 corp_code=%s", r.corp_code, exc_info=False)
                     continue
-                if data.get("status") != "000":
+                status = data.get("status")
+                if status != "000":
                     logger.warning(
-                        "DART 기업개황 비정상 status=%s corp_code=%s", data.get("status"), r.corp_code
+                        "DART 기업개황 비정상 status=%s corp_code=%s", status, r.corp_code
                     )
+                    # 영구 실패(013 데이터 없음·100 잘못된 요청)는 tombstone 적재로 일일 재호출 누수 차단.
+                    # 키·쿼터·점검 등 일시 오류는 미저장 → 다음 실행 재시도.
+                    if status in ("013", "100"):
+                        await self.repo.upsert_silver(
+                            {
+                                "sector_slug": None,
+                                "amount_krw": None,
+                                "currency": None,
+                                "series": None,
+                                "company": None,
+                                "ref_date": r.ref_date,
+                                "raw_id": r.raw_id,
+                                "model_name": "dart_company_api",
+                                "prompt_version": DART_PROMPT_VERSION,
+                                "input_hash": hashlib.sha256(
+                                    f"{r.corp_code}|{r.raw_id}".encode("utf-8")
+                                ).hexdigest(),
+                            }
+                        )
                     continue
                 sector = map_ksic_to_sector(data.get("induty_code"))
-                # KRW 외 통화는 amount_krw 로 쓸 수 없음 — 무금액 저장으로 재호출만 방지.
+                # KRW 외 통화 가드 — 현재 DART CB·M&A 수집기는 currency 를 채우지 않아(항상 NULL=KRW)
+                # 실질 항상 통과하는 방어적 가드다(향후 외화 공시 대비).
                 krw_ok = (r.currency or "KRW").upper() == "KRW"
                 await self.repo.upsert_silver(
                     {
@@ -165,8 +186,9 @@ class InvestmentFlowRefineService:
                         "raw_id": r.raw_id,
                         "model_name": "dart_company_api",
                         "prompt_version": DART_PROMPT_VERSION,
+                        # dedup 은 (raw_table_ref, raw_id, prompt_version) 자연키 담당 — 해시는 입력 식별용.
                         "input_hash": hashlib.sha256(
-                            str(r.corp_code).encode("utf-8")
+                            f"{r.corp_code}|{r.raw_id}".encode("utf-8")
                         ).hexdigest(),
                     }
                 )
