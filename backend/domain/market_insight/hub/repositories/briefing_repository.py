@@ -11,7 +11,7 @@ _FETCH_ECON = text(
     """
     SELECT raw_title AS title
     FROM raw_economic_data
-    WHERE COALESCE(published_at::date, collected_at::date) >= CURRENT_DATE - 3
+    WHERE COALESCE((published_at AT TIME ZONE 'Asia/Seoul')::date, (collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - 3
     ORDER BY COALESCE(published_at, collected_at) DESC NULLS LAST
     LIMIT :lim
     """
@@ -39,13 +39,13 @@ _FETCH_GAPS = text(
 )
 
 _TODAY_EXISTS = text(
-    "SELECT 1 FROM economic_briefings WHERE published_date = CURRENT_DATE LIMIT 1"
+    "SELECT 1 FROM economic_briefings WHERE published_date = (now() AT TIME ZONE 'Asia/Seoul')::date LIMIT 1"
 )
-_DELETE_TODAY = text("DELETE FROM economic_briefings WHERE published_date = CURRENT_DATE")
+_DELETE_TODAY = text("DELETE FROM economic_briefings WHERE published_date = (now() AT TIME ZONE 'Asia/Seoul')::date")
 _INSERT_LINE = text(
     """
     INSERT INTO economic_briefings (published_date, line_number, content, trend_icon)
-    VALUES (CURRENT_DATE, :ln, :content, :icon)
+    VALUES ((now() AT TIME ZONE 'Asia/Seoul')::date, :ln, :content, :icon)
     """
 )
 

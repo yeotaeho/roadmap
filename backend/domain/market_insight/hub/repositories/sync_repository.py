@@ -38,7 +38,7 @@ _UPSERT_SYNC_INPUT = text(
         (user_id, sector_slug, reference_date, affinity_score, trend_score,
          contributing_keywords, model_name, prompt_version)
     VALUES
-        (:user_id, :sector_slug, CURRENT_DATE, :affinity_score, :trend_score,
+        (:user_id, :sector_slug, (now() AT TIME ZONE 'Asia/Seoul')::date, :affinity_score, :trend_score,
          CAST(:keywords AS JSONB), :model_name, :prompt_version)
     ON CONFLICT (user_id, sector_slug, reference_date) DO UPDATE SET
         affinity_score = EXCLUDED.affinity_score,
@@ -51,7 +51,7 @@ _UPSERT_SYNC_INPUT = text(
 _UPSERT_SYNC_GOLD = text(
     """
     INSERT INTO sync_scores_daily (user_id, sector_slug, recorded_date, score, badge)
-    VALUES (:user_id, :sector_slug, CURRENT_DATE, :score, :badge)
+    VALUES (:user_id, :sector_slug, (now() AT TIME ZONE 'Asia/Seoul')::date, :score, :badge)
     ON CONFLICT (user_id, sector_slug, recorded_date) DO UPDATE SET
         score = EXCLUDED.score,
         badge = EXCLUDED.badge,

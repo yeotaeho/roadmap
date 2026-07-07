@@ -15,7 +15,7 @@ _FETCH_UNPROCESSED = text(
            c.raw_id AS raw_id, c.sector_slug AS sector_slug,
            d.headline AS headline, d.source_url AS url,
            d.headline || E'\n' || COALESCE(d.content_body, '') AS body,
-           COALESCE(d.published_at::date, d.collected_at::date) AS ref_date
+           COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM refined_text_sector_class c
     JOIN raw_discourse_data d ON d.id = c.raw_id
     LEFT JOIN refined_gap_insights g
@@ -24,7 +24,7 @@ _FETCH_UNPROCESSED = text(
       AND c.sector_slug IS NOT NULL
       AND c.confidence >= :conf_min
       AND g.id IS NULL
-      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.raw_id, c.confidence DESC
     LIMIT :lim
     """
@@ -51,7 +51,7 @@ _FETCH_UNPROCESSED_TECH_DEMAND = text(
            i.title AS title, i.source_url AS url,
            i.title || E'\n' || COALESCE(i.abstract_text, '') || E'\n'
                   || COALESCE(i.raw_metadata->>'keyword', '') AS body,
-           COALESCE(i.published_at::date, i.collected_at::date) AS ref_date
+           COALESCE((i.published_at AT TIME ZONE 'Asia/Seoul')::date, (i.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM refined_text_sector_class c
     JOIN raw_innovation_data i ON i.id = c.raw_id
     LEFT JOIN refined_gap_insights g
@@ -61,7 +61,7 @@ _FETCH_UNPROCESSED_TECH_DEMAND = text(
       AND c.confidence >= :conf_min
       AND i.source_type IN ('INNOVATION_KIAT_TECH_DEMAND', 'INNOVATION_KISTEP_REPORT')
       AND g.id IS NULL
-      AND COALESCE(i.published_at::date, i.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((i.published_at AT TIME ZONE 'Asia/Seoul')::date, (i.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.confidence DESC
     LIMIT :lim
     """

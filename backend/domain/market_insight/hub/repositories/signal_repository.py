@@ -17,7 +17,7 @@ _FETCH_UNEXTRACTED_ECONOMIC = text(
            e.raw_title || E'\n' ||
            COALESCE(e.raw_metadata->>'content_text', e.raw_metadata->>'body_text',
                     e.raw_metadata->>'summary', '') AS body,
-           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date
+           COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM refined_text_sector_class c
     JOIN raw_economic_data e ON e.id = c.raw_id
     LEFT JOIN refined_signal_sources ss
@@ -26,7 +26,7 @@ _FETCH_UNEXTRACTED_ECONOMIC = text(
       AND c.sector_slug IS NOT NULL
       AND c.confidence >= :conf_min
       AND ss.id IS NULL
-      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.raw_id, c.confidence DESC
     LIMIT :lim
     """
@@ -37,7 +37,7 @@ _FETCH_UNEXTRACTED_DISCOURSE = text(
     SELECT DISTINCT ON (c.raw_id)
            c.raw_id AS raw_id, c.sector_slug AS sector_slug,
            d.headline || E'\n' || COALESCE(d.content_body, '') AS body,
-           COALESCE(d.published_at::date, d.collected_at::date) AS ref_date
+           COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM refined_text_sector_class c
     JOIN raw_discourse_data d ON d.id = c.raw_id
     LEFT JOIN refined_signal_sources ss
@@ -46,7 +46,7 @@ _FETCH_UNEXTRACTED_DISCOURSE = text(
       AND c.sector_slug IS NOT NULL
       AND c.confidence >= :conf_min
       AND ss.id IS NULL
-      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.raw_id, c.confidence DESC
     LIMIT :lim
     """
@@ -83,7 +83,7 @@ _KEYWORD_FREQ_RECENT = text(
     FROM refined_innovation_signal s,
          LATERAL jsonb_array_elements_text(s.extracted_keywords) AS kw
     WHERE jsonb_typeof(s.extracted_keywords) = 'array'
-      AND s.reference_period_end >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND s.reference_period_end >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
       AND (CAST(:sector AS TEXT) IS NULL OR s.sector_slug = :sector)
     GROUP BY kw
     """
@@ -95,8 +95,8 @@ _KEYWORD_FREQ_PRIOR = text(
     FROM refined_innovation_signal s,
          LATERAL jsonb_array_elements_text(s.extracted_keywords) AS kw
     WHERE jsonb_typeof(s.extracted_keywords) = 'array'
-      AND s.reference_period_end >= CURRENT_DATE - CAST(:win2 AS INTEGER)
-      AND s.reference_period_end <  CURRENT_DATE - CAST(:win AS INTEGER)
+      AND s.reference_period_end >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win2 AS INTEGER)
+      AND s.reference_period_end <  (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
       AND (CAST(:sector AS TEXT) IS NULL OR s.sector_slug = :sector)
     GROUP BY kw
     """

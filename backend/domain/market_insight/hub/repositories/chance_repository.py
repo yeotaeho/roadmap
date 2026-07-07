@@ -15,13 +15,13 @@ _FETCH_UNPROCESSED = text(
            o.deadline_at::date AS deadline, o.source_url AS url,
            o.raw_title || E'\n' || COALESCE(o.raw_content, '') || E'\n'
                || COALESCE(o.raw_metadata::text, '') AS body,
-           COALESCE(o.published_at::date, o.collected_at::date) AS ref_date
+           COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM raw_opportunity_data o
     LEFT JOIN refined_chance_insights c
            ON c.raw_table_ref = 'raw_opportunity_data' AND c.raw_id = o.id AND c.prompt_version = :pv
     WHERE c.id IS NULL
-      AND (o.deadline_at IS NULL OR o.deadline_at::date >= CURRENT_DATE)
-      AND COALESCE(o.published_at::date, o.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND (o.deadline_at IS NULL OR o.deadline_at::date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
+      AND COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY o.deadline_at ASC NULLS LAST, o.id
     LIMIT :lim
     """
@@ -100,7 +100,7 @@ _FETCH_OPPORTUNITIES = text(
     SELECT id, sector_slug, title, opportunity_type, host_name, benefit_summary, d_day_date
     FROM chance_opportunities
     WHERE is_active = true
-      AND (d_day_date IS NULL OR d_day_date >= CURRENT_DATE)
+      AND (d_day_date IS NULL OR d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
       AND (CAST(:sector AS TEXT) IS NULL OR sector_slug = CAST(:sector AS TEXT))
     ORDER BY d_day_date ASC NULLS LAST, id DESC
     LIMIT :lim
@@ -120,7 +120,7 @@ _FETCH_ACTIVE_OPPS = text(
     """
     SELECT id, sector_slug, title, opportunity_type, benefit_summary, target_audience
     FROM chance_opportunities
-    WHERE is_active = true AND (d_day_date IS NULL OR d_day_date >= CURRENT_DATE)
+    WHERE is_active = true AND (d_day_date IS NULL OR d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
     """
 )
 
@@ -167,7 +167,7 @@ _FETCH_MATCH_AFFINITIES = text(
       ON de.source_table = 'chance_opportunities'
      AND de.embedding_model = u.embedding_model
     JOIN chance_opportunities o ON o.id = de.source_id
-    WHERE o.is_active = true AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+    WHERE o.is_active = true AND (o.d_day_date IS NULL OR o.d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
     """
 )
 

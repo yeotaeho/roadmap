@@ -15,14 +15,14 @@ _FETCH_UNPROCESSED = text(
            o.target_company_or_fund AS company_hint,
            COALESCE(o.raw_metadata->>'content_text', o.raw_metadata->>'body_text',
                     o.raw_metadata->>'summary', '') AS body,
-           COALESCE(o.published_at::date, o.collected_at::date) AS ref_date
+           COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM raw_economic_data o
     LEFT JOIN refined_investment_flows f
            ON f.raw_table_ref = 'raw_economic_data' AND f.raw_id = o.id
           AND f.prompt_version = :pv
     WHERE f.id IS NULL
       AND o.source_type ~ 'INVEST|FUND|_MA|_VC|IPO'
-      AND COALESCE(o.published_at::date, o.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY o.id
     LIMIT :lim
     """
@@ -49,7 +49,7 @@ _FETCH_DART_UNENRICHED = text(
            e.raw_metadata->>'corp_code' AS corp_code,
            e.investor_name, e.target_company_or_fund,
            e.investment_amount, e.currency, e.source_type,
-           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date
+           COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM raw_economic_data e
     LEFT JOIN refined_investment_flows f
            ON f.raw_table_ref = 'raw_economic_data' AND f.raw_id = e.id

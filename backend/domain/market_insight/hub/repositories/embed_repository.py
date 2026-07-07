@@ -163,7 +163,7 @@ _CLEAR_USER_SYNC_EXPLANATIONS = text(
     UPDATE sync_scores_daily
     SET explanation = NULL
     WHERE user_id = CAST(:user_id AS UUID)
-      AND recorded_date = CURRENT_DATE
+      AND recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
       AND explanation IS NOT NULL
     """
 )

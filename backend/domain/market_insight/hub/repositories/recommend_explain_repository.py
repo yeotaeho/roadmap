@@ -14,7 +14,7 @@ _FETCH_PENDING_USER_IDS = text(
     SELECT DISTINCT user_id FROM (
         SELECT d.user_id
         FROM sync_scores_daily d
-        WHERE d.recorded_date = CURRENT_DATE
+        WHERE d.recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
           AND d.explanation IS NULL
           AND d.badge IS DISTINCT FROM :insufficient
         UNION
@@ -23,7 +23,7 @@ _FETCH_PENDING_USER_IDS = text(
         JOIN chance_opportunities o ON o.id = m.opportunity_id
         WHERE m.match_explanation IS NULL
           AND o.is_active = true
-          AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+          AND (o.d_day_date IS NULL OR o.d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
     ) u
     ORDER BY user_id
     LIMIT :max_users
@@ -45,7 +45,7 @@ _FETCH_UNEXPLAINED_SYNC = text(
         LEFT JOIN refined_sync_inputs i
                ON i.user_id = d.user_id AND i.sector_slug = d.sector_slug
               AND i.reference_date = d.recorded_date
-        WHERE d.recorded_date = CURRENT_DATE
+        WHERE d.recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
           AND d.explanation IS NULL
           AND d.badge IS DISTINCT FROM :insufficient
           AND d.user_id IN :uids
@@ -67,7 +67,7 @@ _FETCH_UNEXPLAINED_MATCHES = text(
         JOIN chance_opportunities o ON o.id = m.opportunity_id
         WHERE m.match_explanation IS NULL
           AND o.is_active = true
-          AND (o.d_day_date IS NULL OR o.d_day_date >= CURRENT_DATE)
+          AND (o.d_day_date IS NULL OR o.d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
           AND m.user_id IN :uids
     ) t
     WHERE rn <= :per_user
@@ -103,7 +103,7 @@ _UPDATE_SYNC_EXPLANATION = text(
     """
     UPDATE sync_scores_daily SET explanation = :explanation
     WHERE user_id = CAST(:user_id AS UUID) AND sector_slug = :sector_slug
-      AND recorded_date = CURRENT_DATE
+      AND recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
       AND explanation IS NULL
       AND score = :score
       AND badge IS NOT DISTINCT FROM :badge

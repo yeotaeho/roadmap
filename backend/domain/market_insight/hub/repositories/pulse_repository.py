@@ -69,28 +69,28 @@ _MARKET_SOURCE_MAP: dict[str, str] = {
 _INNOVATION_SIGNAL_SQL = text(
     """
     WITH mapped AS (
-        SELECT r.id AS rid, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date) AS ref_date
+        SELECT r.id AS rid, m.sector_slug, COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'arxiv_category'
          AND m.match_value = r.raw_metadata->>'category'
         WHERE r.source_type = 'INNOVATION_ARXIV_KR'
         UNION ALL
-        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
+        SELECT r.id, m.sector_slug, COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date)
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'customs_group'
          AND m.match_value = r.raw_metadata->>'group_name'
         WHERE r.source_type = 'INNOVATION_CUSTOMS_EXPORT'
         UNION ALL
-        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
+        SELECT r.id, m.sector_slug, COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date)
         FROM raw_innovation_data r
         JOIN sector_source_map m
           ON m.match_key = 'tech_category'
          AND m.match_value = r.raw_metadata->>'tech_category'
         WHERE r.source_type = 'INNOVATION_TECHBLOG_KR'
         UNION ALL
-        SELECT r.id, m.sector_slug, COALESCE(r.published_at::date, r.collected_at::date)
+        SELECT r.id, m.sector_slug, COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date)
         FROM raw_innovation_data r
         JOIN LATERAL jsonb_array_elements_text(r.raw_metadata->'topics') AS t(topic) ON true
         JOIN sector_source_map m
@@ -110,7 +110,7 @@ _INNOVATION_SIGNAL_SQL = text(
 _ECONOMIC_AXIS_SQL = text(
     """
     SELECT COALESCE(raw_metadata->>'industry_sector', raw_metadata->>'group_name') AS code,
-           COALESCE(published_at::date, collected_at::date) AS ref_date,
+           COALESCE((published_at AT TIME ZONE 'Asia/Seoul')::date, (collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
            COUNT(*) AS c
     FROM raw_economic_data
     WHERE (raw_metadata ? 'industry_sector' OR raw_metadata ? 'group_name')
@@ -159,7 +159,7 @@ _MARKET_AXIS_SQL = text(
 _TEXT_SECTOR_AXIS_SQL = text(
     """
     SELECT 'economic_text' AS axis, c.sector_slug,
-           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date,
+           COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
            COUNT(DISTINCT c.raw_id) AS c
     FROM refined_text_sector_class c
     JOIN raw_economic_data e ON e.id = c.raw_id
@@ -170,7 +170,7 @@ _TEXT_SECTOR_AXIS_SQL = text(
     GROUP BY c.sector_slug, ref_date
     UNION ALL
     SELECT 'discourse' AS axis, c.sector_slug,
-           COALESCE(d.published_at::date, d.collected_at::date) AS ref_date,
+           COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
            COUNT(DISTINCT c.raw_id) AS c
     FROM refined_text_sector_class c
     JOIN raw_discourse_data d ON d.id = c.raw_id
@@ -181,7 +181,7 @@ _TEXT_SECTOR_AXIS_SQL = text(
     GROUP BY c.sector_slug, ref_date
     UNION ALL
     SELECT 'tech_demand' AS axis, c.sector_slug,
-           COALESCE(r.published_at::date, r.collected_at::date) AS ref_date,
+           COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
            COUNT(DISTINCT c.raw_id) AS c
     FROM refined_text_sector_class c
     JOIN raw_innovation_data r ON r.id = c.raw_id
@@ -208,7 +208,7 @@ _FETCH_UNCLASSIFIED_ECONOMIC = text(
           AND c.prompt_version = :pv
     WHERE c.id IS NULL
       AND (e.raw_metadata ? 'industry_sector' OR e.raw_metadata ? 'group_name') IS NOT TRUE
-      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY e.id
     LIMIT :lim
     """
@@ -225,7 +225,7 @@ _FETCH_UNCLASSIFIED_DISCOURSE = text(
           AND c.raw_id = d.id
           AND c.prompt_version = :pv
     WHERE c.id IS NULL
-      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY d.id
     LIMIT :lim
     """
@@ -246,7 +246,7 @@ _FETCH_UNCLASSIFIED_INNOVATION = text(
           AND c.prompt_version = :pv
     WHERE c.id IS NULL
       AND r.source_type IN ('INNOVATION_KIAT_TECH_DEMAND', 'INNOVATION_KISTEP_REPORT')
-      AND COALESCE(r.published_at::date, r.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY r.id
     LIMIT :lim
     """
@@ -279,7 +279,7 @@ _TEXT_SENTIMENT_SQL = text(
     SELECT sector_slug, ref_date, AVG(sentiment_score) AS avg_sent, COUNT(*) AS n
     FROM (
         SELECT c.sector_slug AS sector_slug,
-               COALESCE(e.published_at::date, e.collected_at::date) AS ref_date,
+               COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
                c.sentiment_score AS sentiment_score
         FROM refined_text_sector_class c
         JOIN raw_economic_data e ON e.id = c.raw_id
@@ -290,7 +290,7 @@ _TEXT_SENTIMENT_SQL = text(
           AND c.sentiment_score IS NOT NULL
         UNION ALL
         SELECT c.sector_slug,
-               COALESCE(d.published_at::date, d.collected_at::date),
+               COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date),
                c.sentiment_score
         FROM refined_text_sector_class c
         JOIN raw_discourse_data d ON d.id = c.raw_id
@@ -301,7 +301,7 @@ _TEXT_SENTIMENT_SQL = text(
           AND c.sentiment_score IS NOT NULL
         UNION ALL
         SELECT c.sector_slug,
-               COALESCE(r.published_at::date, r.collected_at::date),
+               COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date),
                c.sentiment_score
         FROM refined_text_sector_class c
         JOIN raw_innovation_data r ON r.id = c.raw_id
@@ -351,7 +351,7 @@ _FETCH_SENTIMENT_BACKFILL_ECONOMIC = text(
     WHERE c.raw_table_ref = 'raw_economic_data'
       AND c.prompt_version = :pv
       AND c.sentiment IS NULL
-      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.id
     LIMIT :lim
     """
@@ -365,7 +365,7 @@ _FETCH_SENTIMENT_BACKFILL_DISCOURSE = text(
     WHERE c.raw_table_ref = 'raw_discourse_data'
       AND c.prompt_version = :pv
       AND c.sentiment IS NULL
-      AND COALESCE(d.published_at::date, d.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((d.published_at AT TIME ZONE 'Asia/Seoul')::date, (d.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.id
     LIMIT :lim
     """
@@ -381,7 +381,7 @@ _FETCH_SENTIMENT_BACKFILL_INNOVATION = text(
     WHERE c.raw_table_ref = 'raw_innovation_data'
       AND c.prompt_version = :pv
       AND c.sentiment IS NULL
-      AND COALESCE(r.published_at::date, r.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((r.published_at AT TIME ZONE 'Asia/Seoul')::date, (r.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.id
     LIMIT :lim
     """
@@ -437,7 +437,7 @@ _OVERVIEW_MONTHLY_SQL = text(
     """
     SELECT to_char(recorded_date, 'YYYY-MM') AS bucket, round(avg(score)) AS value
     FROM pulse_metrics_log
-    WHERE recorded_date >= (CURRENT_DATE - make_interval(months => :months))
+    WHERE recorded_date >= ((now() AT TIME ZONE 'Asia/Seoul')::date - make_interval(months => :months))
     GROUP BY 1
     ORDER BY 1
     """
@@ -451,7 +451,7 @@ _OVERVIEW_WEEKLY_SQL = text(
         to_char(date_trunc('week', recorded_date), 'IYYY-"W"IW') AS bucket,
         score
     FROM pulse_metrics_log
-    WHERE recorded_date >= (CURRENT_DATE - make_interval(weeks => :weeks))
+    WHERE recorded_date >= ((now() AT TIME ZONE 'Asia/Seoul')::date - make_interval(weeks => :weeks))
     ORDER BY sector_slug, date_trunc('week', recorded_date), recorded_date DESC
     """
 )
@@ -473,7 +473,7 @@ _HISTORY_SQL = text(
     SELECT recorded_date, score, status_badge, momentum_pct
     FROM pulse_metrics_log
     WHERE sector_slug = :slug
-      AND recorded_date >= (CURRENT_DATE - make_interval(weeks => :weeks))
+      AND recorded_date >= ((now() AT TIME ZONE 'Asia/Seoul')::date - make_interval(weeks => :weeks))
     ORDER BY recorded_date ASC
     """
 )
@@ -492,7 +492,7 @@ _INVESTMENTS_LIST_SQL = text(
         SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
                f.amount_krw AS amount_krw,
                COALESCE(f.series, '투자유치') AS flow_label,
-               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date,
+               COALESCE(f.reference_date, (e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
                -- 뉴스류 investor_name 은 수집기가 제목 조각을 넣어 신뢰 불가 → 비움.
                NULL AS investor_name, e.raw_title, e.source_url
         FROM refined_investment_flows f
@@ -507,7 +507,7 @@ _INVESTMENTS_LIST_SQL = text(
         SELECT f.company,
                f.amount_krw,
                COALESCE(f.series, '자금조달'),
-               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date),
+               COALESCE(f.reference_date, (e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date),
                -- M&A 는 공시 제출인(인수 주체)이 투자자 성격, CB 는 발행사 자신이라 비움.
                CASE WHEN e.target_company_or_fund IS NOT NULL THEN e.investor_name END,
                e.raw_title, e.source_url
@@ -531,7 +531,7 @@ _INVESTMENTS_SUMMARY_SQL = text(
            COALESCE(SUM(amount_krw) FILTER (WHERE ref_date >= :prev_from AND ref_date < :recent_from), 0) AS prev_total
     FROM (
         SELECT f.amount_krw AS amount_krw,
-               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date
+               COALESCE(f.reference_date, (e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
         FROM refined_investment_flows f
         JOIN refined_text_sector_class c
           ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
@@ -542,7 +542,7 @@ _INVESTMENTS_SUMMARY_SQL = text(
           AND c.sector_slug = :slug
         UNION ALL
         SELECT f.amount_krw,
-               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date)
+               COALESCE(f.reference_date, (e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date)
         FROM refined_investment_flows f
         JOIN raw_economic_data e ON e.id = f.raw_id
         WHERE f.amount_krw IS NOT NULL
@@ -596,7 +596,7 @@ _CROSSOVER_SQL = text(
            round(avg(score) FILTER (WHERE sector_slug = ANY(string_to_array(:legacy_csv, ',')))) AS legacy_value,
            round(avg(score) FILTER (WHERE sector_slug = ANY(string_to_array(:emerging_csv, ',')))) AS emerging_value
     FROM pulse_metrics_log
-    WHERE recorded_date >= (CURRENT_DATE - make_interval(months => :months))
+    WHERE recorded_date >= ((now() AT TIME ZONE 'Asia/Seoul')::date - make_interval(months => :months))
       AND sector_slug = ANY(string_to_array(:legacy_csv || ',' || :emerging_csv, ','))
     GROUP BY 1
     ORDER BY 1

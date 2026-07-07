@@ -14,7 +14,7 @@ _FETCH_UNPROCESSED = text(
            e.raw_title || E'\n' ||
            COALESCE(e.raw_metadata->>'content_text', e.raw_metadata->>'body_text',
                     e.raw_metadata->>'summary', '') AS body,
-           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date
+           COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
     FROM refined_text_sector_class c
     JOIN raw_economic_data e ON e.id = c.raw_id
     LEFT JOIN refined_causal_chain_insights cc
@@ -23,7 +23,7 @@ _FETCH_UNPROCESSED = text(
       AND c.sector_slug IS NOT NULL
       AND c.confidence >= :conf_min
       AND cc.id IS NULL
-      AND COALESCE(e.published_at::date, e.collected_at::date) >= CURRENT_DATE - CAST(:win AS INTEGER)
+      AND COALESCE((e.published_at AT TIME ZONE 'Asia/Seoul')::date, (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY c.raw_id, c.confidence DESC
     LIMIT :lim
     """
