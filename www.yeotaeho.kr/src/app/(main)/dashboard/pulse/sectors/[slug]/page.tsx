@@ -138,10 +138,14 @@ function InvestmentFlowSection({ data }: { data: PulseInvestments }) {
         </div>
       </div>
 
-      {s.market_total_krw != null && (
+      {s.market_total_krw != null ? (
         <p className="rounded-xl bg-indigo-50/60 px-3 py-2 text-[11px] text-slate-500 dark:bg-indigo-900/20 dark:text-slate-400">
           이 분야 <b className="text-slate-700 dark:text-slate-200">{s.market_year}년 시장 전체 신규 벤처투자 {formatKrw(s.market_total_krw)}</b>
           {" "}규모입니다(벤처투자종합포털). 아래 목록은 공시·뉴스로 <b>포착한 표본</b>이라 전체의 일부입니다.
+        </p>
+      ) : (
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-400 dark:bg-slate-800/40">
+          이 분야는 공식 벤처투자 통계의 업종 대분류(9종)에서 별도로 집계되지 않아 시장 전체 기준선은 표시하지 않습니다. 아래 목록은 공시·뉴스로 포착한 표본입니다.
         </p>
       )}
 
