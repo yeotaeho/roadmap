@@ -10,16 +10,28 @@ import { usePulse } from "@/hooks/useDashboard";
 
 export function PulseSectorSidebar() {
   const pathname = usePathname();
-  const { data: sectors } = usePulse();
+  const { data: sectors, isLoading, isError } = usePulse();
+  // usePathname은 인코딩/정규화된 실경로 → 마지막 세그먼트만 비교해 slug 인코딩 차이에도 안정적으로 매칭.
+  const activeSlug = pathname?.split("/").pop();
 
   return (
     <SideNav>
       <p className="px-2 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
         분야별 트렌드 속도
       </p>
+      {isLoading && (
+        <div className="flex flex-col gap-1 px-1" aria-hidden>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-11 rounded-lg bg-slate-200/60 animate-pulse dark:bg-slate-800/60" />
+          ))}
+        </div>
+      )}
+      {isError && (
+        <p className="px-2 py-1 text-xs text-slate-400">섹터 목록을 불러오지 못했습니다.</p>
+      )}
       {(sectors ?? []).map((s) => {
         const href = `/dashboard/pulse/sectors/${s.sector_slug}`;
-        const active = pathname === href;
+        const active = activeSlug === s.sector_slug;
         return (
           <Link
             key={s.sector_slug}
