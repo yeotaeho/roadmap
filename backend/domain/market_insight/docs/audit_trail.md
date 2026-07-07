@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-07-07 — Pulse 섹터 트렌드 속도 드릴다운(주간 라인 차트 상세 페이지)
+- **무엇** — 실시간 펄스 개요의 "분야별 트렌드 속도 현황" 카드를 클릭하면 섹터 전용 상세 페이지로 이동해 **주 단위 트렌드 라인 차트**를 보여줌. (1) 기존 `GET /api/insight/pulse/{sector}/history`(일별 점수·기본 26주, 미사용이던 `usePulseHistory` 훅)를 배선 — 신규 API 없음. (2) 일별 포인트를 **월요일 시작 주 평균**으로 집계(`toWeeklyPoints`) 후 SVG 라인 차트(격자·y라벨·주차 x라벨·area fill·마지막값 배지, `WeeklyTrendChart`)로 렌더 — 두 함수는 공용 컴포넌트 `PulseWeeklyTrend.tsx`로 분리. (3) 신규 라우트 `/dashboard/pulse/sectors/[slug]` — 섹터명+급등/하락 배지+모멘텀%, 스탯 카드 3종(현재 점수+스파크라인·주간 최고·주간 최저), 주간 차트. 기존 `gap/issues/[id]` 상세 페이지 패턴 준용. (4) 섹터 카드를 인라인 토글(1차 시안)에서 `next/link` 내비게이션으로 교체. (5) 상세 페이지에 앱-셸 적용 — 상단 탭(인사이트·AI 상담실·전략 로드맵·AI 코치)은 `shell()`이 항상 렌더해 자동, 좌측에 **분야별 트렌드 속도 카드 목록 사이드바**(`PulseSectorSidebar` — 섹터명·점수·모멘텀%, 클릭 시 섹터 이동·활성 하이라이트) 신설.
+- **왜** — 개요 카드가 현재값만 보여줘 "이 분야가 어떻게 움직여왔나"를 볼 수 없었음. 선행 지표 제품 특성상 추세 가시화가 핵심. 사용자 피드백으로 인라인 토글 → 전용 페이지(대시보드 셸+섹터 사이드바 레이아웃)로 2회 반복.
+- **어디** — 프론트 전용(백엔드 무변경). [PulseTab.tsx](../../../../www.yeotaeho.kr/src/components/features/dashboard/PulseTab.tsx)(카드→Link) · [PulseWeeklyTrend.tsx](../../../../www.yeotaeho.kr/src/components/features/dashboard/PulseWeeklyTrend.tsx)(신규 공용) · [page.tsx](../../../../www.yeotaeho.kr/src/app/(main)/dashboard/pulse/sectors/[slug]/page.tsx)(신규 상세) · [PulseSectorSidebar.tsx](../../../../www.yeotaeho.kr/src/components/features/dashboard/PulseSectorSidebar.tsx)(신규 사이드바) · [MainLayout.tsx](../../../../www.yeotaeho.kr/src/components/layout/MainLayout.tsx)(하위 라우트 브랜치). 재사용 API [pulse_repository.py](../hub/repositories/pulse_repository.py)(`fetch_history`·`_HISTORY_SQL` `recorded_date ASC`).
+- **검증** — `tsc --noEmit` 0 에러(4회). preview 실검증: 12개 카드 Link 전환·상세 페이지 이동·주간 차트 렌더(모빌리티 최근 27주)·데스크톱 셸 레이아웃(상단 탭+좌측 사이드바+본문, 레퍼런스 이미지 정합)·섹터 간 이동+활성 하이라이트·콘솔 에러 0. 이중 리뷰: 1차 code-reviewer 각 커밋 APPROVE/COMMENT(Critical/Important 0), 2차 Codex — 인라인 차트 커밋 클린, 상세 페이지 커밋 P2 1건(상세 라우트에 대시보드 셸 부재) 지적 → 본 사이드바 배선으로 해소.
+- **후속** — (비차단) ① 주간 집계가 인덱스 등간격이라 데이터 갭 시 등간격 표시(기존 Momentum/Crossover 차트와 동일 관례). ② gap·chance 상세 페이지도 동일 셸+사이드바 패턴 확장 검토. ③ 사이드바 로딩/에러 상태 표식(현재 빈 목록 무표시).
+
 ## 2026-07-03 — SP-6①: Big Five를 추천 설명 레이어에 활용
 - **무엇** — SP-5에서 채점한 Big Five 성격 5요인을 추천 **설명 레이어에만** 녹임. 순수 `big_five_traits`(뚜렷한 축만 — display 50±`TRAIT_MARGIN=12` 밖 — 강점·중립 서술어로, **신경성 N은 정서안정성(100−N) 관점만**·병리 규정 금지)를 `_build_user_context`가 `personality_traits`로 만들어 `explain_recommendations` LLM 컨텍스트에 주입. 프롬프트는 성격-적합을 **공고가 그 일하는 방식을 분명히 포함할 때만** 언급(억지·환각 금지)·강점 톤·섹터보다 개별 공고. **점수·임베딩·Sync/Chance 순위 불변** — 설명 문구만.
 - **왜** — 흥미(RIASEC)는 분야 매칭에 자연스럽지만 성격(Big Five)은 "일하는 방식·환경 적합"이라 섹터/공고 임베딩에 넣으면 노이즈. 성격의 제자리는 "이 일이 왜 당신과 맞는지" 설명 레이어(사용자 결정).
