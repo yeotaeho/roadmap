@@ -12,6 +12,10 @@ from domain.market_insight.hub.services.pulse_pipeline import (
     fuse_signals,
     project_to_gold,
 )
+from domain.market_insight.hub.services.investment_flow_service import (
+    DART_PROMPT_VERSION as INVEST_DART_PROMPT_VERSION,
+    PROMPT_VERSION as INVEST_PROMPT_VERSION,
+)
 from domain.market_insight.hub.services.text_sector_classify_service import PROMPT_VERSION
 
 
@@ -35,6 +39,8 @@ class PulseRefineService:
         axis = await self.repo.fetch_axis_signals(
             text_confidence_min=settings.llm_classify_confidence_min,
             text_prompt_version=PROMPT_VERSION,
+            invest_prompt_version=INVEST_PROMPT_VERSION,
+            dart_prompt_version=INVEST_DART_PROMPT_VERSION,
         )
         modifiers = await self.repo.fetch_directional_modifiers(
             text_confidence_min=settings.llm_classify_confidence_min,

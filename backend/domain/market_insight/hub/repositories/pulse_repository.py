@@ -153,6 +153,43 @@ _MARKET_AXIS_SQL = text(
     """
 )
 
+# capital_flow 축: 날짜 있는 실 자금 유입(투자 뉴스 v2 + DART CB/M&A dart-v2)을 섹터×일자로.
+# 단일 메가딜이 축을 장악하지 않도록 딜별 금액을 억원 로그(ln(1+억))로 압축 후 합산.
+# 투자 서빙과 동일 UNION(소스타입 disjoint) — 두 prompt_version 경로만 읽어 이중집계 없음.
+_CAPITAL_FLOW_AXIS_SQL = text(
+    """
+    SELECT sector_slug, ref_date, SUM(ln(1 + amount_krw / 1e8)) AS capital_value
+    FROM (
+        SELECT c.sector_slug AS sector_slug,
+               COALESCE(f.reference_date,
+                        (e.published_at AT TIME ZONE 'Asia/Seoul')::date,
+                        (e.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date,
+               f.amount_krw AS amount_krw
+        FROM refined_investment_flows f
+        JOIN refined_text_sector_class c
+          ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
+         AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :invest_pv
+          AND c.sector_slug IS NOT NULL
+        UNION ALL
+        SELECT f.sector_slug,
+               COALESCE(f.reference_date,
+                        (e.published_at AT TIME ZONE 'Asia/Seoul')::date,
+                        (e.collected_at AT TIME ZONE 'Asia/Seoul')::date),
+               f.amount_krw
+        FROM refined_investment_flows f
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :dart_pv
+          AND f.sector_slug IS NOT NULL
+    ) t
+    WHERE ref_date IS NOT NULL AND amount_krw > 0
+    GROUP BY sector_slug, ref_date
+    """
+)
+
 # economic_text·discourse 축: raw 자유 텍스트의 LLM 섹터 분류(refined_text_sector_class)를
 # (섹터×발생일) 건수로 집계. ref_date 는 원천 raw 테이블에서 가져온다(혁신축과 동일 분산).
 # confidence/prompt_version 필터로 저신뢰·구버전 분류를 배제. sector_slug NULL(무귀속)은 제외.
@@ -672,11 +709,14 @@ class PulseRepository(BaseRepository):
         self,
         text_confidence_min: float = 0.0,
         text_prompt_version: str | None = None,
+        invest_prompt_version: str | None = None,
+        dart_prompt_version: str | None = None,
     ) -> list[AxisSignal]:
         """축을 섹터×일자로 집계 후 축별 통약 정규화.
 
         기본 4축(innovation·economic·people·market)에 더해, text_prompt_version 이
-        주어지면 LLM 분류 기반 economic_text·discourse 축을 합류시킨다.
+        주어지면 LLM 분류 기반 economic_text·discourse 축을, invest/dart prompt_version 이
+        주어지면 실 자금 유입 capital_flow 축을 합류시킨다.
         """
         # (sector, date, axis) → 합산값. 같은 섹터로 매핑되는 다중 코드/티커는 합산.
         agg: dict[tuple[str, object, str], float] = {}
@@ -711,6 +751,21 @@ class PulseRepository(BaseRepository):
                 )
             ).all():
                 _add(r.sector_slug, r.ref_date, r.axis, float(r.c))
+
+        # capital_flow 축(실 자금 유입) — invest/dart/text prompt_version 모두 지정 시에만 합류.
+        if invest_prompt_version and dart_prompt_version and text_prompt_version:
+            for r in (
+                await self.session.execute(
+                    _CAPITAL_FLOW_AXIS_SQL,
+                    {
+                        "invest_pv": invest_prompt_version,
+                        "dart_pv": dart_prompt_version,
+                        "text_pv": text_prompt_version,
+                        "conf_min": text_confidence_min,
+                    },
+                )
+            ).all():
+                _add(r.sector_slug, r.ref_date, "capital_flow", float(r.capital_value))
 
         raw = [AxisSignal(k[0], k[1], k[2], v) for k, v in agg.items()]
         return _normalize_axes(raw)

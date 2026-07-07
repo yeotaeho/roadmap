@@ -48,6 +48,9 @@ DEFAULT_AXIS_WEIGHTS: dict[str, float] = {
     "economic_text": 1.0,
     "discourse": 0.5,
     "tech_demand": 0.5,  # KIAT 수요기술 — 생산 신호의 보조(추후 튜닝).
+    # 실 자금 유입(투자 뉴스·DART CB/M&A의 날짜 있는 딜, log 압축). 표본이 희소해 저가중 —
+    # 딜 발생일에만 신호가 있어 대부분 0 기여, 자금이 몰린 날만 해당 섹터 모멘텀을 소폭 밀어올린다.
+    "capital_flow": 0.4,
 }
 
 
