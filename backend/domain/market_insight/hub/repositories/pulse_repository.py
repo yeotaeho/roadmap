@@ -486,7 +486,7 @@ _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 # DART CB·M&A 직접 기입분(raw.investment_amount 39건)은 섹터 귀속 수단이 없어 제외:
 #   metadata industry_sector/group_name 무태깅(0/197)·회사마스터 명칭 일치 0/39(벤처인증 기업 위주).
 #   corp_code→섹터 귀속 경로가 생기면 UNION 으로 재편입한다.
-_INVESTMENTS_SQL = text(
+_INVESTMENTS_LIST_SQL = text(
     """
     SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
            f.amount_krw AS amount_krw,
@@ -503,7 +503,30 @@ _INVESTMENTS_SQL = text(
       AND f.prompt_version = :invest_pv
       AND c.sector_slug = :slug
     ORDER BY ref_date DESC NULLS LAST
-    LIMIT 200
+    LIMIT :limit
+    """
+)
+
+# 요약 집계는 목록 LIMIT 과 분리 — 윈도우 전체를 SQL 에서 합산해 행 수와 무관하게 정확.
+_INVESTMENTS_SUMMARY_SQL = text(
+    """
+    SELECT COUNT(*) FILTER (WHERE ref_date >= :recent_from) AS recent_count,
+           COALESCE(SUM(amount_krw) FILTER (WHERE ref_date >= :recent_from), 0) AS recent_total,
+           COUNT(*) FILTER (WHERE ref_date >= :prev_from AND ref_date < :recent_from) AS prev_count,
+           COALESCE(SUM(amount_krw) FILTER (WHERE ref_date >= :prev_from AND ref_date < :recent_from), 0) AS prev_total
+    FROM (
+        SELECT f.amount_krw AS amount_krw,
+               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date
+        FROM refined_investment_flows f
+        JOIN refined_text_sector_class c
+          ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
+         AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :invest_pv
+          AND c.sector_slug = :slug
+    ) t
+    WHERE ref_date IS NOT NULL
     """
 )
 
@@ -916,34 +939,30 @@ class PulseRepository(BaseRepository):
         name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
         if name_row is None:
             return None
-        rows = (
-            await self.session.execute(
-                _INVESTMENTS_SQL,
-                {
-                    "slug": sector_slug,
-                    "invest_pv": invest_prompt_version,
-                    "text_pv": text_prompt_version,
-                    "conf_min": confidence_min,
-                },
-            )
-        ).all()
+        base_params = {
+            "slug": sector_slug,
+            "invest_pv": invest_prompt_version,
+            "text_pv": text_prompt_version,
+            "conf_min": confidence_min,
+        }
         today = date.today()
         recent_from = today - timedelta(days=window_days)
         prev_from = today - timedelta(days=window_days * 2)
-        recent_total = 0
-        recent_count = 0
-        prev_total = 0
-        prev_count = 0
-        for r in rows:
-            if r.ref_date is None:
-                continue
-            amount = int(r.amount_krw)
-            if r.ref_date >= recent_from:
-                recent_total += amount
-                recent_count += 1
-            elif r.ref_date >= prev_from:
-                prev_total += amount
-                prev_count += 1
+        rows = (
+            await self.session.execute(
+                _INVESTMENTS_LIST_SQL, {**base_params, "limit": limit}
+            )
+        ).all()
+        agg = (
+            await self.session.execute(
+                _INVESTMENTS_SUMMARY_SQL,
+                {**base_params, "recent_from": recent_from, "prev_from": prev_from},
+            )
+        ).first()
+        recent_total = int(agg.recent_total)
+        recent_count = int(agg.recent_count)
+        prev_total = int(agg.prev_total)
+        prev_count = int(agg.prev_count)
         delta_pct = (
             round((recent_total - prev_total) / prev_total * 100, 1) if prev_total > 0 else None
         )
@@ -957,7 +976,7 @@ class PulseRepository(BaseRepository):
                 "title": r.raw_title,
                 "url": r.source_url,
             }
-            for r in rows[:limit]
+            for r in rows
         ]
         return {
             "sector_slug": sector_slug,
