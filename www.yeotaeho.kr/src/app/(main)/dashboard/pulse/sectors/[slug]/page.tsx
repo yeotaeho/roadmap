@@ -138,6 +138,13 @@ function InvestmentFlowSection({ data }: { data: PulseInvestments }) {
         </div>
       </div>
 
+      {s.market_total_krw != null && (
+        <p className="rounded-xl bg-indigo-50/60 px-3 py-2 text-[11px] text-slate-500 dark:bg-indigo-900/20 dark:text-slate-400">
+          이 분야 <b className="text-slate-700 dark:text-slate-200">{s.market_year}년 시장 전체 신규 벤처투자 {formatKrw(s.market_total_krw)}</b>
+          {" "}규모입니다(벤처투자종합포털). 아래 목록은 공시·뉴스로 <b>포착한 표본</b>이라 전체의 일부입니다.
+        </p>
+      )}
+
       <ul className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
         {data.items.map((it, i) => (
           <li key={`${it.url ?? it.title}-${i}`} className="flex items-center gap-3 py-2.5">

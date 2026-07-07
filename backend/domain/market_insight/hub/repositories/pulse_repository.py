@@ -522,6 +522,22 @@ _INVESTMENTS_LIST_SQL = text(
     """
 )
 
+# 시장 자금 기준선 — 섹터의 최신 완전연도 시장 신규투자 총액(vcs). 우리 표본의 규모 맥락.
+# 부분연도(집계 진행 중)는 제외하고, 매핑된 여러 vcs_category 는 섹터 단위 합산.
+_MARKET_BASELINE_SQL = text(
+    """
+    SELECT SUM(amount_krw) AS market_total, period_year
+    FROM market_sector_capital_flow
+    WHERE sector_slug = :slug
+      AND is_partial = false
+      AND period_year = (
+          SELECT MAX(period_year) FROM market_sector_capital_flow
+          WHERE is_partial = false AND sector_slug IS NOT NULL
+      )
+    GROUP BY period_year
+    """
+)
+
 # 요약 집계는 목록 LIMIT 과 분리 — 윈도우 전체를 SQL 에서 합산해 행 수와 무관하게 정확.
 _INVESTMENTS_SUMMARY_SQL = text(
     """
@@ -992,6 +1008,10 @@ class PulseRepository(BaseRepository):
         delta_pct = (
             round((recent_total - prev_total) / prev_total * 100, 1) if prev_total > 0 else None
         )
+        # 시장 자금 기준선(vcs 최신 완전연도) — 우리 표본의 규모 맥락(전수 아님을 정직하게 드러냄).
+        mkt = (await self.session.execute(_MARKET_BASELINE_SQL, {"slug": sector_slug})).first()
+        market_total_krw = int(mkt.market_total) if mkt and mkt.market_total else None
+        market_year = mkt.period_year if mkt else None
         items = [
             {
                 "company": r.company,
@@ -1014,6 +1034,9 @@ class PulseRepository(BaseRepository):
                 "prev_total_krw": prev_total,
                 "prev_count": prev_count,
                 "delta_pct": delta_pct,
+                # 시장 전체 기준선 — 표본 대비 규모 맥락. 데이터 없으면 null.
+                "market_total_krw": market_total_krw,
+                "market_year": market_year,
             },
             "items": items,
         }

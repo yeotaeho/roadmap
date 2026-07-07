@@ -259,6 +259,8 @@ export interface PulseInvestmentSummary {
   prev_total_krw: number;
   prev_count: number;
   delta_pct: number | null;
+  market_total_krw: number | null;
+  market_year: number | null;
 }
 export interface PulseInvestments {
   sector_slug: string;
