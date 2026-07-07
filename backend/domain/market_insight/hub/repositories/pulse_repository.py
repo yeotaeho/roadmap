@@ -483,6 +483,7 @@ _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 
 # 섹터 관련 문서(드릴다운) — 텍스트 섹터 분류 리니지로 raw 3테이블 역참조.
 # news = 공시·기사·담론(economic+discourse) / tech = 기술·R&D(innovation). 그룹별 최신 :limit 건.
+# prompt_version/confidence 필터로 구버전·저신뢰 분류 배제(타 소비 쿼리와 동일 관례) — 버전 누적 시 중복·stale 방지.
 _DOCUMENTS_SQL = text(
     """
     SELECT doc_group, title, url, source_type, published_at, sentiment
@@ -507,6 +508,8 @@ _DOCUMENTS_SQL = text(
                ON c.raw_table_ref = 'raw_discourse_data' AND d.id = c.raw_id
         WHERE c.sector_slug = :slug
           AND c.raw_table_ref IN ('raw_economic_data', 'raw_innovation_data', 'raw_discourse_data')
+          AND c.prompt_version = :pv
+          AND c.confidence >= :conf_min
           AND COALESCE(e.raw_title, i.title, d.headline) IS NOT NULL
     ) t
     WHERE rn <= :limit
@@ -830,13 +833,28 @@ class PulseRepository(BaseRepository):
         ]
         return {"sector_slug": sector_slug, "sector_name": name_row.name_ko, "points": points}
 
-    async def fetch_documents(self, sector_slug: str, limit: int = 8) -> dict | None:
+    async def fetch_documents(
+        self,
+        sector_slug: str,
+        limit: int = 8,
+        *,
+        prompt_version: str,
+        confidence_min: float,
+    ) -> dict | None:
         """단일 섹터 관련 문서(공시·기사 news / 기술·R&D tech) 그룹별 최신 limit건. 섹터 미존재 시 None."""
         name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
         if name_row is None:
             return None
         rows = (
-            await self.session.execute(_DOCUMENTS_SQL, {"slug": sector_slug, "limit": limit})
+            await self.session.execute(
+                _DOCUMENTS_SQL,
+                {
+                    "slug": sector_slug,
+                    "limit": limit,
+                    "pv": prompt_version,
+                    "conf_min": confidence_min,
+                },
+            )
         ).all()
         groups: dict[str, list[dict]] = {"news": [], "tech": []}
         for r in rows:

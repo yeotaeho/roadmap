@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api_guards import require_internal_token
+from core.config.settings import get_settings
 from core.database import get_db
 from domain.market_insight.hub.repositories.briefing_repository import BriefingRepository
 from domain.market_insight.hub.repositories.causal_chain_repository import CausalChainRepository
@@ -19,6 +20,9 @@ from domain.market_insight.hub.services.gap_refine_service import GapRefineServi
 from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
+from domain.market_insight.hub.services.text_sector_classify_service import (
+    PROMPT_VERSION as TEXT_SECTOR_PROMPT_VERSION,
+)
 from domain.market_insight.hub.services.forecast_refine_service import (
     MarketForecastRefineService,
 )
@@ -107,7 +111,12 @@ async def get_pulse_documents(
 ):
     """단일 섹터 관련 문서(드릴다운) — 공시·기사(news)·기술·R&D(tech) 그룹별 최신 목록."""
     try:
-        data = await PulseRepository(db).fetch_documents(sector, limit)
+        data = await PulseRepository(db).fetch_documents(
+            sector,
+            limit,
+            prompt_version=TEXT_SECTOR_PROMPT_VERSION,
+            confidence_min=get_settings().llm_classify_confidence_min,
+        )
         if data is None:
             raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다.")
         return {"success": True, **data}
