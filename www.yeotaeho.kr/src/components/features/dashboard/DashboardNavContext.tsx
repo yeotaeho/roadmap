@@ -21,14 +21,12 @@ export const SUB_TABS = [
 export type TabId = (typeof SUB_TABS)[number]["id"];
 
 // 펄스 탭에서 드롭다운으로 선택하는 세부 섹션 목록.
+// 14일 전망·인과관계 체인·세대교체 크로스오버는 섹터 상세 페이지로 흡수됨.
 export const PULSE_SECTIONS: { id: PulseSectionId; label: string }[] = [
   { id: "overview", label: "개요" },
-  { id: "forecast", label: "14일 전망" },
-  { id: "causal", label: "인과관계 체인" },
   { id: "momentum", label: "연간 모멘텀 트렌드" },
   { id: "share", label: "관심 점유율" },
   { id: "heatmap", label: "Top 섹터 히트맵" },
-  { id: "crossover", label: "세대교체 크로스오버" },
   { id: "keywords", label: "트렌딩 키워드" },
 ];
 

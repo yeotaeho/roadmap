@@ -10,15 +10,13 @@ import { Crown } from "lucide-react";
 import {
   useBriefing,
   useCausalChains,
-  useCrossover,
   usePulse,
   usePulseOverview,
   useTrendingKeywords,
 } from "@/hooks/useDashboard";
-import type { Crossover, PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
+import type { PulseHeatmapRow, PulseMomentumPoint } from "@/lib/api/dashboard";
 import { PanelStatus } from "./PanelStatus";
-import { ForecastSection } from "./ForecastSection";
-import { CausalFlow, Sparkline, TrendStatusBadge } from "./PulseViz";
+import { Sparkline, TrendStatusBadge } from "./PulseViz";
 
 function heatTone(score: number | null): string {
   if (score == null) return "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500";
@@ -38,14 +36,12 @@ function DataPendingBadge() {
 }
 
 // LNB에서 선택 가능한 펄스 세부 섹션 식별자. DashboardView와 공유.
+// 14일 전망·인과관계 체인·크로스오버는 섹터 상세 페이지로 흡수됨.
 export type PulseSectionId =
   | "overview"
-  | "forecast"
-  | "causal"
   | "momentum"
   | "share"
   | "heatmap"
-  | "crossover"
   | "keywords";
 
 // 선택된 세부 섹션 공통 래퍼 — 제목 헤딩 + 카드 테두리.
@@ -77,34 +73,6 @@ function MomentumChart({ points }: { points: PulseMomentumPoint[] }) {
       {points.map((p, i) => (
         <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.value)} r="2.5" fill="#6366f1" />
       ))}
-    </svg>
-  );
-}
-
-function CrossoverChart({ data }: { data: Crossover }) {
-  const pts = data.series.filter((s) => s.legacy_value !== null && s.emerging_value !== null);
-  if (pts.length < 2) {
-    return <p className="text-sm text-slate-400">크로스오버 데이터가 아직 부족합니다.</p>;
-  }
-  const w = 560;
-  const h = 180;
-  const all = pts.flatMap((p) => [p.legacy_value as number, p.emerging_value as number]);
-  const max = Math.max(...all, 1);
-  const min = Math.min(...all, 0);
-  const span = max - min || 1;
-  const xAt = (i: number) => (i / (pts.length - 1)) * w;
-  const yAt = (v: number) => h - ((v - min) / span) * h;
-  const path = (key: "legacy_value" | "emerging_value") =>
-    pts.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p[key] as number)}`).join(" ");
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-44" role="img" aria-label="세대교체 크로스오버 차트">
-      <path d={path("legacy_value")} fill="none" stroke="#94a3b8" strokeWidth="2" />
-      <path d={path("emerging_value")} fill="none" stroke="#6366f1" strokeWidth="2" />
-      {pts.map((p, i) =>
-        p.is_crossover ? (
-          <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.emerging_value as number)} r="5" fill="#8b5cf6" />
-        ) : null,
-      )}
     </svg>
   );
 }
@@ -163,8 +131,7 @@ export function PulseTab({ section = "overview" }: { section?: PulseSectionId })
   const { data: overview, isLoading: ovLoading, isError: ovError } = usePulseOverview();
   const { data: keywords, isLoading: kwLoading, isError: kwError } = useTrendingKeywords();
   const { data: briefing, isLoading: brLoading, isError: brError } = useBriefing();
-  const { data: crossover, isLoading: coLoading, isError: coError } = useCrossover();
-  const { data: causal, isLoading: ccLoading, isError: ccError } = useCausalChains();
+  const { data: causal } = useCausalChains();
 
   const sectorCards = (livePulse ?? []).map((s) => ({
     slug: s.sector_slug,
@@ -333,35 +300,7 @@ export function PulseTab({ section = "overview" }: { section?: PulseSectionId })
         </>
       )}
 
-      {/* 3.5 14일 시장 전망 — 현재 트렌드의 미래(선행 지표) */}
-      {section === "forecast" && <ForecastSection />}
-
-      {/* 4. 인과관계 체인 — 거시에서 나의 기회까지 */}
-      {section === "causal" && (
-      <SectionCard title="인과관계 체인">
-        <PanelStatus
-          isLoading={ccLoading}
-          isError={ccError}
-          isEmpty={(causal?.length ?? 0) === 0}
-          label="인과사슬"
-        >
-          <div className="flex flex-col gap-3">
-            {(causal ?? []).slice(0, 4).map((c) => (
-              <CausalFlow
-                key={c.sector_slug}
-                sectorName={c.sector_name}
-                accentColor={c.accent_color}
-                macro={c.macro_event}
-                industry={c.industry_impact}
-                chance={c.youth_chance}
-              />
-            ))}
-          </div>
-        </PanelStatus>
-      </SectionCard>
-      )}
-
-      {/* 5. 세부 섹션 — LNB에서 선택 */}
+      {/* 4. 세부 섹션 — LNB에서 선택 (14일 전망·인과사슬·크로스오버는 섹터 상세로 흡수) */}
       {section === "momentum" && (
       <SectionCard title="연간 모멘텀 트렌드">
         <PanelStatus
@@ -409,31 +348,6 @@ export function PulseTab({ section = "overview" }: { section?: PulseSectionId })
           label="히트맵"
         >
           <Heatmap buckets={overview?.heatmap.buckets ?? []} rows={overview?.heatmap.rows ?? []} />
-        </PanelStatus>
-      </SectionCard>
-      )}
-
-      {section === "crossover" && (
-      <SectionCard title="세대교체 · 크로스오버">
-        <div className="mb-3 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 bg-slate-400" />
-            {crossover?.legacy_label ?? "전통"}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 bg-indigo-500" />
-            {crossover?.emerging_label ?? "신흥"}
-          </span>
-        </div>
-        <PanelStatus
-          isLoading={coLoading}
-          isError={coError}
-          isEmpty={(crossover?.series.length ?? 0) === 0}
-          label="크로스오버"
-        >
-          <CrossoverChart
-            data={crossover ?? { legacy_label: "전통", emerging_label: "신흥", series: [] }}
-          />
         </PanelStatus>
       </SectionCard>
       )}

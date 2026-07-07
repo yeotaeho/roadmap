@@ -99,6 +99,25 @@ async def get_pulse_history(
         raise HTTPException(status_code=500, detail=f"Pulse history 조회 실패: {str(e)}")
 
 
+@router.get("/pulse/{sector}/documents")
+async def get_pulse_documents(
+    sector: str,
+    limit: int = Query(default=8, ge=1, le=30, description="그룹별 문서 수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """단일 섹터 관련 문서(드릴다운) — 공시·기사(news)·기술·R&D(tech) 그룹별 최신 목록."""
+    try:
+        data = await PulseRepository(db).fetch_documents(sector, limit)
+        if data is None:
+            raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다.")
+        return {"success": True, **data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pulse documents 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Pulse documents 조회 실패: {str(e)}")
+
+
 @router.get("/pulse/crossover")
 async def get_pulse_crossover(
     months: int = Query(default=12, ge=1, le=36, description="시계열 월 수"),

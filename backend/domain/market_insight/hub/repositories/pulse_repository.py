@@ -481,6 +481,39 @@ _HISTORY_SQL = text(
 # 섹터 메타(이름) 조회 — history 404 판별.
 _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 
+# 섹터 관련 문서(드릴다운) — 텍스트 섹터 분류 리니지로 raw 3테이블 역참조.
+# news = 공시·기사·담론(economic+discourse) / tech = 기술·R&D(innovation). 그룹별 최신 :limit 건.
+_DOCUMENTS_SQL = text(
+    """
+    SELECT doc_group, title, url, source_type, published_at, sentiment
+    FROM (
+        SELECT
+            CASE WHEN c.raw_table_ref = 'raw_innovation_data' THEN 'tech' ELSE 'news' END AS doc_group,
+            COALESCE(e.raw_title, i.title, d.headline) AS title,
+            COALESCE(e.source_url, i.source_url, d.source_url) AS url,
+            COALESCE(e.source_type, i.source_type, d.source_type) AS source_type,
+            COALESCE(e.published_at, i.published_at, d.published_at) AS published_at,
+            c.sentiment,
+            ROW_NUMBER() OVER (
+                PARTITION BY CASE WHEN c.raw_table_ref = 'raw_innovation_data' THEN 'tech' ELSE 'news' END
+                ORDER BY COALESCE(e.published_at, i.published_at, d.published_at) DESC NULLS LAST, c.id DESC
+            ) AS rn
+        FROM refined_text_sector_class c
+        LEFT JOIN raw_economic_data e
+               ON c.raw_table_ref = 'raw_economic_data' AND e.id = c.raw_id
+        LEFT JOIN raw_innovation_data i
+               ON c.raw_table_ref = 'raw_innovation_data' AND i.id = c.raw_id
+        LEFT JOIN raw_discourse_data d
+               ON c.raw_table_ref = 'raw_discourse_data' AND d.id = c.raw_id
+        WHERE c.sector_slug = :slug
+          AND c.raw_table_ref IN ('raw_economic_data', 'raw_innovation_data', 'raw_discourse_data')
+          AND COALESCE(e.raw_title, i.title, d.headline) IS NOT NULL
+    ) t
+    WHERE rn <= :limit
+    ORDER BY doc_group, rn
+    """
+)
+
 # 크로스오버 — 전통/신흥 그룹별 월 평균 score 시계열(string_to_array로 asyncpg-safe).
 _CROSSOVER_SQL = text(
     """
@@ -796,6 +829,32 @@ class PulseRepository(BaseRepository):
             for r in rows
         ]
         return {"sector_slug": sector_slug, "sector_name": name_row.name_ko, "points": points}
+
+    async def fetch_documents(self, sector_slug: str, limit: int = 8) -> dict | None:
+        """단일 섹터 관련 문서(공시·기사 news / 기술·R&D tech) 그룹별 최신 limit건. 섹터 미존재 시 None."""
+        name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
+        if name_row is None:
+            return None
+        rows = (
+            await self.session.execute(_DOCUMENTS_SQL, {"slug": sector_slug, "limit": limit})
+        ).all()
+        groups: dict[str, list[dict]] = {"news": [], "tech": []}
+        for r in rows:
+            groups[r.doc_group].append(
+                {
+                    "title": r.title,
+                    "url": r.url,
+                    "source_type": r.source_type,
+                    "published_at": r.published_at.isoformat() if r.published_at else None,
+                    "sentiment": r.sentiment,
+                }
+            )
+        return {
+            "sector_slug": sector_slug,
+            "sector_name": name_row.name_ko,
+            "news": groups["news"],
+            "tech": groups["tech"],
+        }
 
     async def fetch_crossover(self, months: int = 12) -> dict:
         """전통 vs 신흥 섹터 월 평균 score 시계열·교차점 즉석 집계."""

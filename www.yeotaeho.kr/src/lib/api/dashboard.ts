@@ -219,6 +219,30 @@ export async function fetchPulseHistory(sector: string): Promise<PulseHistory> {
   };
 }
 
+export interface PulseDocument {
+  title: string;
+  url: string | null;
+  source_type: string | null;
+  published_at: string | null;
+  sentiment: string | null;
+}
+export interface PulseDocuments {
+  sector_slug: string;
+  sector_name: string;
+  news: PulseDocument[];
+  tech: PulseDocument[];
+}
+
+export async function fetchPulseDocuments(sector: string): Promise<PulseDocuments> {
+  const { data } = await apiClient.get(`/api/insight/pulse/${sector}/documents`);
+  return {
+    sector_slug: data.sector_slug,
+    sector_name: data.sector_name,
+    news: data.news ?? [],
+    tech: data.tech ?? [],
+  };
+}
+
 export interface KeywordCloudItem {
   keyword: string;
   weight: number;

@@ -1,8 +1,9 @@
-// Pulse 재사용 시각 프리미티브 — 스파크라인·트렌드 상태 배지
+// Pulse 재사용 시각 프리미티브 — 스파크라인·트렌드 상태 배지·크로스오버 차트
 
 "use client";
 
 import { ArrowRight, Flame, Minus, TrendingDown } from "lucide-react";
+import type { Crossover } from "@/lib/api/dashboard";
 
 // 시간축 점수 배열을 미니 추이 선으로. 추세 방향에 따라 색이 바뀐다.
 export function Sparkline({
@@ -41,6 +42,35 @@ export function Sparkline({
       aria-label="추이 스파크라인"
     >
       <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// 세대교체 크로스오버 차트 — 전통 vs 신흥 그룹 월 평균 score 시계열·교차점.
+export function CrossoverChart({ data }: { data: Crossover }) {
+  const pts = data.series.filter((s) => s.legacy_value !== null && s.emerging_value !== null);
+  if (pts.length < 2) {
+    return <p className="text-sm text-slate-400">크로스오버 데이터가 아직 부족합니다.</p>;
+  }
+  const w = 560;
+  const h = 180;
+  const all = pts.flatMap((p) => [p.legacy_value as number, p.emerging_value as number]);
+  const max = Math.max(...all, 1);
+  const min = Math.min(...all, 0);
+  const span = max - min || 1;
+  const xAt = (i: number) => (i / (pts.length - 1)) * w;
+  const yAt = (v: number) => h - ((v - min) / span) * h;
+  const path = (key: "legacy_value" | "emerging_value") =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p[key] as number)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-44" role="img" aria-label="세대교체 크로스오버 차트">
+      <path d={path("legacy_value")} fill="none" stroke="#94a3b8" strokeWidth="2" />
+      <path d={path("emerging_value")} fill="none" stroke="#6366f1" strokeWidth="2" />
+      {pts.map((p, i) =>
+        p.is_crossover ? (
+          <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.emerging_value as number)} r="5" fill="#8b5cf6" />
+        ) : null,
+      )}
     </svg>
   );
 }

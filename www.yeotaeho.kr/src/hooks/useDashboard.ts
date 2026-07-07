@@ -14,6 +14,7 @@ import {
   fetchCrossover,
   fetchForecast,
   fetchPulse,
+  fetchPulseDocuments,
   fetchPulseHistory,
   fetchPulseOverview,
   fetchSyncScores,
@@ -107,6 +108,16 @@ export function usePulseHistory(sector?: string) {
   return useQuery({
     queryKey: ['pulse-history', sector],
     queryFn: () => fetchPulseHistory(sector as string),
+    enabled: !!sector,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function usePulseDocuments(sector?: string) {
+  return useQuery({
+    queryKey: ['pulse-documents', sector],
+    queryFn: () => fetchPulseDocuments(sector as string),
     enabled: !!sector,
     staleTime: STALE,
     retry: 1,
