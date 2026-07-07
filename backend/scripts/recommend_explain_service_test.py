@@ -32,7 +32,7 @@ def check(n: str, c: bool, e: str = "") -> None:
 async def _seed_cleanup(s, uid: str, slug: str, opp: int) -> None:
     await s.execute(text(
         "DELETE FROM sync_scores_daily WHERE user_id = CAST(:u AS UUID) "
-        "AND sector_slug = :sl AND recorded_date = CURRENT_DATE"), {"u": uid, "sl": slug})
+        "AND sector_slug = :sl AND recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date"), {"u": uid, "sl": slug})
     await s.execute(text(
         "DELETE FROM user_chance_matches WHERE user_id = CAST(:u AS UUID) AND opportunity_id = :o"
     ), {"u": uid, "o": opp})
@@ -48,7 +48,7 @@ async def run() -> int:
         slug = (await s.execute(text("SELECT slug FROM sectors ORDER BY slug LIMIT 1"))).scalar_one()
         opp = (await s.execute(text(
             "SELECT id FROM chance_opportunities WHERE is_active = true "
-            "AND (d_day_date IS NULL OR d_day_date >= CURRENT_DATE) ORDER BY id LIMIT 1"
+            "AND (d_day_date IS NULL OR d_day_date >= (now() AT TIME ZONE 'Asia/Seoul')::date) ORDER BY id LIMIT 1"
         ))).scalar_one()
         await _seed_cleanup(s, uid, slug, opp)
 
@@ -57,7 +57,7 @@ async def run() -> int:
         # TOP_SYNC=3 커트라인 안에 반드시 들도록(동점이면 slug 오름차순이라 알파벳 첫 슬러그도 유리).
         await s.execute(text(
             "INSERT INTO sync_scores_daily (user_id, sector_slug, recorded_date, score, badge) "
-            "VALUES (CAST(:u AS UUID), :sl, CURRENT_DATE, 100, '적합')"), {"u": uid, "sl": slug})
+            "VALUES (CAST(:u AS UUID), :sl, (now() AT TIME ZONE 'Asia/Seoul')::date, 100, '적합')"), {"u": uid, "sl": slug})
         await s.execute(text(
             "INSERT INTO user_chance_matches (user_id, opportunity_id, match_score, match_reason) "
             "VALUES (CAST(:u AS UUID), :o, 80, '의미 유사도 60점') "
@@ -116,7 +116,7 @@ async def run() -> int:
 
         v = (await s.execute(text(
             "SELECT explanation FROM sync_scores_daily WHERE user_id = CAST(:u AS UUID) "
-            "AND sector_slug = :sl AND recorded_date = CURRENT_DATE"), {"u": uid, "sl": slug})).scalar_one()
+            "AND sector_slug = :sl AND recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date"), {"u": uid, "sl": slug})).scalar_one()
         check("sync 설명 기록", v == "관심과 정렬된 섹터예요.", str(v))
         v = (await s.execute(text(
             "SELECT match_explanation FROM user_chance_matches "
