@@ -16,8 +16,9 @@ import {
   usePulse,
   usePulseDocuments,
   usePulseHistory,
+  usePulseInvestments,
 } from "@/hooks/useDashboard";
-import type { PulseDocument } from "@/lib/api/dashboard";
+import type { PulseDocument, PulseInvestments } from "@/lib/api/dashboard";
 
 function StatCard({ label, value, spark }: { label: string; value: string; spark?: number[] }) {
   return (
@@ -85,6 +86,95 @@ function shortDate(iso: string | null): string | null {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
+// 원(KRW) 금액을 조/억/만원 단위 한국어 표기로.
+function formatKrw(amount: number): string {
+  if (amount >= 1_0000_0000_0000) return `${(amount / 1_0000_0000_0000).toFixed(1).replace(/\.0$/, "")}조원`;
+  if (amount >= 1_0000_0000) return `${(amount / 1_0000_0000).toFixed(1).replace(/\.0$/, "")}억원`;
+  if (amount >= 1_0000) return `${Math.round(amount / 1_0000).toLocaleString()}만원`;
+  return `${amount.toLocaleString()}원`;
+}
+
+// 투자·자금 흐름 — 최근 윈도우 대비 요약 + 최근 자금 이벤트 목록.
+function InvestmentFlowSection({ data }: { data: PulseInvestments }) {
+  const s = data.summary;
+  if (data.items.length === 0) {
+    return (
+      <p className="text-sm text-slate-400">
+        이 섹터로 집계된 투자·자금 흐름 데이터가 아직 없습니다. 수집이 쌓이면 자동으로 채워집니다.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+          <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            {s.recent_count > 0 ? formatKrw(s.recent_total_krw) : "—"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            최근 {s.window_days}일 자금 유입 ({s.recent_count}건)
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+          <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            {s.prev_count > 0 ? formatKrw(s.prev_total_krw) : "—"}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            직전 {s.window_days}일 ({s.prev_count}건)
+          </p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+          {s.delta_pct != null ? (
+            <p className={`text-lg font-bold ${s.delta_pct < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+              {s.delta_pct > 0 ? "+" : ""}
+              {s.delta_pct}%
+            </p>
+          ) : (
+            <p className="text-lg font-bold text-slate-400">—</p>
+          )}
+          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            {s.delta_pct != null ? "직전 기간 대비 증감" : "비교 기준 기간 데이터 없음"}
+          </p>
+        </div>
+      </div>
+
+      <ul className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
+        {data.items.map((it, i) => (
+          <li key={`${it.url ?? it.title}-${i}`} className="flex items-center gap-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-800 truncate dark:text-slate-100">
+                {it.company ?? it.title ?? "—"}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+                {it.flow_label && (
+                  <span className="px-1.5 py-px rounded-full bg-indigo-50 text-indigo-600 font-medium dark:bg-indigo-900/30 dark:text-indigo-300">
+                    {it.flow_label}
+                  </span>
+                )}
+                {it.investor && <span className="truncate">{it.investor}</span>}
+                {shortDate(it.date) && <span>{shortDate(it.date)}</span>}
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-bold text-slate-900 dark:text-slate-100">
+              {formatKrw(it.amount_krw)}
+            </span>
+            {it.url && (
+              <a
+                href={it.url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-[11px] font-medium text-indigo-500 hover:underline underline-offset-2"
+              >
+                원문
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // 관련 문서 리스트 — 제목(원문 링크)·출처 라벨·일자·감성 점.
 function DocList({ docs, emptyText }: { docs: PulseDocument[]; emptyText: string }) {
   if (docs.length === 0) {
@@ -126,6 +216,7 @@ export default function PulseSectorDetailPage() {
   const slug = String(params?.slug ?? "");
   const { data: history, isLoading, isError } = usePulseHistory(slug || undefined);
   const { data: documents, isLoading: docLoading, isError: docError } = usePulseDocuments(slug || undefined);
+  const { data: investments, isLoading: invLoading, isError: invError } = usePulseInvestments(slug || undefined);
   const { data: livePulse } = usePulse();
   const { data: forecasts, isLoading: fcLoading, isError: fcError } = useForecast();
   const { data: crossover, isLoading: coLoading, isError: coError } = useCrossover();
@@ -192,6 +283,16 @@ export default function PulseSectorDetailPage() {
               ) : (
                 <p className="text-sm text-slate-400">이 섹터의 인과사슬 분석이 아직 없습니다.</p>
               )}
+            </PanelStatus>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">투자·자금 흐름</h2>
+            <p className="mb-4 text-xs text-slate-400">
+              이 분야로 흘러든 투자·조달 금액과 직전 기간 대비 패턴입니다.
+            </p>
+            <PanelStatus isLoading={invLoading} isError={invError} isEmpty={false} label="투자 흐름">
+              {investments && <InvestmentFlowSection data={investments} />}
             </PanelStatus>
           </section>
         </div>

@@ -8,10 +8,13 @@ from domain.auth.hub.repositories.base_repository import BaseRepository
 
 # 미처리 투자/펀딩/M&A/IPO 성격의 economic 행(refined_investment_flows 없음).
 #   토픽 태그(POLICY·CONTEST 등)는 제외해 LLM 호출을 아끼고, 나머지는 LLM abstain 으로 추가 필터.
+#   body: 다이제스트류는 제목에 금액이 없어 본문(raw_metadata)을 추출 입력에 포함(성공률 1/92 원인).
 _FETCH_UNPROCESSED = text(
     """
     SELECT o.id AS raw_id, o.raw_title AS title,
            o.target_company_or_fund AS company_hint,
+           COALESCE(o.raw_metadata->>'content_text', o.raw_metadata->>'body_text',
+                    o.raw_metadata->>'summary', '') AS body,
            COALESCE(o.published_at::date, o.collected_at::date) AS ref_date
     FROM raw_economic_data o
     LEFT JOIN refined_investment_flows f

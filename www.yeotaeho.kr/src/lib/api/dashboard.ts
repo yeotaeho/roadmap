@@ -243,6 +243,40 @@ export async function fetchPulseDocuments(sector: string): Promise<PulseDocument
   };
 }
 
+export interface PulseInvestmentItem {
+  company: string | null;
+  amount_krw: number;
+  flow_label: string | null;
+  investor: string | null;
+  date: string | null;
+  title: string | null;
+  url: string | null;
+}
+export interface PulseInvestmentSummary {
+  window_days: number;
+  recent_total_krw: number;
+  recent_count: number;
+  prev_total_krw: number;
+  prev_count: number;
+  delta_pct: number | null;
+}
+export interface PulseInvestments {
+  sector_slug: string;
+  sector_name: string;
+  summary: PulseInvestmentSummary;
+  items: PulseInvestmentItem[];
+}
+
+export async function fetchPulseInvestments(sector: string): Promise<PulseInvestments> {
+  const { data } = await apiClient.get(`/api/insight/pulse/${sector}/investments`);
+  return {
+    sector_slug: data.sector_slug,
+    sector_name: data.sector_name,
+    summary: data.summary,
+    items: data.items ?? [],
+  };
+}
+
 export interface KeywordCloudItem {
   keyword: string;
   weight: number;

@@ -10,10 +10,11 @@ from core.config.settings import get_settings
 from core.llm.client import LlmClient
 from domain.market_insight.hub.repositories.investment_repository import InvestmentRepository
 
-PROMPT_VERSION = "v1"
+# v2 — 제목만으로는 다이제스트류 금액 추출이 불가해(성공 1/92) 본문을 입력에 포함.
+PROMPT_VERSION = "v2"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
-MAX_INPUT_CHARS = 1000
+MAX_INPUT_CHARS = 1500
 # LLM 추출 중간 적재·커밋 주기 — pool_recycle(5분) 초과 방지.
 REFINE_CHUNK = 25
 
@@ -41,6 +42,9 @@ class InvestmentFlowRefineService:
             base = (r.title or "").strip()
             if r.company_hint:
                 base = f"{base} ({r.company_hint})"
+            body = (r.body or "").strip()
+            if body:
+                base = f"{base}\n{body}"
             input_text = base[:MAX_INPUT_CHARS]
             result = await self._llm.extract_investment(input_text)
             await self.repo.upsert_silver(

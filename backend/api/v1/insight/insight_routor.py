@@ -19,6 +19,9 @@ from domain.market_insight.hub.services.causal_chain_service import CausalChainR
 from domain.market_insight.hub.services.gap_refine_service import GapRefineService
 from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
+from domain.market_insight.hub.services.investment_flow_service import (
+    PROMPT_VERSION as INVEST_PROMPT_VERSION,
+)
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
 from domain.market_insight.hub.services.text_sector_classify_service import (
     PROMPT_VERSION as TEXT_SECTOR_PROMPT_VERSION,
@@ -125,6 +128,33 @@ async def get_pulse_documents(
     except Exception as e:
         logger.error(f"Pulse documents 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Pulse documents 조회 실패: {str(e)}")
+
+
+@router.get("/pulse/{sector}/investments")
+async def get_pulse_investments(
+    sector: str,
+    limit: int = Query(default=8, ge=1, le=30, description="목록 건수"),
+    window_days: int = Query(default=30, ge=7, le=180, description="비교 윈도우(일)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """단일 섹터 투자·자금 흐름(드릴다운) — 최근 투자 목록 + 직전 기간 대비 총액 비교."""
+    try:
+        data = await PulseRepository(db).fetch_investments(
+            sector,
+            limit,
+            invest_prompt_version=INVEST_PROMPT_VERSION,
+            text_prompt_version=TEXT_SECTOR_PROMPT_VERSION,
+            confidence_min=get_settings().llm_classify_confidence_min,
+            window_days=window_days,
+        )
+        if data is None:
+            raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다.")
+        return {"success": True, **data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pulse investments 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Pulse investments 조회 실패: {str(e)}")
 
 
 @router.get("/pulse/crossover")

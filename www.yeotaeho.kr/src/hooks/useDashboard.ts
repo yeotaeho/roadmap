@@ -16,6 +16,7 @@ import {
   fetchPulse,
   fetchPulseDocuments,
   fetchPulseHistory,
+  fetchPulseInvestments,
   fetchPulseOverview,
   fetchSyncScores,
   fetchSyncHistory,
@@ -118,6 +119,16 @@ export function usePulseDocuments(sector?: string) {
   return useQuery({
     queryKey: ['pulse-documents', sector],
     queryFn: () => fetchPulseDocuments(sector as string),
+    enabled: !!sector,
+    staleTime: STALE,
+    retry: 1,
+  });
+}
+
+export function usePulseInvestments(sector?: string) {
+  return useQuery({
+    queryKey: ['pulse-investments', sector],
+    queryFn: () => fetchPulseInvestments(sector as string),
     enabled: !!sector,
     staleTime: STALE,
     retry: 1,
