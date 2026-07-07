@@ -51,6 +51,9 @@ from domain.market_insight.hub.services.gap_refine_service import GapRefineServi
 from domain.market_insight.hub.services.tech_demand_gap_service import TechDemandGapService
 from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.causal_chain_service import CausalChainRefineService
+from domain.market_insight.hub.services.capital_flow_service import (
+    CapitalFlowRefineService,
+)
 from domain.market_insight.hub.services.investment_flow_service import (
     InvestmentFlowRefineService,
 )
@@ -733,6 +736,12 @@ async def _job_investment_refine() -> dict[str, Any] | None:
         return await InvestmentFlowRefineService(session).refine_and_serve()
 
 
+async def _job_capital_flow() -> dict[str, Any]:
+    """벤처투자종합포털(vcs.go.kr) 업종별 연도별 신규투자 총액 수집·적재(멱등, 공공저작물)."""
+    async with AsyncSessionLocal() as session:
+        return await CapitalFlowRefineService(session).refine_and_serve()
+
+
 # 인사이트 Silver→Gold 정제 체인 — 앞 단계 산출을 뒤 단계가 소비하는 순서 의존이라
 # 개별 잡으로 흩어 등록하지 않고 단일 파이프라인 잡으로 순차 실행한다(레이스 방지).
 _REFINE_PIPELINE: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
@@ -793,6 +802,7 @@ _DAILY_JOBS: tuple[tuple[str, Callable[[], Awaitable[Any]]], ...] = (
     ("platum",            _job_platum),
     ("venturesquare",     _job_venturesquare),
     ("startup_recipe",    _job_startup_recipe),
+    ("capital_flow",      _job_capital_flow),
     ("yahoo_market_ts",   _job_yahoo_market_timeseries),
     ("msit_press",        _job_msit_press),
     ("msit_biz",          _job_msit_biz),

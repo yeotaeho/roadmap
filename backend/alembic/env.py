@@ -71,6 +71,9 @@ from domain.market_insight.models.bases.causal_chains import CausalChains  # Gol
 from domain.market_insight.models.bases.refined_investment_flows import (  # Silver
     RefinedInvestmentFlows,
 )
+from domain.market_insight.models.bases.market_sector_capital_flow import (  # 참조 — 시장 기준선
+    MarketSectorCapitalFlow,
+)
 from domain.user_intelligence.models.bases.user_persona import UserPersona  # Persona
 from domain.user_intelligence.models.bases.user_preference import UserPreference  # 성향·선호
 from domain.user_intelligence.models.bases.user_self_model import UserSelfModel  # 자기모델
