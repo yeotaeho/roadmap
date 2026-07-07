@@ -23,6 +23,7 @@ from domain.master.hub.services.collectors.economic.common._rss_investment_krw i
     extract_investment_amount_krw,
 )
 from domain.master.hub.services.collectors.economic.common.rss_wordpress_sync import (
+    DEFAULT_RSS_UA,
     fetch_html_sync,
     wordpress_main_text,
 )
@@ -146,7 +147,9 @@ class VenturesquareEconomicCollector:
     기본 피드: 펀딩 카테고리 (전체 메인 피드보다 투자 기사 집중도 높음).
     """
 
-    RSS_URL = "https://www.venturesquare.net/category/funding/feed"
+    # funding 카테고리는 폐기(빈 채널)·invest 카테고리는 2012~2022 아카이브만 서빙 —
+    # 최신 글이 흐르는 메인 피드를 쓰고 투자 키워드 필터로 거른다.
+    RSS_URL = "https://www.venturesquare.net/feed"
 
     def collect_sync(
         self,
@@ -155,7 +158,8 @@ class VenturesquareEconomicCollector:
         fetch_article_if_short: bool = True,
     ) -> tuple[list[EconomicCollectDto], int]:
         try:
-            feed = feedparser.parse(self.RSS_URL)
+            # 기본 UA 는 410 차단 — 공통 봇 UA 로 요청.
+            feed = feedparser.parse(self.RSS_URL, agent=DEFAULT_RSS_UA)
         except Exception:
             logger.exception("Venturesquare RSS 파싱 실패")
             raise

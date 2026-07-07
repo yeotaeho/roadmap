@@ -23,6 +23,7 @@ from domain.master.hub.services.collectors.economic.common._rss_investment_krw i
     extract_investment_amount_krw,
 )
 from domain.master.hub.services.collectors.economic.common.rss_wordpress_sync import (
+    DEFAULT_RSS_UA,
     fetch_html_sync,
     wordpress_main_text,
 )
@@ -181,7 +182,8 @@ class WowtaleEconomicCollector:
             (수집된 DTO 리스트, 노이즈 필터로 스킵된 건수)
         """
         try:
-            feed = feedparser.parse(self.RSS_URL)
+            # 기본 UA 는 403 차단 — 공통 봇 UA 로 요청.
+            feed = feedparser.parse(self.RSS_URL, agent=DEFAULT_RSS_UA)
         except Exception:
             logger.exception("Wowtale RSS 파싱 실패")
             raise

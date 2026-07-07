@@ -11,10 +11,12 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_UA: Final[str] = (
+# RSS 피드 fetch 에도 재사용하는 공개 UA — feedparser 기본 UA 는 platum/venturesquare/wowtale 서 403/410 차단됨.
+DEFAULT_RSS_UA: Final[str] = (
     "Mozilla/5.0 (compatible; RoadmapBronze/1.0) "
     "AppleWebKit/537.36 (KHTML, like Gecko)"
 )
+_DEFAULT_UA: Final[str] = DEFAULT_RSS_UA
 
 
 def fetch_html_sync(url: str, *, timeout: float = 20.0, tag: str = "rss") -> str:

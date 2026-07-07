@@ -23,6 +23,7 @@ from domain.master.hub.services.collectors.economic.common._rss_investment_krw i
     extract_investment_amount_krw,
 )
 from domain.master.hub.services.collectors.economic.common.rss_wordpress_sync import (
+    DEFAULT_RSS_UA,
     fetch_html_sync,
     wordpress_main_text,
 )
@@ -147,7 +148,8 @@ class PlatumEconomicCollector:
     기본 피드: 펀딩 카테고리 (전체 메인 피드는 비투자 기사 비중이 높음).
     """
 
-    RSS_URL = "https://platum.kr/archives/category/funding/feed"
+    # funding 카테고리는 폐기됨(200 이지만 빈 채널) — investment 카테고리 피드 사용.
+    RSS_URL = "https://platum.kr/archives/category/investment/feed"
 
     def collect_sync(
         self,
@@ -156,7 +158,8 @@ class PlatumEconomicCollector:
         fetch_article_if_short: bool = True,
     ) -> tuple[list[EconomicCollectDto], int]:
         try:
-            feed = feedparser.parse(self.RSS_URL)
+            # 기본 UA 는 403 차단 — 공통 봇 UA 로 요청.
+            feed = feedparser.parse(self.RSS_URL, agent=DEFAULT_RSS_UA)
         except Exception:
             logger.exception("Platum RSS 파싱 실패")
             raise
