@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 
@@ -17,7 +18,8 @@ logger = logging.getLogger(__name__)
 # v2 — 제목만으로는 다이제스트류 금액 추출이 불가해(성공 1/92) 본문을 입력에 포함.
 PROMPT_VERSION = "v2"
 # DART CB·M&A 보강 경로 — LLM 없이 raw 금액 + 기업개황 API 업종(KSIC)→섹터 매핑.
-DART_PROMPT_VERSION = "dart-v1"
+# v2 — 무귀속 16건 실업종 재검토로 70113(의약 R&D)·2927(반도체 장비) 추가, 전 행 재귀속.
+DART_PROMPT_VERSION = "dart-v2"
 ACTIVE_WINDOW_DAYS = 90
 DEFAULT_LIMIT = 200
 MAX_INPUT_CHARS = 1500
@@ -25,6 +27,8 @@ MAX_INPUT_CHARS = 1500
 REFINE_CHUNK = 25
 
 _DART_COMPANY_API = "https://opendart.fss.or.kr/api/company.json"
+# DART 키는 Bronze 수집 잡들과 공유(일 20,000콜 쿼터) — 버스트 방지용 호출 간격.
+_DART_CALL_INTERVAL_SEC = 0.2
 
 # KSIC(induty_code) prefix → sectors.slug. 확실한 산업만 매핑(강제 매핑 = 날조 금지, 미매핑은 무귀속).
 # 긴 prefix 우선 매칭. 예: 582(SW 출판)→ai-data, 551(숙박)은 12섹터 밖이라 무귀속.
@@ -34,11 +38,13 @@ _KSIC_SECTOR_PREFIX: dict[str, str] = {
     "62": "ai-data",   # 컴퓨터 프로그래밍·시스템 통합
     "63": "ai-data",   # 정보서비스(포털·데이터)
     # 전자·반도체
-    "26": "semiconductor",  # 전자부품·컴퓨터·영상·음향·통신장비
+    "26": "semiconductor",    # 전자부품·컴퓨터·영상·음향·통신장비
+    "2927": "semiconductor",  # 반도체·디스플레이 제조용 기계(장비사 — 섹터명과 1:1)
     # 바이오·헬스
-    "21": "bio-health",   # 의료용 물질·의약품
-    "271": "bio-health",  # 의료용 기기
-    "86": "bio-health",   # 보건업
+    "21": "bio-health",     # 의료용 물질·의약품
+    "271": "bio-health",    # 의료용 기기
+    "70113": "bio-health",  # 의학·약학 연구개발업(신약개발사의 전형적 등록업종)
+    "86": "bio-health",     # 보건업
     # 모빌리티
     "30": "mobility",  # 자동차·트레일러
     "31": "mobility",  # 기타 운송장비
@@ -137,6 +143,8 @@ class InvestmentFlowRefineService:
         enriched = 0
         async with httpx.AsyncClient(timeout=15) as client:
             for i, r in enumerate(rows, start=1):
+                if i > 1:
+                    await asyncio.sleep(_DART_CALL_INTERVAL_SEC)
                 try:
                     resp = await client.get(
                         _DART_COMPANY_API,
