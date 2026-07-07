@@ -11,6 +11,7 @@ import { MainTabBar } from "./MainTabBar";
 import { Footer } from "./Footer";
 import { DashboardNavProvider } from "@/components/features/dashboard/DashboardNavContext";
 import { DashboardSidebar } from "@/components/features/dashboard/DashboardSidebar";
+import { PulseSectorSidebar } from "@/components/features/dashboard/PulseSectorSidebar";
 import { RoadmapNavProvider } from "@/components/features/roadmap/RoadmapNavContext";
 import { RoadmapSidebar } from "@/components/features/roadmap/RoadmapSidebar";
 import { ConsultSidebar } from "@/components/features/consult/ConsultSidebar";
@@ -52,12 +53,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     fetchUserInfo();
   }, [token, isAuthenticated, setProfile, clearProfile]);
 
-  const shell = (sidebar: React.ReactNode) => (
+  const shell = (sidebar: React.ReactNode, mainMaxWidth = "max-w-[1480px]") => (
     <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
       {sidebar}
       <div className="flex flex-1 min-w-0 flex-col">
         <MainTabBar />
-        <main className="flex-1 w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className={`flex-1 w-full ${mainMaxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-6`}>
           {children}
         </main>
         <Footer />
@@ -70,13 +71,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   // 하위 라우트를 추가하면(예: /roadmap/[id]) 해당 브랜치를 startsWith로 넓혀 Provider 밖 렌더(throw)를 막을 것.
   let body: React.ReactNode;
   if (pathname === "/") {
-    body = <DashboardNavProvider>{shell(<DashboardSidebar />)}</DashboardNavProvider>;
+    body = <DashboardNavProvider>{shell(<DashboardSidebar />, "max-w-none")}</DashboardNavProvider>;
+  } else if (pathname?.startsWith("/dashboard/pulse/sectors/")) {
+    // 펄스 섹터 상세 — 좌측에 섹터 트렌드 속도 카드 목록(Context 미소비, Provider 불필요).
+    body = shell(<PulseSectorSidebar />, "max-w-none");
   } else if (pathname === "/roadmap") {
-    body = <RoadmapNavProvider>{shell(<RoadmapSidebar />)}</RoadmapNavProvider>;
+    body = <RoadmapNavProvider>{shell(<RoadmapSidebar />, "max-w-none")}</RoadmapNavProvider>;
   } else if (pathname === "/consult") {
-    body = shell(<ConsultSidebar />);
+    body = shell(<ConsultSidebar />, "max-w-none");
   } else if (pathname?.startsWith("/coach")) {
-    body = shell(<CoachSidebar />);
+    body = shell(<CoachSidebar />, "max-w-none");
   } else {
     body = shell(null);
   }
