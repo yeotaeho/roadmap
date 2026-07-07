@@ -934,7 +934,7 @@ class PulseRepository(BaseRepository):
         window_days: int = 30,
     ) -> dict | None:
         """단일 섹터 투자·자금 흐름 — 최근 목록 + 직전 기간 대비 총액 비교. 섹터 미존재 시 None."""
-        from datetime import date, timedelta
+        from datetime import datetime, timedelta, timezone
 
         name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
         if name_row is None:
@@ -945,7 +945,8 @@ class PulseRepository(BaseRepository):
             "text_pv": text_prompt_version,
             "conf_min": confidence_min,
         }
-        today = date.today()
+        # 윈도우 경계는 KST 기준 — 서버 TZ(UTC)면 자정 부근 최대 9시간 경계 오차가 나는 것을 방지.
+        today = datetime.now(timezone(timedelta(hours=9))).date()
         recent_from = today - timedelta(days=window_days)
         prev_from = today - timedelta(days=window_days * 2)
         rows = (
