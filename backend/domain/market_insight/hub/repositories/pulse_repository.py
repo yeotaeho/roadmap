@@ -481,41 +481,27 @@ _HISTORY_SQL = text(
 # 섹터 메타(이름) 조회 — history 404 판별.
 _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 
-# 섹터 투자·자금 흐름(드릴다운) — 두 원천의 UNION.
-#   ① Silver 금액 추출분(refined_investment_flows, 투자 뉴스 LLM) — 텍스트 섹터 분류로 귀속.
-#   ② DART CB·M&A 직접 기입분(raw.investment_amount) — industry_sector 코드 매핑으로 귀속
-#      (해당 행들은 코드 매핑 대상이라 텍스트 분류에서 의도적으로 제외됨 → :codes 역인덱스 필터).
-#   보조금(GOVT_SUBSIDY24)·사업보고서·박스오피스 등 비투자성 금액은 제외.
+# 섹터 투자·자금 흐름(드릴다운) — Silver 금액 추출분(refined_investment_flows, 투자 뉴스 LLM)을
+# 텍스트 섹터 분류로 귀속. 보조금·사업보고서·박스오피스 등 비투자성 금액은 원천에서 제외됨.
+# DART CB·M&A 직접 기입분(raw.investment_amount 39건)은 섹터 귀속 수단이 없어 제외:
+#   metadata industry_sector/group_name 무태깅(0/197)·회사마스터 명칭 일치 0/39(벤처인증 기업 위주).
+#   corp_code→섹터 귀속 경로가 생기면 UNION 으로 재편입한다.
 _INVESTMENTS_SQL = text(
     """
-    SELECT company, amount_krw, flow_label, ref_date, investor_name, raw_title, source_url
-    FROM (
-        SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
-               f.amount_krw AS amount_krw,
-               COALESCE(f.series, '투자유치') AS flow_label,
-               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date,
-               -- 뉴스류 investor_name 은 수집기가 제목 조각을 넣어 신뢰 불가 → 비움.
-               NULL AS investor_name, e.raw_title, e.source_url
-        FROM refined_investment_flows f
-        JOIN refined_text_sector_class c
-          ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
-         AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
-        JOIN raw_economic_data e ON e.id = f.raw_id
-        WHERE f.amount_krw IS NOT NULL
-          AND f.prompt_version = :invest_pv
-          AND c.sector_slug = :slug
-        UNION ALL
-        SELECT COALESCE(e.target_company_or_fund, e.investor_name),
-               e.investment_amount,
-               CASE WHEN e.source_type = 'DART_CONVERTIBLE_BOND' THEN 'CB발행' ELSE 'M&A' END,
-               COALESCE(e.published_at::date, e.collected_at::date),
-               e.investor_name, e.raw_title, e.source_url
-        FROM raw_economic_data e
-        WHERE e.investment_amount IS NOT NULL
-          AND e.source_type IN ('DART_CONVERTIBLE_BOND', 'DART_M_AND_A', 'DART_MA')
-          AND COALESCE(e.raw_metadata->>'industry_sector', e.raw_metadata->>'group_name')
-              = ANY(string_to_array(:codes, ','))
-    ) t
+    SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
+           f.amount_krw AS amount_krw,
+           COALESCE(f.series, '투자유치') AS flow_label,
+           COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date,
+           -- 뉴스류 investor_name 은 수집기가 제목 조각을 넣어 신뢰 불가 → 비움.
+           NULL AS investor_name, e.raw_title, e.source_url
+    FROM refined_investment_flows f
+    JOIN refined_text_sector_class c
+      ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
+     AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
+    JOIN raw_economic_data e ON e.id = f.raw_id
+    WHERE f.amount_krw IS NOT NULL
+      AND f.prompt_version = :invest_pv
+      AND c.sector_slug = :slug
     ORDER BY ref_date DESC NULLS LAST
     LIMIT 200
     """
@@ -930,7 +916,6 @@ class PulseRepository(BaseRepository):
         name_row = (await self.session.execute(_SECTOR_NAME_SQL, {"slug": sector_slug})).first()
         if name_row is None:
             return None
-        codes = [code for code, slug in _SECTOR_CODE_MAP.items() if slug == sector_slug]
         rows = (
             await self.session.execute(
                 _INVESTMENTS_SQL,
@@ -939,8 +924,6 @@ class PulseRepository(BaseRepository):
                     "invest_pv": invest_prompt_version,
                     "text_pv": text_prompt_version,
                     "conf_min": confidence_min,
-                    # 매핑 코드가 없는 섹터도 SQL 이 성립하도록 매칭 불가 센티널을 둔다.
-                    "codes": ",".join(codes) if codes else "__none__",
                 },
             )
         ).all()
