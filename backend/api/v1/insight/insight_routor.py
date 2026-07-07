@@ -20,6 +20,7 @@ from domain.market_insight.hub.services.gap_refine_service import GapRefineServi
 from domain.market_insight.hub.services.gap_projection_service import GapProjectionService
 from domain.market_insight.hub.services.keyword_trends import assemble_keywords
 from domain.market_insight.hub.services.investment_flow_service import (
+    DART_PROMPT_VERSION as INVEST_DART_PROMPT_VERSION,
     PROMPT_VERSION as INVEST_PROMPT_VERSION,
 )
 from domain.market_insight.hub.services.pulse_refine_service import PulseRefineService
@@ -143,6 +144,7 @@ async def get_pulse_investments(
             sector,
             limit,
             invest_prompt_version=INVEST_PROMPT_VERSION,
+            dart_prompt_version=INVEST_DART_PROMPT_VERSION,
             text_prompt_version=TEXT_SECTOR_PROMPT_VERSION,
             confidence_min=get_settings().llm_classify_confidence_min,
             window_days=window_days,

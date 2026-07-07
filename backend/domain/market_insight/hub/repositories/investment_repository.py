@@ -29,15 +29,37 @@ _FETCH_UNPROCESSED = text(
 )
 
 # 멱등 적재 — 추출 실패(amount null)도 저장해 재호출을 막는다(raw_id/prompt_version 자연키).
+# sector_slug 는 LLM 추출 경로에선 NULL(텍스트 분류 조인으로 귀속), DART 보강 경로에선 KSIC 매핑 결과.
 _UPSERT_SILVER = text(
     """
     INSERT INTO refined_investment_flows
         (sector_slug, amount_krw, currency, series, company, reference_date,
          raw_table_ref, raw_id, model_name, prompt_version, input_hash)
     VALUES
-        (NULL, :amount_krw, :currency, :series, :company, :ref_date,
+        (:sector_slug, :amount_krw, :currency, :series, :company, :ref_date,
          'raw_economic_data', :raw_id, :model_name, :prompt_version, :input_hash)
     ON CONFLICT (raw_table_ref, raw_id, prompt_version) DO NOTHING
+    """
+)
+
+# 미보강 DART CB·M&A 행(수집기가 금액 직접 기입) — corp_code 로 업종 조회해 섹터 귀속할 대상.
+_FETCH_DART_UNENRICHED = text(
+    """
+    SELECT e.id AS raw_id,
+           e.raw_metadata->>'corp_code' AS corp_code,
+           e.investor_name, e.target_company_or_fund,
+           e.investment_amount, e.currency, e.source_type,
+           COALESCE(e.published_at::date, e.collected_at::date) AS ref_date
+    FROM raw_economic_data e
+    LEFT JOIN refined_investment_flows f
+           ON f.raw_table_ref = 'raw_economic_data' AND f.raw_id = e.id
+          AND f.prompt_version = :pv
+    WHERE f.id IS NULL
+      AND e.source_type IN ('DART_CONVERTIBLE_BOND', 'DART_M_AND_A')
+      AND e.investment_amount IS NOT NULL
+      AND e.raw_metadata ? 'corp_code'
+    ORDER BY e.id
+    LIMIT :lim
     """
 )
 
@@ -49,6 +71,14 @@ class InvestmentRepository(BaseRepository):
         rows = (
             await self.session.execute(
                 _FETCH_UNPROCESSED, {"pv": prompt_version, "win": window_days, "lim": limit}
+            )
+        ).all()
+        return list(rows)
+
+    async def fetch_dart_unenriched(self, prompt_version: str, limit: int) -> list:
+        rows = (
+            await self.session.execute(
+                _FETCH_DART_UNENRICHED, {"pv": prompt_version, "lim": limit}
             )
         ).all()
         return list(rows)

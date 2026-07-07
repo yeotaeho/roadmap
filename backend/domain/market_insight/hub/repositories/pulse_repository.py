@@ -481,27 +481,42 @@ _HISTORY_SQL = text(
 # 섹터 메타(이름) 조회 — history 404 판별.
 _SECTOR_NAME_SQL = text("SELECT name_ko FROM sectors WHERE slug = :slug")
 
-# 섹터 투자·자금 흐름(드릴다운) — Silver 금액 추출분(refined_investment_flows, 투자 뉴스 LLM)을
-# 텍스트 섹터 분류로 귀속. 보조금·사업보고서·박스오피스 등 비투자성 금액은 원천에서 제외됨.
-# DART CB·M&A 직접 기입분(raw.investment_amount 39건)은 섹터 귀속 수단이 없어 제외:
-#   metadata industry_sector/group_name 무태깅(0/197)·회사마스터 명칭 일치 0/39(벤처인증 기업 위주).
-#   corp_code→섹터 귀속 경로가 생기면 UNION 으로 재편입한다.
+# 섹터 투자·자금 흐름(드릴다운) — 두 경로의 UNION(소스타입 disjoint 라 이중집계 없음).
+#   ① 투자 뉴스 LLM 추출분(:invest_pv) — 텍스트 섹터 분류(c)로 귀속.
+#   ② DART CB·M&A 보강분(:dart_pv) — 기업개황 KSIC 매핑으로 f.sector_slug 직접 귀속.
+# 보조금·사업보고서·박스오피스 등 비투자성 금액은 원천에서 제외됨.
 _INVESTMENTS_LIST_SQL = text(
     """
-    SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
-           f.amount_krw AS amount_krw,
-           COALESCE(f.series, '투자유치') AS flow_label,
-           COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date,
-           -- 뉴스류 investor_name 은 수집기가 제목 조각을 넣어 신뢰 불가 → 비움.
-           NULL AS investor_name, e.raw_title, e.source_url
-    FROM refined_investment_flows f
-    JOIN refined_text_sector_class c
-      ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
-     AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
-    JOIN raw_economic_data e ON e.id = f.raw_id
-    WHERE f.amount_krw IS NOT NULL
-      AND f.prompt_version = :invest_pv
-      AND c.sector_slug = :slug
+    SELECT company, amount_krw, flow_label, ref_date, investor_name, raw_title, source_url
+    FROM (
+        SELECT COALESCE(f.company, e.target_company_or_fund) AS company,
+               f.amount_krw AS amount_krw,
+               COALESCE(f.series, '투자유치') AS flow_label,
+               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date) AS ref_date,
+               -- 뉴스류 investor_name 은 수집기가 제목 조각을 넣어 신뢰 불가 → 비움.
+               NULL AS investor_name, e.raw_title, e.source_url
+        FROM refined_investment_flows f
+        JOIN refined_text_sector_class c
+          ON c.raw_table_ref = f.raw_table_ref AND c.raw_id = f.raw_id
+         AND c.prompt_version = :text_pv AND c.confidence >= :conf_min
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :invest_pv
+          AND c.sector_slug = :slug
+        UNION ALL
+        SELECT f.company,
+               f.amount_krw,
+               COALESCE(f.series, '자금조달'),
+               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date),
+               -- M&A 는 공시 제출인(인수 주체)이 투자자 성격, CB 는 발행사 자신이라 비움.
+               CASE WHEN e.target_company_or_fund IS NOT NULL THEN e.investor_name END,
+               e.raw_title, e.source_url
+        FROM refined_investment_flows f
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :dart_pv
+          AND f.sector_slug = :slug
+    ) t
     ORDER BY ref_date DESC NULLS LAST
     LIMIT :limit
     """
@@ -525,6 +540,14 @@ _INVESTMENTS_SUMMARY_SQL = text(
         WHERE f.amount_krw IS NOT NULL
           AND f.prompt_version = :invest_pv
           AND c.sector_slug = :slug
+        UNION ALL
+        SELECT f.amount_krw,
+               COALESCE(f.reference_date, e.published_at::date, e.collected_at::date)
+        FROM refined_investment_flows f
+        JOIN raw_economic_data e ON e.id = f.raw_id
+        WHERE f.amount_krw IS NOT NULL
+          AND f.prompt_version = :dart_pv
+          AND f.sector_slug = :slug
     ) t
     WHERE ref_date IS NOT NULL
     """
@@ -929,6 +952,7 @@ class PulseRepository(BaseRepository):
         limit: int = 8,
         *,
         invest_prompt_version: str,
+        dart_prompt_version: str,
         text_prompt_version: str,
         confidence_min: float,
         window_days: int = 30,
@@ -942,6 +966,7 @@ class PulseRepository(BaseRepository):
         base_params = {
             "slug": sector_slug,
             "invest_pv": invest_prompt_version,
+            "dart_pv": dart_prompt_version,
             "text_pv": text_prompt_version,
             "conf_min": confidence_min,
         }
