@@ -30,7 +30,7 @@ export function MainTabBar() {
           {TABS.map(({ href, label, shortLabel, icon: Icon }) => {
             const isActive =
               href === "/"
-                ? pathname === "/"
+                ? pathname === "/" || pathname?.startsWith("/dashboard/")
                 : pathname === href || pathname?.startsWith(`${href}/`);
             return (
               <Link
