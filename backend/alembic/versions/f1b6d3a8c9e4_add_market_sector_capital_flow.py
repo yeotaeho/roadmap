@@ -7,7 +7,9 @@ from alembic import op
 
 
 revision: str = "f1b6d3a8c9e4"
-down_revision: Union[str, None] = "a9d2f7c4e1b8"
+# 메인라인 현 tip(planner/notes) 뒤에 선형 append. a9d2f7c4e1b8 은 이미 d1a2b3c4e5f6 머지가
+# 소비한 노드라 그 아래서 분기하면 head 가 늘어난다(리뷰 지적) → 진짜 tip 으로 정정.
+down_revision: Union[str, None] = "e7b3a1c5d9f2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
