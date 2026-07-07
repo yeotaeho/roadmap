@@ -12,7 +12,7 @@ from domain.auth.hub.repositories.base_repository import BaseRepository
 _FETCH_UNPROCESSED = text(
     """
     SELECT o.id AS raw_id, o.raw_title AS title, o.host_name AS host_name,
-           o.deadline_at::date AS deadline, o.source_url AS url,
+           (o.deadline_at AT TIME ZONE 'Asia/Seoul')::date AS deadline, o.source_url AS url,
            o.raw_title || E'\n' || COALESCE(o.raw_content, '') || E'\n'
                || COALESCE(o.raw_metadata::text, '') AS body,
            COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) AS ref_date
@@ -20,7 +20,8 @@ _FETCH_UNPROCESSED = text(
     LEFT JOIN refined_chance_insights c
            ON c.raw_table_ref = 'raw_opportunity_data' AND c.raw_id = o.id AND c.prompt_version = :pv
     WHERE c.id IS NULL
-      AND (o.deadline_at IS NULL OR o.deadline_at::date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
+      AND (o.deadline_at IS NULL
+           OR (o.deadline_at AT TIME ZONE 'Asia/Seoul')::date >= (now() AT TIME ZONE 'Asia/Seoul')::date)
       AND COALESCE((o.published_at AT TIME ZONE 'Asia/Seoul')::date, (o.collected_at AT TIME ZONE 'Asia/Seoul')::date) >= (now() AT TIME ZONE 'Asia/Seoul')::date - CAST(:win AS INTEGER)
     ORDER BY o.deadline_at ASC NULLS LAST, o.id
     LIMIT :lim
@@ -46,7 +47,8 @@ _FETCH_SILVER_FOR_GOLD = text(
     """
     SELECT c.sector_slug, c.extracted_type, c.extracted_target, c.extracted_benefits,
            c.extracted_qualifications, c.extracted_deadline, c.raw_id,
-           o.raw_title AS title, o.host_name AS host_name, o.deadline_at::date AS deadline,
+           o.raw_title AS title, o.host_name AS host_name,
+           (o.deadline_at AT TIME ZONE 'Asia/Seoul')::date AS deadline,
            o.source_url AS url
     FROM refined_chance_insights c
     JOIN raw_opportunity_data o ON o.id = c.raw_id
