@@ -63,7 +63,9 @@ def build_subagent_specs(user_id: str, settings=None) -> list[dict]:
     sonnet = _chat_model(sonnet_model, api_key, 8192)
 
     internal = {t.name: t for t in build_internal_tools(user_id)}
-    web = _limited(build_web_tools(settings), settings.roadmap_agent_web_call_limit)
+    # fetch_url 은 완주 병목(45s×N, haiku 가 호출 상한을 잘 안 지킴) — scout 는 검색 스니펫만 사용.
+    web_search_only = [t for t in build_web_tools(settings) if t.name == "web_search"]
+    web = _limited(web_search_only, settings.roadmap_agent_web_call_limit)
 
     return [
         {

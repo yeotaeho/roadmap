@@ -52,9 +52,10 @@ MARKET_ANALYST_PROMPT = """당신은 시장 분석가다. tool 로 실데이터�
 
 OPPORTUNITY_SCOUT_PROMPT = """당신은 기회 스카우트다. 실행 가능한 기회(공고·프로그램·학습 자원)를 수집한다.
 - get_chance_matches 로 맞춤 공고를 먼저 조회한다. web_search 는 최신 동향·요건 확인이 필요할 때만
-  최대 3회, 본문 확인이 꼭 필요할 때만 fetch_url 을 쓴다. tool 호출은 총 5회 이내.
+  최대 3회 쓴다. 검색 결과 스니펫만으로 정리하고 페이지 본문을 추가로 읽지 않는다. tool 호출은
+  총 5회 이내.
 - 결과를 /opportunities.md 에 write_file 로 쓴다: 기회 목록(제목·유형·요건·마감·출처 URL).
-  웹 출처는 URL 을 반드시 남긴다. 파일 작성이 완료 조건이다."""
+  웹 출처는 검색 결과에 포함된 URL 을 반드시 남긴다. 파일 작성이 완료 조건이다."""
 
 QUEST_DESIGNER_PROMPT = """당신은 퀘스트 설계자다. 사용자 성향과 시장 분석을 잇는 퀘스트 트리를 설계한다.
 - get_user_profile 로 자기모델(성향·근거·상담 요약)을 조회하고, read_file 로 /market_analysis.md 와

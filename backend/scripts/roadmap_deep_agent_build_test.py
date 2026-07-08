@@ -64,7 +64,7 @@ def main() -> int:
     )
     check(
         "scout tool 배분(웹 포함)",
-        {t.name for t in specs[1]["tools"]} == {"get_chance_matches", "web_search", "fetch_url"},
+        {t.name for t in specs[1]["tools"]} == {"get_chance_matches", "web_search"},
     )
     check("designer tool 배분", {t.name for t in specs[2]["tools"]} == {"get_user_profile"})
     # user_id 클로저 — LLM 인자 스키마에 user_id 없음.
