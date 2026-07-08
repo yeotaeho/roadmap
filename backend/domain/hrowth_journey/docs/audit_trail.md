@@ -1,5 +1,20 @@
 # hrowth_journey (Roadmap) 작업 기록
 
+## 2026-07-08 — R-1 로드맵 딥 에이전트 라이브 verify + 스펙 현행화(마지막 Task)
+- **무엇** — R-1(로드맵 딥 에이전트) 마지막 태스크로 실 DB·실 Anthropic 대상 라이브 verify 스크립트를 작성하고, 기존 로드맵 보유 실사용자(퀘스트 6개·플래너 태스크 2개)로 2회 실행(허용 한도 전부 소진). 스펙 §6·§8·§10 을 구현 실체로 현행화.
+- **왜** — Task 1~6(테이블·서비스·병합·프론트 진행률 UI)이 오프라인 테스트로만 검증됐고, `agent.astream(stream_mode=["updates","values"])` 소비부의 실 스트림 형태(튜플 언패킹)와 `roadmap_agent_cheap_model` 기본값(`claude-haiku-4-5`)의 실 API 수용 여부가 미검증 상태였다.
+- **어디** —
+  - 신규 [`backend/scripts/roadmap_agent_live_verify.py`](../../../scripts/roadmap_agent_live_verify.py) — 사전/사후 퀘스트·플래너 태스크 스냅샷 비교, SSE 완주 관찰, `roadmap_generation_runs` 최종 상태 확인.
+  - 소비부 [`roadmap_generation_service.py:131-160`](../hub/services/roadmap_generation_service.py) `_run_inner` — 실행 결과 실 스트림으로 튜플 언패킹·`map_agent_event` 매핑 모두 정상 동작 확인(코드 수정 없음).
+  - 설정 [`backend/core/config/settings.py:184-193`](../../../core/config/settings.py) `roadmap_agent_cheap_model`/`roadmap_agent_timeout_s`/`roadmap_agent_recursion_limit` — 모델명은 API 수용 확인(수정 불필요), 타임아웃·recursion_limit 은 아래 검증에서 실사용자 완주 기준 부족 확인(이번 태스크 범위 밖이라 기본값은 미변경).
+  - 스펙 [`docs/superpowers/specs/2026-07-05-ai-coach-roadmap-agent-design.md`](../../../../docs/superpowers/specs/2026-07-05-ai-coach-roadmap-agent-design.md) §6(구현 실체+변경 이력+라이브 검증 결과)·§8(R-1 행)·§10(리스크 실증 행 추가).
+- **검증** — 라이브 실행 2회(허용 한도 전부 사용, 대상 `user_id=50885bf5-...`, 사전 퀘스트 6개/done 0/태스크 2개):
+  - **1회차**(기본 `roadmap_agent_timeout_s=300`) — `발주 성공`·`progress 이벤트 수신` PASS, `start`→`market_analyst`→`opportunity_scout` 단계까지 진행 후 300s 타임아웃(`TimeoutError`)으로 폴백 진입. 기존 로드맵 보유자라 "무변경 실패" 안전 경로 발동(run `failed`/`agent_output_invalid`) → `done 종결`·`결과 소스 기록`·`run succeeded` FAIL(설계상 예상된 결과). `RESULT: PASS 3 / FAIL 3`.
+  - **2회차**(`ROADMAP_AGENT_TIMEOUT_S=480` 환경변수로 임시 상향 — 코드 미변경) — 타임아웃 전에 `quest_designer` 단계(80%)까지 도달했으나 LangGraph `recursion_limit=50` 도달로 실패(`Recursion limit of 50 reached`). 동일하게 무변경 실패 경로로 안전 종료. `RESULT: PASS 3 / FAIL 3`.
+  - **사후 DB 확인** — 두 실행 모두 `roadmap_generation_runs.status='failed'`, `error='agent_output_invalid'`(소요 ~305s/~315s). 퀘스트 6개(상태 불변)·플래너 태스크 2개 완전히 무손상 보존 확인 — "기존 로드맵 보유자 무변경 실패" 안전장치가 실측으로 검증됨.
+  - 결론 — Risk 1(스트림 튜플 언패킹)·Risk 2(모델명 거부) 둘 다 **미발생**(정상 동작 확인, 코드 수정 없음). 딥 에이전트 자체의 "완주(done)" 경로는 이번 실사용자 컨텍스트 기준 기본 타임아웃/recursion_limit 내에서 확인하지 못했다(후속 필요).
+- **후속** — `roadmap_agent_timeout_s`/`roadmap_agent_recursion_limit` 상향 조정 또는 서브에이전트 tool-calling 절감 튜닝 후 재검증(별도 태스크, 실 Anthropic 과금 필요). done 상태 퀘스트가 있는 사용자 대상 "기존 done 보존" 케이스는 이번 대상자에 done 퀘스트가 없어 미검증.
+
 ## 2026-07-06 — 플래너(WBS)·노트 탭 풀스택 신설
 - **무엇** — Roadmap 탭에 플래너(백로그·스프린트 보드 + 주간 간트 타임라인)와 노트(마크다운 + `[[링크]]` + 백링크) 탭을 풀스택 추가. AI 퀘스트 분해(LLM+결정론 폴백)·여정 지도 "태스크 n/m" 진행률 배지 포함.
 - **왜** — 퀘스트 트리(장기 방향)에 실행 계층이 없어 일정 관리 불가. 사용자 요구: WBS + 노션/옵시디언식 메모. 스펙 `docs/superpowers/specs/2026-07-06-roadmap-planner-notes-design.md` · 플랜 `docs/superpowers/plans/2026-07-06-roadmap-planner-notes.md`.
