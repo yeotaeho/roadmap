@@ -1,97 +1,14 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Hexagon, Sparkles, Triangle } from "lucide-react";
+// 여정 개요 — 여정 지도(게임 스테이지 맵) + 역량 3축 칩 + 직무 키워드 브릿지
+
+import { Hexagon, Map as MapIcon, Sparkles } from "lucide-react";
 import { useMemo } from "react";
-import type { QuestTreeNode } from "@/data/roadmapQuestMap";
-import {
-  BRIDGE_KEYWORDS,
-  QUEST_TREE,
-  SKILL_TRIANGLE,
-} from "@/data/roadmapQuestMap";
+import { BRIDGE_KEYWORDS, QUEST_TREE, SKILL_TRIANGLE } from "@/data/roadmapQuestMap";
 import { usePlannerBoard } from "@/hooks/usePlanner";
 import { useJourney, useRefreshRoadmap } from "@/hooks/useRoadmap";
 import { useStore } from "@/store";
-
-const DIFFICULTY_RING: Record<string, string> = {
-  입문: "ring-emerald-200 bg-emerald-50 text-emerald-800",
-  중급: "ring-amber-200 bg-amber-50 text-amber-900",
-  심화: "ring-violet-200 bg-violet-50 text-violet-900",
-};
-
-const STATE_STYLE: Record<string, string> = {
-  start: "border-indigo-300 bg-indigo-50/80 shadow-md shadow-indigo-100/60 dark:border-indigo-800 dark:bg-indigo-900/20 dark:shadow-none",
-  done: "border-emerald-200 bg-white dark:border-emerald-900/40 dark:bg-slate-800",
-  active: "border-indigo-400 bg-white ring-2 ring-indigo-200/70 dark:border-indigo-700 dark:bg-slate-800 dark:ring-indigo-900/40",
-  available: "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800",
-  locked: "border-slate-100 bg-slate-50 opacity-75 dark:border-slate-700 dark:bg-slate-900",
-};
-
-function QuestTreeCard({
-  node,
-  depth,
-  taskCounts,
-}: {
-  node: QuestTreeNode;
-  depth: number;
-  taskCounts?: Map<string, { done: number; total: number }>;
-}) {
-  const isRoot = node.state === "start";
-  const counts = taskCounts?.get(node.id);
-
-  return (
-    <div className={depth > 0 ? "mt-3 border-l-2 border-slate-200 pl-4 dark:border-slate-700" : ""}>
-      <motion.article
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: depth * 0.05 }}
-        className={`rounded-2xl border p-4 shadow-sm transition ${STATE_STYLE[node.state] ?? STATE_STYLE.available}`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{node.title}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{node.purpose}</p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${DIFFICULTY_RING[node.difficulty]}`}
-            >
-              {node.difficulty}
-            </span>
-            {counts && counts.total > 0 ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/35 dark:text-sky-300">
-                태스크 {counts.done}/{counts.total}
-              </span>
-            ) : null}
-            {isRoot ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:bg-indigo-900/35 dark:text-indigo-300">
-                <Sparkles className="h-3 w-3" />
-                시작점
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {node.keywords.map((kw) => (
-            <span
-              key={kw}
-              className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300"
-            >
-              #{kw}
-            </span>
-          ))}
-        </div>
-      </motion.article>
-      {node.children?.length ? (
-        <div className="space-y-1">
-          {node.children.map((ch) => (
-            <QuestTreeCard key={ch.id} node={ch} depth={depth + 1} taskCounts={taskCounts} />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+import { JourneyQuestMap } from "./JourneyQuestMap";
 
 export function JourneyMapTab() {
   const profile = useStore((s) => s.profile);
@@ -120,56 +37,64 @@ export function JourneyMapTab() {
 
   return (
     <div className="space-y-8 pb-4">
-      <section className="rounded-2xl border border-slate-200 bg-[#F8FAFC] p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-            스킬 트라이앵글
-          </p>
-          {isLoading ? (
-            <span className="text-[11px] text-slate-400">불러오는 중…</span>
-          ) : !isLive ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              예시 로드맵
-            </span>
-          ) : null}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+              여정 지도
+            </p>
+            <h2 className="mt-1 inline-flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-slate-100">
+              <MapIcon className="h-5 w-5 text-indigo-600" />
+              퀘스트 월드맵
+            </h2>
+            <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
+              시작점에서 갈래로 뻗는 과제 지도입니다. 스테이지를 눌러 <strong className="text-slate-800 dark:text-slate-200">현재 위치</strong>를 옮기며 다음 목표를 살펴보세요.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isLoading ? (
+              <span className="text-[11px] text-slate-400">불러오는 중…</span>
+            ) : !isLive ? (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                예시 로드맵
+              </span>
+            ) : null}
+            {loggedIn ? (
+              <button
+                type="button"
+                onClick={() => refresh.mutate()}
+                disabled={refresh.isPending}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+              >
+                <Sparkles className="h-4 w-4" />
+                {refresh.isPending ? "생성 중…" : isLive ? "로드맵 다시 생성" : "내 로드맵 생성"}
+              </button>
+            ) : null}
+          </div>
         </div>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          획득해야 할 핵심 3축입니다. 일정이 아니라 <strong className="text-slate-800 dark:text-slate-200">역량 방향</strong>
-          을 먼저 고정합니다.
-        </p>
 
-        <div className="relative mx-auto mt-8 max-w-md pb-6">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-center shadow-sm dark:border-indigo-900/40 dark:bg-slate-800">
-              <Triangle className="mx-auto h-5 w-5 text-indigo-500 dark:text-indigo-300" />
-              <p className="mt-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">YOU</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-500">지금 여기</p>
-            </div>
-          </div>
+        {/* 역량 3축 칩 (구 스킬 트라이앵글) */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {pillars.map((p) => (
+            <span
+              key={p.id}
+              title={p.blurb}
+              className="inline-flex items-center gap-1.5 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300"
+            >
+              <Hexagon className="h-3.5 w-3.5 text-indigo-500" />
+              {p.label}
+            </span>
+          ))}
+        </div>
 
-          <div className="relative h-52">
-            {pillars.map((s, i) => {
-              const pos =
-                i === 0
-                  ? "left-1/2 top-0 -translate-x-1/2"
-                  : i === 1
-                    ? "bottom-0 left-0"
-                    : "bottom-0 right-0";
-              return (
-                <motion.div
-                  key={s.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.1 + i * 0.08 }}
-                  className={`absolute max-w-[140px] rounded-2xl border border-white bg-white p-3 shadow-md dark:border-slate-700 dark:bg-slate-800 ${pos}`}
-                >
-                  <Hexagon className="h-4 w-4 text-indigo-500" />
-                  <p className="mt-1 text-xs font-bold text-slate-900 dark:text-slate-100">{s.label}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-slate-600 dark:text-slate-400">{s.blurb}</p>
-                </motion.div>
-              );
-            })}
-          </div>
+        {loggedIn && !isLive && !isLoading ? (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            프로필의 역량 정보를 바탕으로 나만의 로드맵을 생성합니다. (아래는 예시)
+          </p>
+        ) : null}
+
+        <div className="mt-5">
+          <JourneyQuestMap tree={tree} taskCounts={isLive ? taskCounts : undefined} />
         </div>
       </section>
 
@@ -187,43 +112,6 @@ export function JourneyMapTab() {
               {k}
             </span>
           ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md dark:border-slate-700 dark:bg-slate-800">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-              퀘스트 트리
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">과제 맵 (Quest Tree)</h2>
-            <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              시작점에서 가지처럼 퍼지는 과제들입니다. 잠금(회색)은 앞 단계를 밟으면 열립니다.
-            </p>
-          </div>
-          {loggedIn ? (
-            <button
-              type="button"
-              onClick={() => refresh.mutate()}
-              disabled={refresh.isPending}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-            >
-              <Sparkles className="h-4 w-4" />
-              {refresh.isPending
-                ? "생성 중…"
-                : isLive
-                  ? "로드맵 다시 생성"
-                  : "내 로드맵 생성"}
-            </button>
-          ) : null}
-        </div>
-        {loggedIn && !isLive && !isLoading ? (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            프로필의 역량 정보를 바탕으로 나만의 로드맵을 생성합니다. (아래는 예시)
-          </p>
-        ) : null}
-        <div className="mt-6">
-          <QuestTreeCard node={tree} depth={0} taskCounts={isLive ? taskCounts : undefined} />
         </div>
       </section>
     </div>
