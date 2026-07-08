@@ -105,7 +105,7 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 - **구성**: `create_deep_agent(model, subagents=[...])`
   - 서브에이전트 3종 (deepagents 서브에이전트별 모델 오버라이드로 비용 최적화):
     - `market_analyst` — Pulse·Gap·Sync 종합 → 유망 방향 후보 도출 (`roadmap_agent_cheap_model`, 기본 `claude-haiku-4-5`)
-    - `opportunity_scout` — Chance 매칭 + 웹 검색(Tavily/WaterCrawl, 호출 상한 `roadmap_agent_web_call_limit`)으로 실행 가능한 기회·요건 수집 (저렴 모델)
+    - `opportunity_scout` — Chance 매칭 + 웹 검색(Tavily `web_search`만, 호출 상한 `roadmap_agent_web_call_limit`)으로 실행 가능한 기회·요건 수집 (저렴 모델). `fetch_url`(WaterCrawl 본문 읽기)은 완주 병목(호출당 ~45s·haiku 가 호출 상한 지시를 잘 안 지킴)으로 라이브 검증 후 제외 — 검색 스니펫 기반으로만 정리
     - `quest_designer` — 자기모델·페르소나 기반 퀘스트 트리 + WBS 초안 설계 (`coach_llm_model`, Sonnet)
   - 오케스트레이터 모델: Sonnet(`resolve_coach_llm`).
   - 플래닝: 빌트인 `write_todos` — todo 변경을 SSE `progress` 이벤트로 중계(`map_agent_event`).
@@ -119,13 +119,20 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
   - `GET /roadmap/generate/status` — 최근 run 스냅샷(폴링용).
   - `GET /roadmap/generate/stream` — SSE(`progress`/`status`/`done`/`error`/`none`), 큐 유실 시 30초 keepalive 로 DB 재조회 보정.
   - 기존 `POST /roadmap/refine`은 별도 경량 LLM 생성 경로(`RoadmapPlannerService`)로 유지 — 딥 에이전트 흐름으로 통합되지 않은 deprecated 폴백.
-- **비용 가드**: `roadmap_agent_timeout_s`(기본 300s)·`roadmap_agent_recursion_limit`(기본 50)·`roadmap_agent_web_call_limit`(기본 6)을 settings 값으로 노출.
+- **비용 가드**: `roadmap_agent_timeout_s`(기본 1500s, 라이브 검증 튜닝 후)·`roadmap_agent_recursion_limit`(기본 100, 튜닝 후)·`roadmap_agent_web_call_limit`(기본 6)을 settings 값으로 노출.
 
 **원설계 대비 변경 이력**:
 - 체크포인터 미주입 — run 재실행은 항상 새 그래프 상태로 시작(대화 이어가기 없음). 진행 상태의 영속 진실원본은 `roadmap_generation_runs.progress`/`RunHub`이며 LangGraph 체크포인터가 아니다.
 - `tools=[내부 tool + web]`을 오케스트레이터에 직접 주지 않고 서브에이전트별로만 배분 — 오케스트레이터는 `task` 위임만 수행.
 - `response_format` 구조화 출력 대신 파일 산출 + 정규식 JSON 추출 3단 폴백(모델별 구조화 출력 지원 편차 회피).
-- **라이브 검증 결과(2026-07-08, 실 Neon·실 Anthropic 2회 실행)**: 이벤트 스트림 소비부(`astream(stream_mode=["updates","values"])` → `(mode, payload)` 튜플 언패킹)와 모델명(`claude-haiku-4-5`/`claude-sonnet-5`)은 문제없이 동작 확인. 다만 실사용자(페르소나·기존 퀘스트 6개 보유) 컨텍스트로 완주 시 기본 타임아웃(300s)·`recursion_limit`(50) 을 초과 — 두 값 모두 상향 조정 검토가 필요하다(§10 리스크 참고). 두 실행 모두 "무변경 실패" 안전 경로가 정상 동작해 기존 로드맵·플래너 태스크는 손상 없이 보존됐다.
+- **라이브 검증 결과(2026-07-08, 실 Neon·실 Anthropic 총 5회 실행 — 완주 성공)**: 이벤트 스트림 소비부(`astream(stream_mode=["updates","values"])` → `(mode, payload)` 튜플 언패킹)와 모델명(`claude-haiku-4-5`/`claude-sonnet-5`)은 최초부터 문제없이 동작 확인. 실사용자(페르소나·기존 퀘스트 6개 보유) 컨텍스트 완주까지 예산 튜닝 5라운드 소요:
+  - 1회차(기본 `timeout=300s`) — `opportunity_scout` 도달 후 타임아웃.
+  - 2회차(`timeout=480s` env override) — `quest_designer`(80%) 도달 후 `recursion_limit=50` 소진.
+  - 커밋 `8399fa5`: `roadmap_agent_timeout_s` 300→900, `roadmap_agent_recursion_limit` 50→100 + 오케스트레이터 스텝 절감 프롬프트(write_todos 1회·최종 검토 read_file 1개·초안 그대로 옮겨쓰기).
+  - 3회차(`timeout=900s`) — 재차 900s 타임아웃(소요 904s). SSE keepalive 역산 결과 `opportunity_scout` 단계가 ~540~570s 소모 — `parse_agent_output` 은 `final_state={}`로 호출도 안 돼 파싱 버그 가능성 배제, 순수 wall-clock 부족 확정. 커밋 `111d14d`: `timeout` 900→1500 재상향.
+  - 4회차(`timeout=1500s`) — docker exec 셸 자체 타임아웃으로 프로세스 강제 종료(`error='cancelled'`), CancelledError 안전망 정상 작동 확인(기존 데이터 무손상). 근본 원인 분석: `opportunity_scout` 의 `fetch_url`(WaterCrawl, 호출당 ~45s)을 haiku 가 호출 상한 지시를 지키지 않고 반복 호출 — 병목의 실체. 커밋 `0412e2a`: scout tools 를 `get_chance_matches`+`web_search`로 제한(fetch_url 제외).
+  - **5회차(최종) — 완주 성공**: 소요 약 4분(1500s 예산 대비 대폭 단축). `result={'source': 'deep_agent', 'quest_count': 10, 'tasks_seeded': 12, 'roadmap_id': 3}`. 병합 사후 확인 — 기존 퀘스트 6개 **6/6 quest_key 전부 재사용**, 신규 4개 추가로 총 10개, 태스크 2→14(+12) 시드 정합. 5회 전 과정에서 "무변경 실패" 안전 경로(1~4회차)와 정상 완주 병합(5회차) 모두 기존 로드맵을 손상 없이 다루는 것을 확인.
+  - done 상태 퀘스트가 없는 사용자라 "기존 done 보존" 분기는 이번에도 미검증(후속 필요).
 
 ## 7. 경계·안전 원칙
 
@@ -140,7 +147,7 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 |---|---|---|
 | **C-1 코치 채팅 코어** | 내부 tool 6종 + `read_for_coach()` + coach_graph + 세션 테이블 마이그레이션 + SSE 라우터 + 최소 CoachView | 코치가 실데이터 근거로 답변, tool_call 이벤트가 프론트에 표시 |
 | **C-2 웹 tool** | web_search/fetch_url + provider 설정 + 출처 표기 | 최신 웹 정보가 출처와 함께 답변에 반영 |
-| **R-1 딥 에이전트** | deepagents 도입, 서브에이전트 3종, `roadmap_generation_runs`+RunHub, `/roadmap/generate`·`/generate/status`·`/generate/stream`, `launch_roadmap_generation` tool, 프론트 진행률 UI, 진행 보존 병합(`refine`은 별도 경량 폴백으로 유지) | 딥 에이전트 산출이 스키마 검증 통과, /roadmap 탭 렌더, 코치에서 발주 동작, 라이브 verify(`roadmap_agent_live_verify.py`)로 SSE 완주·기존 트리 보존 확인(완주 시 타임아웃/recursion_limit 상향 후속 필요) |
+| **R-1 딥 에이전트** | deepagents 도입, 서브에이전트 3종, `roadmap_generation_runs`+RunHub, `/roadmap/generate`·`/generate/status`·`/generate/stream`, `launch_roadmap_generation` tool, 프론트 진행률 UI, 진행 보존 병합(`refine`은 별도 경량 폴백으로 유지) | 딥 에이전트 산출이 스키마 검증 통과, /roadmap 탭 렌더, 코치에서 발주 동작, 라이브 verify(`roadmap_agent_live_verify.py`)로 SSE 완주·기존 트리 보존 확인 — **완주 성공(2026-07-08, 5회차)**: timeout 1500s·recursion_limit 100·scout fetch_url 제외 튜닝 후 `RESULT: PASS 7 / FAIL 0`, quest_key 6/6 재사용 확인 |
 | **v2 (이연)** | render_widget, 인사이트 지갑, 워커 큐 이전, 딥 에이전트 장기 메모리 | — |
 
 ## 9. 검증 전략
@@ -159,4 +166,4 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 | 딥 에이전트 토큰 비용·소요 시간 폭주 | recursion_limit·호출 상한 settings, progress 이벤트로 체감 완화 |
 | SSE 인프로세스 장기 실행 중 배포/재시작 | 체크포인터 재개 + 폴백 로드맵 보장. 빈도 높아지면 v2에서 워커 큐 이전 |
 | deepagents 신규 의존성의 LangGraph 버전 충돌 | 도입 시 기존 consult 스위트 전체 green 확인 후 진행 |
-| (실증, 2026-07-08) 실사용자 컨텍스트 완주 시 기본 `roadmap_agent_timeout_s`(300s)·`roadmap_agent_recursion_limit`(50) 초과 확인 — 완주 실패 시에도 "무변경 실패" 안전 경로로 기존 트리는 보존됨 | 후속 태스크에서 두 값 상향 조정 또는 서브에이전트 tool-calling 절감 튜닝 필요 |
+| (실증, 2026-07-08, 해소됨) 실사용자 컨텍스트 완주 시 기본 `roadmap_agent_timeout_s`(300s)·`roadmap_agent_recursion_limit`(50) 초과 확인 — 완주 실패 시에도 "무변경 실패" 안전 경로로 기존 트리는 보존됨 | `timeout_s`→1500·`recursion_limit`→100 상향 + 오케스트레이터 스텝 절감 프롬프트 + scout `fetch_url`(병목 실체, 호출당 ~45s) 제외로 완주 성공 확인(5회차, quest_key 6/6 재사용) |
