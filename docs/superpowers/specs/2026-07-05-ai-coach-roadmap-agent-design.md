@@ -48,7 +48,7 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 └──────────────────────────────┘         ▼       ▼
                                 ┌─ 로드맵 딥 에이전트 (deepagents) ──┐
                                 │ planning(write_todos) + 서브에이전트│
-                                │ SSE 진행률, 체크포인터 재개          │
+                                │ SSE 진행률, run 상태 영속 기록       │
                                 │ 산출 → user_roadmaps/roadmap_quests│
                                 └────────────────────────────────────┘
                      둘 다 같은 tool 레이어(내부 DB 조회 + 웹) 공유
@@ -125,7 +125,7 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 - 체크포인터 미주입 — run 재실행은 항상 새 그래프 상태로 시작(대화 이어가기 없음). 진행 상태의 영속 진실원본은 `roadmap_generation_runs.progress`/`RunHub`이며 LangGraph 체크포인터가 아니다.
 - `tools=[내부 tool + web]`을 오케스트레이터에 직접 주지 않고 서브에이전트별로만 배분 — 오케스트레이터는 `task` 위임만 수행.
 - `response_format` 구조화 출력 대신 파일 산출 + 정규식 JSON 추출 3단 폴백(모델별 구조화 출력 지원 편차 회피).
-- **라이브 검증 결과(2026-07-08, 실 Neon·실 Anthropic 총 5회 실행 — 완주 성공)**: 이벤트 스트림 소비부(`astream(stream_mode=["updates","values"])` → `(mode, payload)` 튜플 언패킹)와 모델명(`claude-haiku-4-5`/`claude-sonnet-5`)은 최초부터 문제없이 동작 확인. 실사용자(페르소나·기존 퀘스트 6개 보유) 컨텍스트 완주까지 예산 튜닝 5라운드 소요:
+- **라이브 검증 결과(2026-07-08, 실 Neon·실 Anthropic 총 5회 실행 — 완주 성공)**: 이벤트 스트림 소비부(`astream(stream_mode=["updates","values"])` → `(mode, payload)` 튜플 언패킹)와 모델명(`claude-haiku-4-5`/`claude-sonnet-5`)은 최초부터 문제없이 동작 확인. 실사용자(페르소나·기존 퀘스트 6개 보유) 컨텍스트 완주까지 예산 튜닝 5라운드가 소요됐다.
   - 1회차(기본 `timeout=300s`) — `opportunity_scout` 도달 후 타임아웃.
   - 2회차(`timeout=480s` env override) — `quest_designer`(80%) 도달 후 `recursion_limit=50` 소진.
   - 커밋 `8399fa5`: `roadmap_agent_timeout_s` 300→900, `roadmap_agent_recursion_limit` 50→100 + 오케스트레이터 스텝 절감 프롬프트(write_todos 1회·최종 검토 read_file 1개·초안 그대로 옮겨쓰기).
@@ -164,6 +164,6 @@ tool 구현은 대부분 기존 repository 함수를 LLM tool로 감싸는 작�
 | Sonnet 비용 (코치 대화량 증가 시) | 수직별 모델 분리로 consult는 저렴 유지, 딥 에이전트는 서브에이전트 모델 믹스, 사용량 모니터링 |
 | WaterCrawl 클라우드 의존 | 셀프호스트 옵션 존재 — 비용·안정성 이슈 시 compose에 추가 |
 | 딥 에이전트 토큰 비용·소요 시간 폭주 | recursion_limit·호출 상한 settings, progress 이벤트로 체감 완화 |
-| SSE 인프로세스 장기 실행 중 배포/재시작 | 체크포인터 재개 + 폴백 로드맵 보장. 빈도 높아지면 v2에서 워커 큐 이전 |
+| SSE 인프로세스 장기 실행 중 배포/재시작 | 체크포인터 미주입 — 재실행은 항상 새 run(무변경 실패 경로로 기존 데이터 보존, stale 마킹이 좀비 정리). 빈도 높아지면 v2에서 체크포인터 도입 또는 워커 큐 이전 |
 | deepagents 신규 의존성의 LangGraph 버전 충돌 | 도입 시 기존 consult 스위트 전체 green 확인 후 진행 |
 | (실증, 2026-07-08, 해소됨) 실사용자 컨텍스트 완주 시 기본 `roadmap_agent_timeout_s`(300s)·`roadmap_agent_recursion_limit`(50) 초과 확인 — 완주 실패 시에도 "무변경 실패" 안전 경로로 기존 트리는 보존됨 | `timeout_s`→1500·`recursion_limit`→100 상향 + 오케스트레이터 스텝 절감 프롬프트 + scout `fetch_url`(병목 실체, 호출당 ~45s) 제외로 완주 성공 확인(5회차, quest_key 6/6 재사용) |

@@ -6,9 +6,9 @@
 - **어디** —
   - 신규 [`backend/scripts/roadmap_agent_live_verify.py`](../../../scripts/roadmap_agent_live_verify.py) — 사전/사후 퀘스트·플래너 태스크 스냅샷 비교, SSE 완주 관찰, `roadmap_generation_runs` 최종 상태 확인.
   - 소비부 [`roadmap_generation_service.py:131-160`](../hub/services/roadmap_generation_service.py) `_run_inner` — 실행 결과 실 스트림으로 튜플 언패킹·`map_agent_event` 매핑 모두 정상 동작 확인(코드 수정 없음).
-  - 설정 [`backend/core/config/settings.py:184-193`](../../../core/config/settings.py) `roadmap_agent_cheap_model`/`roadmap_agent_timeout_s`/`roadmap_agent_recursion_limit` — 모델명은 API 수용 확인(수정 불필요), 타임아웃·recursion_limit 은 아래 검증에서 실사용자 완주 기준 부족 확인(이번 태스크 범위 밖이라 기본값은 미변경).
+  - 설정 [`backend/core/config/settings.py:184-193`](../../../core/config/settings.py) `roadmap_agent_cheap_model`/`roadmap_agent_timeout_s`/`roadmap_agent_recursion_limit` — 모델명은 API 수용 확인(수정 불필요), 타임아웃·recursion_limit 은 아래 검증에서 실사용자 완주 기준 부족이 확인되어 재검증 라운드에서 기본값을 상향했다(최종 `1500s`/`100`, 커밋 `8399fa5`·`111d14d`).
   - 스펙 [`docs/superpowers/specs/2026-07-05-ai-coach-roadmap-agent-design.md`](../../../../docs/superpowers/specs/2026-07-05-ai-coach-roadmap-agent-design.md) §6(구현 실체+변경 이력+라이브 검증 결과)·§8(R-1 행)·§10(리스크 실증 행 추가).
-- **검증** — 라이브 실행 총 5회(대상 `user_id=50885bf5-...`, 사전 퀘스트 6개/done 0/태스크 2개), 예산 튜닝을 거치며 완주(done)까지 도달:
+- **검증** — 라이브 실행 총 5회(대상 `user_id=50885bf5-...`, 사전 퀘스트 6개/done 0/태스크 2개), 예산 튜닝을 거치며 완주(done)까지 도달했다.
   - **1회차**(기본 `roadmap_agent_timeout_s=300`) — `start`→`market_analyst`→`opportunity_scout` 단계까지 진행 후 300s `TimeoutError` 폴백. 무변경 실패 안전 경로 발동. `RESULT: PASS 3 / FAIL 3`.
   - **2회차**(`ROADMAP_AGENT_TIMEOUT_S=480` 환경변수 임시 상향, 코드 미변경) — `quest_designer`(80%) 도달했으나 `recursion_limit=50` 소진으로 실패. `RESULT: PASS 3 / FAIL 3`.
   - 결론(1~2회차) — Risk 1(스트림 튜플 언패킹)·Risk 2(모델명 거부) 둘 다 **미발생**. 병목은 시간/스텝 예산 부족으로 판명 → 커밋 `8399fa5`(`roadmap_agent_timeout_s` 300→900, `roadmap_agent_recursion_limit` 50→100 + 오케스트레이터 스텝 절감 프롬프트: write_todos 1회·최종 검토 read_file 1개·초안 그대로 옮겨쓰기)로 재검증.
