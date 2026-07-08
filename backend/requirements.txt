@@ -86,6 +86,7 @@ openpyxl>=3.1
 APScheduler>=3.10.4
 
 langchain-anthropic>=0.3.0
+deepagents==0.6.12
 
 # 코치 웹 tool
 watercrawl-py>=0.9.2
