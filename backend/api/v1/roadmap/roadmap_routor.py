@@ -4,15 +4,20 @@ import logging
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.api_guards import get_authenticated_user_id
 from core.database import get_db
+from domain.hrowth_journey.hub.repositories.generation_run_repository import (
+    GenerationRunRepository,
+)
 from domain.hrowth_journey.hub.services.archive_service import ArchiveService
 from domain.hrowth_journey.hub.services.journey_service import JourneyService
 from domain.hrowth_journey.hub.services.note_service import NoteService
 from domain.hrowth_journey.hub.services.planner_service import PlannerService
+from domain.hrowth_journey.hub.services.roadmap_generation_service import RoadmapGenerationService
 from domain.hrowth_journey.hub.services.roadmap_planner_service import RoadmapPlannerService
 
 logger = logging.getLogger(__name__)
@@ -101,6 +106,64 @@ async def refine_roadmap(
     except Exception as e:
         logger.error(f"Roadmap 생성 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Roadmap 생성 실패: {str(e)}")
+
+
+# ── 로드맵 딥 에이전트 생성 런 (R-1) ──
+
+
+@router.post("/generate", status_code=202)
+async def start_generation(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """딥 에이전트 로드맵 생성 발주 — 202(시작) 또는 409(이미 진행 중)."""
+    try:
+        result = await RoadmapGenerationService(db).start_run(user_id, trigger="tab")
+    except Exception as e:
+        logger.error(f"Roadmap 생성 발주 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Roadmap 생성 발주 실패: {str(e)}")
+    if result.get("already_running"):
+        raise HTTPException(status_code=409, detail="이미 로드맵 생성이 진행 중입니다.")
+    return {"success": True, "runId": result["run_id"], "status": "running"}
+
+
+@router.get("/generate/status")
+async def generation_status(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """최근 생성 런 상태 — 탭 진입·폴링용(run 없으면 run: null)."""
+    try:
+        run = await GenerationRunRepository(db).fetch_latest(user_id)
+    except Exception as e:
+        logger.error(f"Roadmap 생성 상태 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Roadmap 생성 상태 조회 실패: {str(e)}")
+    if run is None:
+        return {"success": True, "run": None}
+    prog = run["progress"] or {}
+    return {
+        "success": True,
+        "run": {
+            "runId": run["run_id"], "status": run["status"], "trigger": run["trigger"],
+            "stage": prog.get("stage"), "percent": prog.get("percent"),
+            "label": prog.get("label"), "error": run["error"],
+            "result": run["result"],
+        },
+    }
+
+
+@router.get("/generate/stream")
+async def generation_stream(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """생성 진행률 SSE — 스냅샷 1건 후 실시간 중계."""
+    service = RoadmapGenerationService(db)
+    return StreamingResponse(
+        service.stream_events(user_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── 플래너(WBS) — 백로그·스프린트·태스크 ──
