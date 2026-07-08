@@ -3,7 +3,7 @@
 // 여정 지도 — 퀘스트 트리를 게임 스테이지 맵으로(가지치기 배치·경로·현재 위치 아바타·이동)
 
 import { motion } from "framer-motion";
-import { Check, ChevronUp, Flag, Footprints, Lock, Star } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Flag, Footprints, Lock, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { QuestTreeNode, QuestTreeState } from "@/data/roadmapQuestMap";
 
@@ -105,6 +105,7 @@ export function JourneyQuestMap({
   // avatarId: 아바타(현재 위치, 잠금 노드로는 이동 불가) / focusId: 상세 패널(잠금 포함 열람 가능)
   const [avatarId, setAvatarId] = useState(currentId);
   const [focusId, setFocusId] = useState(currentId);
+  const [listOpen, setListOpen] = useState(true);
 
   // 로드맵 갱신(트리 교체) 시 현재 위치로 리셋
   useEffect(() => {
@@ -255,10 +256,17 @@ export function JourneyQuestMap({
 
         {/* 전체 퀘스트 — 우측 상단 소형 오버레이(고정·지도와 연동) */}
         <div className="absolute right-2 top-2 z-30 flex max-h-[72%] w-44 flex-col rounded-xl border border-slate-200 bg-white/85 p-1.5 shadow-md backdrop-blur dark:border-slate-700 dark:bg-slate-800/85">
-          <p className="px-1 pb-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-            전체 퀘스트 {nodes.length}
-          </p>
-          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+          <button
+            type="button"
+            onClick={() => setListOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-1 rounded-lg px-1 py-0.5 text-[10px] font-semibold text-slate-500 transition hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-900/60"
+            aria-expanded={listOpen}
+          >
+            <span>전체 퀘스트 {nodes.length}</span>
+            {listOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {listOpen ? (
+          <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {nodes.map((laid) => {
               const { cls, Icon } = nodeVisual(laid.node.state);
               const isFocus = laid.node.id === focus.id;
@@ -289,6 +297,7 @@ export function JourneyQuestMap({
               );
             })}
           </div>
+          ) : null}
         </div>
       </div>
 
