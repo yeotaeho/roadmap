@@ -31,6 +31,13 @@ def merge_roadmap(old_quests: list[dict], new_roadmap: dict, planner_keys: set[s
         if q["state"] == "start" and q["parent_key"] is not None:
             q["state"] = "available"
 
+    reinsert_keys = {
+        key
+        for key, old in old_by_key.items()
+        if key not in new_keys and (old["state"] == "done" or key in planner_keys)
+    }
+    alive = new_keys | reinsert_keys
+
     reinserted = []
     for key, old in old_by_key.items():
         if key in new_keys:
@@ -38,7 +45,7 @@ def merge_roadmap(old_quests: list[dict], new_roadmap: dict, planner_keys: set[s
         if old["state"] != "done" and key not in planner_keys:
             continue  # 미진행·미참조 — 삭제 허용.
         parent = old.get("parent_key")
-        if parent is None or parent not in new_keys:
+        if parent is None or parent not in alive:
             parent = root_key
         state = old["state"] if old["state"] in _VALID_REINSERT_STATES else "done"
         reinserted.append(

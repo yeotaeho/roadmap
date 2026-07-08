@@ -42,6 +42,9 @@ def main() -> int:
         q("q-c", "q-b", "available"),
         q("q-d", "root", "available"),  # 미진행·미참조 — 삭제 허용 대상.
         q("q-e", "q-d", "done"),        # done 인데 새 트리에서 사라짐 + 부모도 사라짐.
+        q("q-gp", "root", "done"),          # 다단계 재삽입 체인 — 조부(done).
+        q("q-parent", "q-gp", "done"),      # 체인 — 부모(done).
+        q("q-child", "q-parent", "done"),   # 체인 — 자식(done), 셋 다 새 트리에서 사라짐.
     ]
     new = {
         "title": "새 로드맵", "summary": "", "skill_pillars": [], "bridge_keywords": [],
@@ -65,6 +68,9 @@ def main() -> int:
     check("사라진 done 재삽입", "q-e" in by_key)
     check("재삽입 부모 소실 시 루트", by_key["q-e"]["parent_key"] == "root")
     check("미진행 미참조 삭제", "q-d" not in by_key)
+    check("재삽입 체인 조부 생존(원 부모 root)", by_key["q-gp"]["parent_key"] == "root")
+    check("재삽입 체인 부모(조부 아래)", by_key["q-parent"]["parent_key"] == "q-gp")
+    check("재삽입 체인 자식(부모 아래)", by_key["q-child"]["parent_key"] == "q-parent")
     roots = [x for x in merged["quests"] if x["parent_key"] is None]
     check("루트 1개 유지", len(roots) == 1)
 
