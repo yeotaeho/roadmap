@@ -155,10 +155,9 @@ async def generation_status(
 @router.get("/generate/stream")
 async def generation_stream(
     user_id: str = Depends(get_authenticated_user_id),
-    db: AsyncSession = Depends(get_db),
 ):
-    """생성 진행률 SSE — 스냅샷 1건 후 실시간 중계."""
-    service = RoadmapGenerationService(db)
+    """생성 진행률 SSE — 스냅샷 1건 후 실시간 중계(request 세션 미사용 — SSE 장기 점유 방지)."""
+    service = RoadmapGenerationService()
     return StreamingResponse(
         service.stream_events(user_id),
         media_type="text/event-stream",

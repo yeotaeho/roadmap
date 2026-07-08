@@ -38,7 +38,8 @@ def _sse(obj: dict) -> str:
 
 
 class RoadmapGenerationService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession | None = None):
+        """session=None 은 스트림 전용(stream_events) 경로에서만 허용 — 세션 필요 메서드(start_run 등)는 호출 금지."""
         self.session = session
         self._settings = get_settings()
 
@@ -60,6 +61,13 @@ class RoadmapGenerationService:
     async def _execute_run(self, user_id: str, run_id: str) -> None:
         try:
             await self._run_inner(user_id, run_id)
+        except asyncio.CancelledError:  # 앱 종료·태스크 취소 — run 을 failed 로 남기고 재전파.
+            try:
+                async with AsyncSessionLocal() as db:
+                    await GenerationRunRepository(db).finish(run_id, "failed", error="cancelled")
+            except Exception:
+                pass  # 종료 중 DB 실패는 stale 마킹이 수습한다.
+            raise
         except Exception as e:  # 마지막 안전망 — run 을 failed 로 남긴다.
             logger.error(f"로드맵 생성 런 실패: {e}", exc_info=True)
             try:
@@ -204,7 +212,8 @@ class RoadmapGenerationService:
 
     async def stream_events(self, user_id: str):
         """활성 run 스냅샷 + 실시간 이벤트 중계. 활성 run 없으면 none 후 종료."""
-        run = await GenerationRunRepository(self.session).fetch_latest(user_id)
+        async with AsyncSessionLocal() as db:
+            run = await GenerationRunRepository(db).fetch_latest(user_id)
         if run is None or run["status"] in ("succeeded", "failed"):
             if run is not None and run["status"] == "succeeded":
                 yield _sse({"type": "done", "result": run["result"] or {}})
