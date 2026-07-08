@@ -80,11 +80,11 @@ export function useRoadmapGeneration(loggedIn: boolean) {
   const abortRef = useRef<AbortController | null>(null);
 
   const finish = useCallback(
-    (error?: string) => {
+    (error?: string, opts?: { invalidate?: boolean }) => {
       abortRef.current?.abort();
       abortRef.current = null;
       setView({ running: false, error: error ?? null });
-      if (!error) {
+      if (!error && opts?.invalidate !== false) {
         qc.invalidateQueries({ queryKey: ['roadmap-journey'] });
         qc.invalidateQueries({ queryKey: ['roadmap-planner'] });
       }
@@ -102,17 +102,20 @@ export function useRoadmapGeneration(loggedIn: boolean) {
           setView({ running: true, stage: e.stage, percent: e.percent, label: e.label }),
         onDone: () => finish(),
         onError: (m) => finish(m),
-        onNone: () => finish(),
+        onNone: () => finish(undefined, { invalidate: false }),
       },
       ac.signal,
     ).catch(() => {
       // 스트림 자체 실패 — 폴링 폴백 없이 조용히 종료(status 재조회로 복구 가능).
-      if (abortRef.current === ac) finish();
+      if (abortRef.current === ac) finish(undefined, { invalidate: false });
     });
   }, [finish]);
 
   useEffect(() => {
-    if (!loggedIn) return;
+    if (!loggedIn) {
+      setView({ running: false });
+      return;
+    }
     let cancelled = false;
     fetchGenerationStatus().then((run: GenerationRun | null) => {
       if (cancelled || !run) return;
