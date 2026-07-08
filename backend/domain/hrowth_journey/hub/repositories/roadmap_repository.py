@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
@@ -104,6 +104,30 @@ _INSERT_QUEST = text(
         (roadmap_id, quest_key, parent_key, title, purpose, difficulty, keywords, state, sort_order)
     VALUES (:roadmap_id, :quest_key, :parent_key, :title, :purpose, :difficulty,
             CAST(:keywords AS JSONB), :state, :sort_order)
+    """
+)
+
+_UPSERT_QUEST = text(
+    """
+    INSERT INTO roadmap_quests
+        (roadmap_id, quest_key, parent_key, title, purpose, difficulty, keywords, state, sort_order)
+    VALUES (:roadmap_id, :quest_key, :parent_key, :title, :purpose, :difficulty,
+            CAST(:keywords AS JSONB), :state, :sort_order)
+    ON CONFLICT (roadmap_id, quest_key) DO UPDATE SET
+        parent_key = EXCLUDED.parent_key, title = EXCLUDED.title, purpose = EXCLUDED.purpose,
+        difficulty = EXCLUDED.difficulty, keywords = EXCLUDED.keywords,
+        state = EXCLUDED.state, sort_order = EXCLUDED.sort_order
+    """
+)
+
+_DELETE_QUESTS_NOT_IN = text(
+    "DELETE FROM roadmap_quests WHERE roadmap_id = :roadmap_id AND quest_key NOT IN :keys"
+).bindparams(bindparam("keys", expanding=True))
+
+_FETCH_PLANNER_QUEST_KEYS = text(
+    """
+    SELECT DISTINCT quest_key FROM planner_tasks
+    WHERE user_id = CAST(:user_id AS UUID) AND quest_key IS NOT NULL
     """
 )
 
@@ -233,3 +257,57 @@ class RoadmapRepository(BaseRepository):
             )
         await self.session.commit()
         return rid
+
+    async def save_roadmap_merged(self, user_id: str, roadmap: dict) -> int:
+        """병합 저장 — 헤더 upsert + 퀘스트 diff upsert. 전체 DELETE 없음(부분 실패에도 트리 무손상)."""
+        rid = (
+            await self.session.execute(
+                _UPSERT_ROADMAP,
+                {
+                    "user_id": user_id,
+                    "title": roadmap["title"],
+                    "summary": roadmap.get("summary") or "",
+                    "pillars": json.dumps(roadmap.get("skill_pillars") or []),
+                    "bridge": json.dumps(roadmap.get("bridge_keywords") or []),
+                },
+            )
+        ).scalar_one()
+        quests = roadmap.get("quests") or []
+        for q in quests:
+            await self.session.execute(
+                _UPSERT_QUEST,
+                {
+                    "roadmap_id": rid,
+                    "quest_key": q["quest_key"],
+                    "parent_key": q.get("parent_key"),
+                    "title": q["title"],
+                    "purpose": q.get("purpose") or "",
+                    "difficulty": q["difficulty"],
+                    "keywords": json.dumps(q.get("keywords") or []),
+                    "state": q["state"],
+                    "sort_order": q.get("sort_order") or 0,
+                },
+            )
+        keys = [q["quest_key"] for q in quests]
+        if keys:
+            await self.session.execute(
+                _DELETE_QUESTS_NOT_IN, {"roadmap_id": rid, "keys": keys}
+            )
+        await self.session.commit()
+        return rid
+
+    async def fetch_quest_rows(self, user_id: str) -> list[dict]:
+        """병합 입력용 — 사용자의 현재 퀘스트 행 전부(로드맵 없으면 빈 목록)."""
+        header = (await self.session.execute(_FETCH_ROADMAP, {"user_id": user_id})).first()
+        if header is None:
+            return []
+        rows = (
+            await self.session.execute(_FETCH_QUESTS, {"roadmap_id": header.id})
+        ).mappings().all()
+        return [dict(r) for r in rows]
+
+    async def fetch_planner_quest_keys(self, user_id: str) -> set[str]:
+        rows = (
+            await self.session.execute(_FETCH_PLANNER_QUEST_KEYS, {"user_id": user_id})
+        ).all()
+        return {r[0] for r in rows}
