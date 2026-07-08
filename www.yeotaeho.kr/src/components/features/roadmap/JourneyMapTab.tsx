@@ -47,9 +47,6 @@ export function JourneyMapTab() {
               <MapIcon className="h-5 w-5 text-indigo-600" />
               퀘스트 월드맵
             </h2>
-            <p className="mt-1 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              시작점에서 갈래로 뻗는 과제 지도입니다. 스테이지를 눌러 <strong className="text-slate-800 dark:text-slate-200">현재 위치</strong>를 옮기며 다음 목표를 살펴보세요.
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {isLoading ? (

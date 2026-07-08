@@ -294,6 +294,55 @@ export function JourneyQuestMap({
           ) : null}
         </motion.div>
       </div>
+
+      {/* 전체 퀘스트 — 한눈에 보는 통합 목록(지도와 연동). 들여쓰기로 갈래 표현 */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <p className="mb-2 px-1 text-xs font-semibold text-slate-500 dark:text-slate-500">
+          전체 퀘스트 {nodes.length}
+        </p>
+        <div className="space-y-1">
+          {nodes.map((laid) => {
+            const { cls, Icon } = nodeVisual(laid.node.state);
+            const c = taskCounts?.get(laid.node.id);
+            const isFocus = laid.node.id === focus.id;
+            const locked = laid.node.state === "locked";
+            return (
+              <button
+                key={laid.node.id}
+                type="button"
+                onClick={() => handleNodeClick(laid)}
+                style={{ paddingLeft: 8 + laid.depth * 16 }}
+                className={`flex w-full items-center gap-2 rounded-xl py-1.5 pr-2 text-left transition ${
+                  isFocus
+                    ? "bg-indigo-50 ring-1 ring-indigo-200 dark:bg-indigo-900/20 dark:ring-indigo-800"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
+                }`}
+              >
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${cls}`}>
+                  <Icon className="h-3 w-3" />
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate text-xs font-semibold ${
+                    locked ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  {laid.node.title}
+                </span>
+                {c && c.total > 0 ? (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/35 dark:text-sky-300">
+                    {c.done}/{c.total}
+                  </span>
+                ) : null}
+                <span
+                  className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 sm:inline ${DIFFICULTY_RING[laid.node.difficulty]}`}
+                >
+                  {laid.node.difficulty}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
