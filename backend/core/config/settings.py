@@ -180,6 +180,18 @@ class Settings(BaseSettings):
     tavily_api_key: Optional[str] = Field(default=None, validation_alias="TAVILY_API_KEY")
     watercrawl_api_key: Optional[str] = Field(default=None, validation_alias="WATERCRAWL_API_KEY")
 
+    # 로드맵 딥 에이전트 (R-1)
+    roadmap_agent_cheap_model: str = Field(
+        default="claude-haiku-4-5", validation_alias="ROADMAP_AGENT_CHEAP_MODEL"
+    )
+    roadmap_agent_timeout_s: int = Field(default=300, validation_alias="ROADMAP_AGENT_TIMEOUT_S")
+    roadmap_agent_recursion_limit: int = Field(
+        default=50, validation_alias="ROADMAP_AGENT_RECURSION_LIMIT"
+    )
+    roadmap_agent_web_call_limit: int = Field(
+        default=6, validation_alias="ROADMAP_AGENT_WEB_CALL_LIMIT"
+    )
+
     # Pulse 방향성 modifier 튜닝(감성·시장 방향 가산 이동) — 실사용 데이터 축적 후 .env 로 재조정.
     pulse_sentiment_k: float = Field(default=15.0, validation_alias="PULSE_SENTIMENT_K")
     pulse_modifier_window_days: int = Field(
