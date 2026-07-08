@@ -158,6 +158,14 @@ export function JourneyQuestMap({
           }}
         />
 
+        {/* 드래그로 팬(pan) 가능한 지도 레이어 — 노드 탭은 유지(움직임 임계값으로 구분) */}
+        <motion.div
+          className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
+          drag
+          dragConstraints={{ left: -200, right: 200, top: -160, bottom: 160 }}
+          dragElastic={0.16}
+          dragMomentum={false}
+        >
         {/* 경로(SVG) — 부모→자식 곡선. 잠금 자식은 점선 */}
         <svg
           className="absolute inset-0 h-full w-full"
@@ -243,6 +251,45 @@ export function JourneyQuestMap({
             </motion.div>
           </motion.div>
         ) : null}
+        </motion.div>
+
+        {/* 전체 퀘스트 — 우측 상단 소형 오버레이(고정·지도와 연동) */}
+        <div className="absolute right-2 top-2 z-30 flex max-h-[72%] w-44 flex-col rounded-xl border border-slate-200 bg-white/85 p-1.5 shadow-md backdrop-blur dark:border-slate-700 dark:bg-slate-800/85">
+          <p className="px-1 pb-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+            전체 퀘스트 {nodes.length}
+          </p>
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+            {nodes.map((laid) => {
+              const { cls, Icon } = nodeVisual(laid.node.state);
+              const isFocus = laid.node.id === focus.id;
+              const locked = laid.node.state === "locked";
+              return (
+                <button
+                  key={laid.node.id}
+                  type="button"
+                  onClick={() => handleNodeClick(laid)}
+                  style={{ paddingLeft: 4 + laid.depth * 10 }}
+                  className={`flex w-full items-center gap-1.5 rounded-lg py-1 pr-1 text-left transition ${
+                    isFocus
+                      ? "bg-indigo-50 dark:bg-indigo-900/30"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
+                  }`}
+                >
+                  <span className={`grid h-4 w-4 shrink-0 place-items-center rounded-full ${cls}`}>
+                    <Icon className="h-2.5 w-2.5" />
+                  </span>
+                  <span
+                    className={`min-w-0 flex-1 truncate text-[10px] font-semibold ${
+                      locked ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-200"
+                    }`}
+                  >
+                    {laid.node.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* 상세 패널 — 선택 스테이지 (key 리마운트로 즉시 갱신·mount 애니메이션) */}
@@ -293,55 +340,6 @@ export function JourneyQuestMap({
             </p>
           ) : null}
         </motion.div>
-      </div>
-
-      {/* 전체 퀘스트 — 한눈에 보는 통합 목록(지도와 연동). 들여쓰기로 갈래 표현 */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <p className="mb-2 px-1 text-xs font-semibold text-slate-500 dark:text-slate-500">
-          전체 퀘스트 {nodes.length}
-        </p>
-        <div className="space-y-1">
-          {nodes.map((laid) => {
-            const { cls, Icon } = nodeVisual(laid.node.state);
-            const c = taskCounts?.get(laid.node.id);
-            const isFocus = laid.node.id === focus.id;
-            const locked = laid.node.state === "locked";
-            return (
-              <button
-                key={laid.node.id}
-                type="button"
-                onClick={() => handleNodeClick(laid)}
-                style={{ paddingLeft: 8 + laid.depth * 16 }}
-                className={`flex w-full items-center gap-2 rounded-xl py-1.5 pr-2 text-left transition ${
-                  isFocus
-                    ? "bg-indigo-50 ring-1 ring-indigo-200 dark:bg-indigo-900/20 dark:ring-indigo-800"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-900/60"
-                }`}
-              >
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${cls}`}>
-                  <Icon className="h-3 w-3" />
-                </span>
-                <span
-                  className={`min-w-0 flex-1 truncate text-xs font-semibold ${
-                    locked ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200"
-                  }`}
-                >
-                  {laid.node.title}
-                </span>
-                {c && c.total > 0 ? (
-                  <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/35 dark:text-sky-300">
-                    {c.done}/{c.total}
-                  </span>
-                ) : null}
-                <span
-                  className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 sm:inline ${DIFFICULTY_RING[laid.node.difficulty]}`}
-                >
-                  {laid.node.difficulty}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
