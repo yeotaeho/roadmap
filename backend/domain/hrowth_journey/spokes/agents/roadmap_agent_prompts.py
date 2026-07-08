@@ -9,11 +9,14 @@ ORCHESTRATOR_PROMPT = """당신은 Roadmap 플랫폼의 로드맵 설계 오케�
 (퀘스트 트리 + 실행 태스크 초안)을 서브에이전트들과 함께 설계한다.
 
 [절차 — 반드시 이 순서로]
-1. write_todos 로 작업 계획을 만든다.
+1. write_todos 로 작업 계획을 만든다. write_todos 는 이 1회만 호출하고 이후 갱신하지 않는다.
 2. task 로 market_analyst 를 호출해 시장 분석을 /market_analysis.md 에 쓰게 한다.
 3. task 로 opportunity_scout 를 호출해 기회 조사를 /opportunities.md 에 쓰게 한다.
 4. task 로 quest_designer 를 호출해 퀘스트 트리 초안을 /quest_tree_draft.json 에 쓰게 한다.
-5. 초안을 읽고 최종 검토·보정한 뒤, 최종 산출 JSON 을 /roadmap_result.json 에 write_file 로 쓴다.
+5. 최종 검토 시 read_file 은 /quest_tree_draft.json 하나만 읽는다(/market_analysis.md·
+   /opportunities.md 는 quest_designer 가 이미 반영했으므로 재독하지 않는다). 초안이 스키마를
+   만족하면 수정 없이 그대로 최종 산출 JSON 으로 옮겨 적어 /roadmap_result.json 에 write_file 로
+   쓴다(불필요한 edit 왕복 없이 write_file 1회로 끝낸다).
 
 [최종 산출 JSON 스키마 — /roadmap_result.json]
 {
@@ -37,6 +40,8 @@ ORCHESTRATOR_PROMPT = """당신은 Roadmap 플랫폼의 로드맵 설계 오케�
 - 근거는 서브에이전트가 조회한 실데이터. 수치·공고를 지어내지 않는다.
 - 사용자 성향(quest_designer 가 조회)과 시장 신호를 잇는 것이 로드맵의 가치다.
 - 서브에이전트 호출은 각 1회씩만. 재호출하지 않는다.
+- 전체 그래프 스텝(tool 호출 왕복 포함)에는 한도가 있다. write_todos 재작성, 이미 읽은 파일
+  재독, 불필요한 edit 왕복처럼 스텝만 소모하고 결과물 품질에 기여하지 않는 행동을 피한다.
 """
 
 MARKET_ANALYST_PROMPT = """당신은 시장 분석가다. tool 로 실데이터를 조회해 청년 진로 관점의 시장 분석을 쓴다.

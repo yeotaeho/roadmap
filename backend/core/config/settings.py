@@ -184,9 +184,9 @@ class Settings(BaseSettings):
     roadmap_agent_cheap_model: str = Field(
         default="claude-haiku-4-5", validation_alias="ROADMAP_AGENT_CHEAP_MODEL"
     )
-    roadmap_agent_timeout_s: int = Field(default=300, validation_alias="ROADMAP_AGENT_TIMEOUT_S")
+    roadmap_agent_timeout_s: int = Field(default=900, validation_alias="ROADMAP_AGENT_TIMEOUT_S")
     roadmap_agent_recursion_limit: int = Field(
-        default=50, validation_alias="ROADMAP_AGENT_RECURSION_LIMIT"
+        default=100, validation_alias="ROADMAP_AGENT_RECURSION_LIMIT"
     )
     roadmap_agent_web_call_limit: int = Field(
         default=6, validation_alias="ROADMAP_AGENT_WEB_CALL_LIMIT"
