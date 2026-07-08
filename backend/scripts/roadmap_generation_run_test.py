@@ -58,10 +58,10 @@ async def main() -> int:
         check("progress 반영", latest is not None and (latest["progress"] or {}).get("percent") == 30)
         check("run_id 일치", latest["run_id"] == run["run_id"])
 
-        # stale: updated_at 을 과거로 조작 → fetch_latest 가 failed(stale) 마킹.
+        # stale: updated_at 을 과거로 조작(기본 stale 창 30분 = 타임아웃 1500s/60+5 을 초과) → fetch_latest 가 failed(stale) 마킹.
         await db.execute(
             text(
-                "UPDATE roadmap_generation_runs SET updated_at = now() - interval '11 minutes' "
+                "UPDATE roadmap_generation_runs SET updated_at = now() - interval '31 minutes' "
                 "WHERE run_id = CAST(:r AS UUID)"
             ),
             {"r": run["run_id"]},

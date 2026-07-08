@@ -69,26 +69,22 @@ export interface GenerationStreamHandlers {
 }
 
 export async function startGeneration(): Promise<{ started: boolean; alreadyRunning: boolean }> {
-  const token = getStore().getState().token;
-  const res = await fetch(`${RAW_API_BASE}/api/roadmap/generate`, {
-    method: 'POST',
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    credentials: 'include',
-  });
-  if (res.status === 409) return { started: false, alreadyRunning: true };
-  if (!res.ok) throw new Error(`generate failed: ${res.status}`);
-  return { started: true, alreadyRunning: false };
+  try {
+    await apiClient.post('/api/roadmap/generate');
+    return { started: true, alreadyRunning: false };
+  } catch (err: any) {
+    if (err?.response?.status === 409) return { started: false, alreadyRunning: true };
+    throw err;
+  }
 }
 
 export async function fetchGenerationStatus(): Promise<GenerationRun | null> {
-  const token = getStore().getState().token;
-  const res = await fetch(`${RAW_API_BASE}/api/roadmap/generate/status`, {
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    credentials: 'include',
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data?.run ?? null;
+  try {
+    const { data } = await apiClient.get('/api/roadmap/generate/status');
+    return data?.run ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function streamGeneration(

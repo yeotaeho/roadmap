@@ -8,7 +8,13 @@ from sqlalchemy import text
 
 from domain.auth.hub.repositories.base_repository import BaseRepository
 
-_STALE_MINUTES = 10
+
+def _stale_minutes() -> int:
+    """stale 판정 창 — 에이전트 타임아웃을 항상 초과(진행 중 오판 방지, +5분 버퍼)."""
+    from core.config.settings import get_settings
+
+    return int(get_settings().roadmap_agent_timeout_s / 60) + 5
+
 
 _INSERT_RUN = text(
     """
@@ -75,7 +81,7 @@ class GenerationRunRepository(BaseRepository):
         """활성 run이 없으면 running 으로 생성. 있으면 None(이미 진행 중)."""
         # 좀비가 자리를 차지하지 않도록 생성 직전에 stale 정리.
         await self.session.execute(
-            _MARK_STALE, {"user_id": user_id, "stale_min": _STALE_MINUTES}
+            _MARK_STALE, {"user_id": user_id, "stale_min": _stale_minutes()}
         )
         row = (
             await self.session.execute(
@@ -91,7 +97,7 @@ class GenerationRunRepository(BaseRepository):
     async def fetch_latest(self, user_id: str) -> dict | None:
         """최근 run 1건 — 조회 시점에 stale run 을 failed 로 lazy 마킹한다."""
         await self.session.execute(
-            _MARK_STALE, {"user_id": user_id, "stale_min": _STALE_MINUTES}
+            _MARK_STALE, {"user_id": user_id, "stale_min": _stale_minutes()}
         )
         await self.session.commit()
         r = (await self.session.execute(_FETCH_LATEST, {"user_id": user_id})).first()
