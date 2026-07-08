@@ -10,10 +10,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
+from domain.ai_coach.spokes.agents.tools.action_tools import ACTION_TOOL_LABELS
 from domain.ai_coach.spokes.agents.tools.internal_tools import TOOL_LABELS
 from domain.ai_coach.spokes.agents.tools.web_tools import WEB_TOOL_LABELS
 
-_ALL_TOOL_LABELS = {**TOOL_LABELS, **WEB_TOOL_LABELS}
+_ALL_TOOL_LABELS = {**TOOL_LABELS, **WEB_TOOL_LABELS, **ACTION_TOOL_LABELS}
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import { Hexagon, Map as MapIcon, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { BRIDGE_KEYWORDS, QUEST_TREE, SKILL_TRIANGLE } from "@/data/roadmapQuestMap";
 import { usePlannerBoard } from "@/hooks/usePlanner";
-import { useJourney, useRefreshRoadmap } from "@/hooks/useRoadmap";
+import { useJourney, useRoadmapGeneration } from "@/hooks/useRoadmap";
 import { useStore } from "@/store";
 import { JourneyQuestMap } from "./JourneyQuestMap";
 
@@ -14,7 +14,7 @@ export function JourneyMapTab() {
   const profile = useStore((s) => s.profile);
   const loggedIn = !!profile?.id;
   const { data, isLoading } = useJourney(loggedIn);
-  const refresh = useRefreshRoadmap();
+  const { view: gen, start: startGen } = useRoadmapGeneration(loggedIn);
   const { data: plannerData } = usePlannerBoard(loggedIn);
 
   // 로그인 사용자에게 생성된 로드맵이 있으면 라이브, 없으면 로컬 목업으로 폴백.
@@ -59,16 +59,34 @@ export function JourneyMapTab() {
             {loggedIn ? (
               <button
                 type="button"
-                onClick={() => refresh.mutate()}
-                disabled={refresh.isPending}
+                onClick={() => startGen()}
+                disabled={gen.running}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
               >
                 <Sparkles className="h-4 w-4" />
-                {refresh.isPending ? "생성 중…" : isLive ? "로드맵 다시 생성" : "내 로드맵 생성"}
+                {gen.running ? "생성 중…" : isLive ? "로드맵 다시 생성" : "내 로드맵 생성"}
               </button>
             ) : null}
           </div>
         </div>
+
+        {gen.running ? (
+          <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900/40 dark:bg-indigo-900/15">
+            <div className="flex items-center justify-between text-xs font-semibold text-indigo-800 dark:text-indigo-300">
+              <span>{gen.label ?? "로드맵 생성 중"}</span>
+              <span>{gen.percent ?? 0}%</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900/40">
+              <div
+                className="h-full rounded-full bg-indigo-600 transition-all duration-700"
+                style={{ width: `${gen.percent ?? 0}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
+        {gen.error ? (
+          <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{gen.error}</p>
+        ) : null}
 
         {/* 역량 3축 칩 (구 스킬 트라이앵글) */}
         <div className="mt-4 flex flex-wrap gap-2">

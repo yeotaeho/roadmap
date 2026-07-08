@@ -13,6 +13,7 @@ from core.database import AsyncSessionLocal
 from core.llm.client import LlmClient
 from core.llm.provider import resolve_coach_llm, resolve_user_llm
 from domain.ai_coach.hub.repositories.coach_session_repository import CoachSessionRepository
+from domain.ai_coach.spokes.agents.tools.action_tools import build_action_tools
 from domain.ai_coach.spokes.agents.tools.internal_tools import build_internal_tools
 from domain.ai_coach.spokes.agents.tools.web_tools import build_web_tools
 from domain.ai_coach.spokes.infra.coach_graph import build_coach_graph
@@ -51,6 +52,8 @@ _COACH_SYSTEM_PROMPT = """당신은 Roadmap 플랫폼의 AI 진로 코치다. �
 4. 인용 — 데이터를 근거로 쓸 때 어느 탭·데이터인지 자연스럽게 밝힌다(예: "Pulse 기준 AI 섹터가…").
    웹에서 가져온 정보는 반드시 출처 URL 을 함께 표기한다.
 5. 역할 경계 — 성향을 새로 캐묻는 심층 조사는 상담실 몫이다. 코치는 파악된 성향을 활용해 방향·실행을 다룬다.
+   사용자가 로드맵 생성·개편을 원하면 launch_roadmap_generation 으로 발주하고, 결과를 기다리지 말고
+   "로드맵 탭에서 진행 상황을 확인하라"고 안내한다. 이미 진행 중이라는 응답이면 그 사실만 전한다.
 6. 대화 태도 — 한 턴에 핵심 하나. 단정 대신 근거와 함께 제안하고, 다음 행동을 구체적으로 제시한다.
 """
 
@@ -94,7 +97,7 @@ class CoachService:
         )
 
     def _build_tools(self, user_id: str) -> list:
-        return build_internal_tools(user_id) + build_web_tools()
+        return build_internal_tools(user_id) + build_web_tools() + build_action_tools(user_id)
 
     async def _default_summarizer(self, prior_summary, older):
         if not self._sum_key:

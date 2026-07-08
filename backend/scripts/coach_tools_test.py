@@ -42,6 +42,18 @@ def run() -> int:
         schema = t.args_schema.model_json_schema() if t.args_schema else {"properties": {}}
         check(f"{t.name} 인자에 user_id 없음", "user_id" not in schema.get("properties", {}))
 
+    # R-1: launch_roadmap_generation tool 계약.
+    from domain.ai_coach.spokes.agents.tools.action_tools import (
+        ACTION_TOOL_LABELS,
+        build_action_tools,
+    )
+
+    action = build_action_tools("00000000-0000-0000-0000-000000000000")
+    check("action tool 1종", len(action) == 1 and action[0].name == "launch_roadmap_generation")
+    check("action 라벨 등록", "launch_roadmap_generation" in ACTION_TOOL_LABELS)
+    schema = action[0].args_schema.model_json_schema() if action[0].args_schema else {"properties": {}}
+    check("launch user_id 인자 없음", "user_id" not in schema.get("properties", {}))
+
     print(f"\n합계: PASS {PASS} / FAIL {FAIL}")
     return 1 if FAIL else 0
 
