@@ -39,7 +39,8 @@ export function CoachNavProvider({ children }: { children: React.ReactNode }) {
       if (authEpochRef.current !== epoch) return; // 로그아웃/사용자 전환 후 stale 응답 폐기.
       setSessions(list);
     } finally {
-      setLoadingSessions(false); // 로컬 로딩 플래그는 stale 여부와 무관하게 항상 해제한다.
+      // 현재 epoch 의 refresh 만 로딩 플래그를 해제한다(stale 요청이 새 fetch 의 로딩을 지우지 못하게).
+      if (authEpochRef.current === epoch) setLoadingSessions(false);
     }
   }, []);
 
@@ -50,6 +51,7 @@ export function CoachNavProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) {
       setSessionId(null);
       setSessions([]);
+      setLoadingSessions(false); // 로그아웃 시 진행 중이던 로딩 표시를 즉시 해제(stale finally 가 건너뛰어도 고착 방지).
       setNavToken((n) => n + 1); // 뷰가 인사말로 리셋.
       return;
     }
