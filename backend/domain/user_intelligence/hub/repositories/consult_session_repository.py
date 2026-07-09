@@ -54,6 +54,16 @@ _RECENT_SUMMARIES = text(
     "WHERE user_id = CAST(:uid AS UUID) AND context_summary IS NOT NULL "
     "ORDER BY created_at DESC LIMIT :n"
 )
+_LIST = text(
+    "SELECT s.id, s.title, s.created_at FROM consult_sessions s "
+    "WHERE s.user_id = CAST(:uid AS UUID) "
+    "AND EXISTS (SELECT 1 FROM consult_messages m WHERE m.session_id = s.id) "
+    "ORDER BY s.created_at DESC"
+)
+_SET_TITLE_IF_EMPTY = text(
+    "UPDATE consult_sessions SET title = :title "
+    "WHERE id = CAST(:id AS UUID) AND title IS NULL"
+)
 
 
 class ConsultSessionRepository(BaseRepository):
@@ -115,3 +125,14 @@ class ConsultSessionRepository(BaseRepository):
     async def fetch_recent_summaries(self, user_id: str, limit: int = 3) -> list[str]:
         rows = (await self.session.execute(_RECENT_SUMMARIES, {"uid": user_id, "n": limit})).all()
         return [r[0] for r in rows]
+
+    async def list_sessions(self, user_id: str) -> list[dict]:
+        rows = (await self.session.execute(_LIST, {"uid": user_id})).all()
+        return [
+            {"id": str(r.id), "title": r.title, "created_at": r.created_at.isoformat()}
+            for r in rows
+        ]
+
+    async def set_title_if_empty(self, session_id: str, title: str) -> None:
+        await self.session.execute(_SET_TITLE_IF_EMPTY, {"id": session_id, "title": title})
+        await self.session.commit()

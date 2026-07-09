@@ -32,6 +32,32 @@ async def create_session(
     return {"success": True, "sessionId": session_id}
 
 
+@router.get("/sessions")
+async def list_sessions(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """사용자의 코치 대화 세션 목록(메시지 있는 세션, 최신순)."""
+    sessions = await CoachService(db).list_sessions(user_id)
+    return {
+        "success": True,
+        "sessions": [
+            {"id": s["id"], "title": s["title"], "createdAt": s["created_at"]}
+            for s in sessions
+        ],
+    }
+
+
+@router.post("/sessions/new")
+async def create_new_session(
+    user_id: str = Depends(get_authenticated_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """항상 새 코치 세션 생성(기존 active 재사용 안 함)."""
+    session_id = await CoachService(db).create_new_session(user_id)
+    return {"success": True, "sessionId": session_id}
+
+
 @router.post("/stream")
 async def coach_stream(
     request: CoachStreamRequest,

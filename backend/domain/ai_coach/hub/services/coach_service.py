@@ -63,6 +63,12 @@ def _sse(obj: dict) -> str:
     return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
 
+def _derive_title(message: str) -> str:
+    """첫 사용자 메시지에서 세션 제목 유도 — 한 줄, 최대 40자."""
+    line = (message or "").strip().splitlines()[0] if (message or "").strip() else ""
+    return line[:40] if line else "새 대화"
+
+
 class CoachService:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -111,6 +117,12 @@ class CoachService:
         repo = CoachSessionRepository(self.session)
         existing = await repo.get_latest_active_session(user_id)
         return existing or await repo.create_session(user_id)
+
+    async def create_new_session(self, user_id: str) -> str:
+        return await CoachSessionRepository(self.session).create_session(user_id)
+
+    async def list_sessions(self, user_id: str) -> list[dict]:
+        return await CoachSessionRepository(self.session).list_sessions(user_id)
 
     async def verify_owner(self, user_id: str, session_id: str) -> str:
         sess = await CoachSessionRepository(self.session).get_session(session_id)
@@ -198,7 +210,9 @@ class CoachService:
     async def stream_sse(self, user_id: str, session_id: str, message: str):
         """사용자 메시지 저장 → 코치 그래프 구동 → custom 이벤트를 SSE 로 중계."""
         async with AsyncSessionLocal() as db:
-            await CoachSessionRepository(db).add_message(session_id, "user", message)
+            repo = CoachSessionRepository(db)
+            await repo.add_message(session_id, "user", message)
+            await repo.set_title_if_empty(session_id, _derive_title(message))
 
         if self._llm_error:
             yield _sse({"type": "error", "message": f"코치 모델 설정 오류 — {self._llm_error}"})

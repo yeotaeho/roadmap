@@ -36,6 +36,16 @@ _LATEST_ACTIVE = text(
     "SELECT id FROM coach_sessions WHERE user_id = CAST(:uid AS UUID) AND status = 'active' "
     "ORDER BY created_at DESC LIMIT 1"
 )
+_LIST = text(
+    "SELECT s.id, s.title, s.created_at FROM coach_sessions s "
+    "WHERE s.user_id = CAST(:uid AS UUID) "
+    "AND EXISTS (SELECT 1 FROM coach_messages m WHERE m.session_id = s.id) "
+    "ORDER BY s.created_at DESC"
+)
+_SET_TITLE_IF_EMPTY = text(
+    "UPDATE coach_sessions SET title = :title "
+    "WHERE id = CAST(:id AS UUID) AND title IS NULL"
+)
 
 
 class CoachSessionRepository(BaseRepository):
@@ -78,3 +88,14 @@ class CoachSessionRepository(BaseRepository):
     async def get_latest_active_session(self, user_id: str) -> str | None:
         r = (await self.session.execute(_LATEST_ACTIVE, {"uid": user_id})).first()
         return str(r.id) if r else None
+
+    async def list_sessions(self, user_id: str) -> list[dict]:
+        rows = (await self.session.execute(_LIST, {"uid": user_id})).all()
+        return [
+            {"id": str(r.id), "title": r.title, "created_at": r.created_at.isoformat()}
+            for r in rows
+        ]
+
+    async def set_title_if_empty(self, session_id: str, title: str) -> None:
+        await self.session.execute(_SET_TITLE_IF_EMPTY, {"id": session_id, "title": title})
+        await self.session.commit()
