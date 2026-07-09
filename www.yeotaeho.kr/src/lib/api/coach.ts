@@ -15,6 +15,35 @@ export interface CoachStreamHandlers {
   onError?: (message: string) => void;
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string | null;
+  createdAt: string;
+}
+
+export async function listCoachSessions(): Promise<SessionSummary[]> {
+  const token = getStore().getState().token;
+  const res = await fetch(`${API_BASE_URL}/api/coach/sessions`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: 'include',
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data?.sessions ?? [];
+}
+
+export async function createNewCoachSession(): Promise<string | null> {
+  const token = getStore().getState().token;
+  const res = await fetch(`${API_BASE_URL}/api/coach/sessions/new`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: 'include',
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.sessionId ?? null;
+}
+
 export async function createCoachSession(): Promise<string | null> {
   const token = getStore().getState().token;
   const res = await fetch(`${API_BASE_URL}/api/coach/sessions`, {

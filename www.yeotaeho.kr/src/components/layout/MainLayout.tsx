@@ -15,7 +15,9 @@ import { PulseSectorSidebar } from "@/components/features/dashboard/PulseSectorS
 import { RoadmapNavProvider } from "@/components/features/roadmap/RoadmapNavContext";
 import { RoadmapSidebar } from "@/components/features/roadmap/RoadmapSidebar";
 import { ConsultSidebar } from "@/components/features/consult/ConsultSidebar";
+import { ConsultNavProvider } from "@/components/features/consult/ConsultNavContext";
 import { CoachSidebar } from "@/components/features/coach/CoachSidebar";
+import { CoachNavProvider } from "@/components/features/coach/CoachNavContext";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null);
@@ -78,9 +80,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   } else if (pathname === "/roadmap") {
     body = <RoadmapNavProvider>{shell(<RoadmapSidebar />, "max-w-none")}</RoadmapNavProvider>;
   } else if (pathname === "/consult") {
-    body = shell(<ConsultSidebar />, "max-w-none");
+    body = <ConsultNavProvider>{shell(<ConsultSidebar />, "max-w-none")}</ConsultNavProvider>;
   } else if (pathname?.startsWith("/coach")) {
-    body = shell(<CoachSidebar />, "max-w-none");
+    body = <CoachNavProvider>{shell(<CoachSidebar />, "max-w-none")}</CoachNavProvider>;
   } else {
     body = shell(null);
   }

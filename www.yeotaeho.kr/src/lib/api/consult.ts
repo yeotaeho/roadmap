@@ -8,6 +8,41 @@ export interface ConsultMessage {
   content: string;
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string | null;
+  createdAt: string;
+}
+
+/**
+ * 상담 세션 목록을 불러온다. 실패 시 빈 배열 반환.
+ */
+export async function listConsultSessions(): Promise<SessionSummary[]> {
+  const token = getStore().getState().token;
+  const res = await fetch(`${API_BASE_URL}/api/consult/sessions`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: 'include',
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data?.sessions ?? [];
+}
+
+/**
+ * 상담 세션을 강제로 새로 생성한다. 실패 시 null 반환.
+ */
+export async function createNewConsultSession(): Promise<string | null> {
+  const token = getStore().getState().token;
+  const res = await fetch(`${API_BASE_URL}/api/consult/sessions/new`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: 'include',
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.sessionId ?? null;
+}
+
 /**
  * 상담 세션을 생성한다. 실패 시 null 반환.
  */
