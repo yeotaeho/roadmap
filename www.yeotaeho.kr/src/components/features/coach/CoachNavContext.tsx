@@ -39,7 +39,7 @@ export function CoachNavProvider({ children }: { children: React.ReactNode }) {
       if (authEpochRef.current !== epoch) return; // 로그아웃/사용자 전환 후 stale 응답 폐기.
       setSessions(list);
     } finally {
-      if (authEpochRef.current === epoch) setLoadingSessions(false);
+      setLoadingSessions(false); // 로컬 로딩 플래그는 stale 여부와 무관하게 항상 해제한다.
     }
   }, []);
 
