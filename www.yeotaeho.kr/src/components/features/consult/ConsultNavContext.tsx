@@ -2,7 +2,7 @@
 
 // 상담 사이드바(셸)와 ConsultView 가 공유하는 세션 상태 Context — 세션 목록·전환·새 채팅.
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   createConsultSession,
   listConsultSessions,
@@ -29,18 +29,24 @@ export function ConsultNavProvider({ children }: { children: React.ReactNode }) 
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [navToken, setNavToken] = useState(0);
+  const authEpochRef = useRef(0);
 
   const refreshSessions = useCallback(async () => {
+    const epoch = authEpochRef.current;
     setLoadingSessions(true);
     try {
-      setSessions(await listConsultSessions());
+      const list = await listConsultSessions();
+      if (authEpochRef.current !== epoch) return; // 로그아웃/사용자 전환 후 stale 응답 폐기.
+      setSessions(list);
     } finally {
-      setLoadingSessions(false);
+      if (authEpochRef.current === epoch) setLoadingSessions(false);
     }
   }, []);
 
   // 마운트/인증 전환: 최근 active 세션으로 초기화 + 목록 로드.
   useEffect(() => {
+    authEpochRef.current += 1;
+    const epoch = authEpochRef.current;
     if (!isAuthenticated) {
       setSessionId(null);
       setSessions([]);
@@ -50,7 +56,7 @@ export function ConsultNavProvider({ children }: { children: React.ReactNode }) 
     let cancelled = false;
     (async () => {
       const sid = await createConsultSession(); // get-or-create(최근 active)
-      if (cancelled) return;
+      if (cancelled || authEpochRef.current !== epoch) return;
       setSessionId(sid);
       setNavToken((n) => n + 1); // 뷰가 sid 히스토리 로드.
       await refreshSessions();
