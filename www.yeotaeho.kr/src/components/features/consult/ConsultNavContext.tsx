@@ -5,7 +5,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   createConsultSession,
-  createNewConsultSession,
   listConsultSessions,
   type SessionSummary,
 } from "@/lib/api/consult";

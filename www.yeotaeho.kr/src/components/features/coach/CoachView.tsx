@@ -69,14 +69,19 @@ export function CoachView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navToken, isAuthenticated]);
 
+  const sendingRef = useRef(false);
+
   const send = useCallback(async () => {
     const message = input.trim();
     if (!message || isLoading || !isAuthenticated) return;
+    if (sendingRef.current) return; // 동기 재진입 차단 — RTT 내 이중 Enter로 세션 2개 생성 방지.
+    sendingRef.current = true;
     let sid = sessionId;
     if (!sid) {
       sid = await createNewCoachSession();
       if (!sid) {
         setSessionError(true);
+        sendingRef.current = false;
         return;
       }
       adoptSession(sid); // navToken 미증가 — 아래 낙관적 메시지 유지.
@@ -108,6 +113,7 @@ export function CoachView() {
     } finally {
       setToolActivity(null);
       setIsLoading(false);
+      sendingRef.current = false;
       void refreshSessions(); // 새 세션 제목이 목록에 나타나도록 갱신.
     }
   }, [input, isLoading, isAuthenticated, sessionId, adoptSession, refreshSessions]);

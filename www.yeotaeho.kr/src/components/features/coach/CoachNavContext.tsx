@@ -5,7 +5,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   createCoachSession,
-  createNewCoachSession,
   listCoachSessions,
   type SessionSummary,
 } from "@/lib/api/coach";

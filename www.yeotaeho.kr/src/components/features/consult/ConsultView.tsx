@@ -61,7 +61,7 @@ export function ConsultView() {
   const [sessionError, setSessionError] = useState(false);
   const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
   const { sessionId, navToken, adoptSession, refreshSessions } = useConsultNav();
-  const sessionIdRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
 
   const scrollBottom = useCallback(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -70,11 +70,6 @@ export function ConsultView() {
   useEffect(() => {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
-
-  // streamConsult 등 콜백에서 최신 세션 id 를 참조할 수 있도록 미러링.
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
 
   // 로그아웃/사용자 전환·세션 전환·새 채팅 시 이전 진행률이 잠깐 노출되지 않도록 리셋
   useEffect(() => {
@@ -114,11 +109,14 @@ export function ConsultView() {
   const send = async () => {
     const text = input.trim();
     if (!text || isLoading || !isAuthenticated) return;
+    if (sendingRef.current) return; // 동기 재진입 차단 — RTT 내 이중 Enter로 세션 2개 생성 방지.
+    sendingRef.current = true;
     let sid = sessionId;
     if (!sid) {
       sid = await createNewConsultSession();
       if (!sid) {
         setSessionError(true);
+        sendingRef.current = false;
         return;
       }
       adoptSession(sid); // navToken 미증가 — 아래 낙관적 메시지 유지.
@@ -153,6 +151,7 @@ export function ConsultView() {
       );
     } finally {
       setIsLoading(false);
+      sendingRef.current = false;
       void refreshSessions(); // 새 세션 제목이 목록에 나타나도록 갱신.
     }
   };
