@@ -14,12 +14,14 @@ import {
   type CoachAttachedContext,
 } from "@/data/coachContext";
 import {
-  createConsultSession,
+  createNewConsultSession,
   fetchConsultMessages,
   streamConsult,
 } from "@/lib/api/consult";
 import { useStore } from "@/store";
+import { ChatMarkdown } from "@/components/common/ChatMarkdown";
 import { SelfModelPanel } from "./SelfModelPanel";
+import { useConsultNav } from "./ConsultNavContext";
 
 type ConsultMessage = {
   id: string;
@@ -56,10 +58,9 @@ export function ConsultView() {
   const [attached, setAttached] = useState<CoachAttachedContext | null>(null);
   const [messages, setMessages] = useState<ConsultMessage[]>(() => INITIAL_MESSAGES);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
   const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
+  const { sessionId, navToken, adoptSession, refreshSessions } = useConsultNav();
   const sessionIdRef = useRef<string | null>(null);
 
   const scrollBottom = useCallback(() => {
@@ -70,50 +71,58 @@ export function ConsultView() {
     scrollBottom();
   }, [messages, isLoading, scrollBottom]);
 
-  // 로그아웃/사용자 전환 시 이전 사용자의 진행률이 잠깐 노출되지 않도록 리셋
+  // streamConsult 등 콜백에서 최신 세션 id 를 참조할 수 있도록 미러링.
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  // 로그아웃/사용자 전환·세션 전환·새 채팅 시 이전 진행률이 잠깐 노출되지 않도록 리셋
   useEffect(() => {
     setCoverage(null);
-  }, [profile?.id]);
+  }, [profile?.id, navToken]);
 
-  // 로그인 상태에서 마운트 시 세션 재개(get-or-create) + 기존 히스토리 로드
+  // navToken 변화(네비게이션)에만 히스토리 로드 — 전송 중 세션 채택은 재로드하지 않음.
   useEffect(() => {
     if (!isAuthenticated) {
-      sessionIdRef.current = null;
-      setSessionId(null);
       setMessages(INITIAL_MESSAGES);
+      setSessionError(false);
       return;
     }
     let cancelled = false;
+    setMessages(INITIAL_MESSAGES);
     setSessionError(false);
+    if (!sessionId) return; // 새 채팅(빈 세션) — 인사말만.
     (async () => {
       try {
-        const id = await createConsultSession();
-        if (cancelled) return;
-        if (!id) {
-          setSessionError(true);
-          return;
-        }
-        const history = await fetchConsultMessages(id);
+        const history = await fetchConsultMessages(sessionId);
         if (cancelled) return;
         if (history.length > 0) {
           setMessages(
             history.map((h) => ({ id: uid(), role: h.role, text: h.content })),
           );
         }
-        sessionIdRef.current = id;
-        setSessionId(id);
       } catch {
-        if (!cancelled) setSessionError(true);
+        /* 히스토리 로드 실패는 대화를 막지 않는다. */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, retryKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navToken, isAuthenticated]);
 
   const send = async () => {
     const text = input.trim();
-    if (!text || isLoading || !sessionId) return;
+    if (!text || isLoading || !isAuthenticated) return;
+    let sid = sessionId;
+    if (!sid) {
+      sid = await createNewConsultSession();
+      if (!sid) {
+        setSessionError(true);
+        return;
+      }
+      adoptSession(sid); // navToken 미증가 — 아래 낙관적 메시지 유지.
+    }
     setInput("");
     setMessages((m) => [...m, { id: uid(), role: "user", text }]);
     const assistantId = uid();
@@ -121,7 +130,7 @@ export function ConsultView() {
     setIsLoading(true);
     try {
       await streamConsult(
-        sessionId,
+        sid,
         text,
         (delta) => {
           setMessages((m) =>
@@ -144,7 +153,18 @@ export function ConsultView() {
       );
     } finally {
       setIsLoading(false);
+      void refreshSessions(); // 새 세션 제목이 목록에 나타나도록 갱신.
     }
+  };
+
+  const retrySession = async () => {
+    const sid = await createNewConsultSession();
+    if (!sid) {
+      setSessionError(true);
+      return;
+    }
+    setSessionError(false);
+    adoptSession(sid);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -156,14 +176,7 @@ export function ConsultView() {
 
   return (
     <div className="mx-auto w-full space-y-4 px-0 sm:px-1">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">AI 상담</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-            AI 상담사 — 대화를 통해 나의 성향과 강점을 함께 발견해요. 대화가 쌓이면 오른쪽에
-            나의 성향이 정리돼요.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-start justify-end gap-3">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -180,11 +193,11 @@ export function ConsultView() {
             데모: 로드맵 스프린트
           </button>
         </div>
-      </header>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,13fr)_minmax(280px,7fr)] lg:items-stretch">
         {/* 좌: 대화 캔버스 */}
-        <section className="flex min-h-[min(72vh,680px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <section className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <div className="border-b border-slate-100 bg-[#F8FAFC] px-4 py-2.5 dark:border-slate-700 dark:bg-slate-900">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
               Interactive Chat Zone
@@ -209,7 +222,11 @@ export function ConsultView() {
                       {m.badge}
                     </span>
                   ) : null}
-                  <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                  {m.role === "assistant" ? (
+                    <ChatMarkdown>{m.text}</ChatMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                  )}
                   {m.code ? (
                     <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900/95 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 ring-1 ring-slate-700">
                       <code>{m.code}</code>
@@ -269,12 +286,12 @@ export function ConsultView() {
                     ? "예: 룰 기반으로 점수 합산 구조를 깔끔하게 잡고 싶어요"
                     : "로그인 후 AI 상담사와 대화할 수 있어요"
                 }
-                disabled={isLoading || !sessionId}
+                disabled={!isAuthenticated || isLoading}
                 className="min-h-[44px] flex-1 rounded-lg border-0 bg-transparent px-2 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
               <button
                 type="submit"
-                disabled={isLoading || !input.trim() || !sessionId}
+                disabled={!isAuthenticated || isLoading || !input.trim()}
                 className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-3 text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-40"
                 aria-label="전송"
               >
@@ -284,7 +301,7 @@ export function ConsultView() {
             {isAuthenticated && !sessionId && sessionError ? (
               <button
                 type="button"
-                onClick={() => setRetryKey((k) => k + 1)}
+                onClick={() => void retrySession()}
                 className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 대화 세션 연결 실패 · 다시 시도

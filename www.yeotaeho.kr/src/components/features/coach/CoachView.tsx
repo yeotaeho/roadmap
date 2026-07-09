@@ -1,10 +1,12 @@
 // AI 코치 대화 화면(최소) — SSE 스트리밍 + tool 활동 인디케이터
 "use client";
 
-import { SendHorizonal, Sparkles } from "lucide-react";
+import { SendHorizonal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createCoachSession, fetchCoachMessages, streamCoach } from "@/lib/api/coach";
+import { createNewCoachSession, fetchCoachMessages, streamCoach } from "@/lib/api/coach";
 import { useStore } from "@/store";
+import { ChatMarkdown } from "@/components/common/ChatMarkdown";
+import { useCoachNav } from "./CoachNavContext";
 
 type CoachMessage = {
   id: string;
@@ -30,54 +32,55 @@ export function CoachView() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [toolActivity, setToolActivity] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState(false);
+  const { sessionId, navToken, adoptSession, refreshSessions } = useCoachNav();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, toolActivity]);
 
-  // 로그인 상태에서 세션 재개(get-or-create) + 히스토리 로드
+  // navToken 변화(네비게이션)에만 히스토리 로드 — 전송 중 세션 채택은 재로드하지 않음.
   useEffect(() => {
     if (!isAuthenticated) {
-      setSessionId(null);
       setMessages([GREETING]);
       setToolActivity(null);
       setSessionError(false);
       return;
     }
     let cancelled = false;
-    setSessionId(null);
     setMessages([GREETING]);
     setToolActivity(null);
     setSessionError(false);
+    if (!sessionId) return; // 새 채팅(빈 세션) — 인사말만.
     (async () => {
-      const sid = await createCoachSession();
-      if (cancelled) return;
-      if (!sid) {
-        setSessionError(true);
-        return;
-      }
       try {
-        const msgs = await fetchCoachMessages(sid);
+        const msgs = await fetchCoachMessages(sessionId);
         if (cancelled) return;
         if (msgs.length > 0) {
           setMessages(msgs.map((m) => ({ id: uid(), role: m.role, text: m.content })));
         }
       } catch {
-        // 히스토리 로드 실패는 대화 시작을 막지 않는다.
+        /* 히스토리 로드 실패는 대화를 막지 않는다. */
       }
-      if (cancelled) return;
-      setSessionId(sid);
     })();
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navToken, isAuthenticated]);
 
   const send = useCallback(async () => {
     const message = input.trim();
-    if (!message || isLoading || !sessionId) return;
+    if (!message || isLoading || !isAuthenticated) return;
+    let sid = sessionId;
+    if (!sid) {
+      sid = await createNewCoachSession();
+      if (!sid) {
+        setSessionError(true);
+        return;
+      }
+      adoptSession(sid); // navToken 미증가 — 아래 낙관적 메시지 유지.
+    }
     setInput("");
     setIsLoading(true);
     const assistantId = uid();
@@ -91,7 +94,7 @@ export function CoachView() {
         prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + text } : m)),
       );
     try {
-      await streamCoach(sessionId, message, {
+      await streamCoach(sid, message, {
         onDelta: (t) => {
           setToolActivity(null);
           appendDelta(t);
@@ -105,20 +108,13 @@ export function CoachView() {
     } finally {
       setToolActivity(null);
       setIsLoading(false);
+      void refreshSessions(); // 새 세션 제목이 목록에 나타나도록 갱신.
     }
-  }, [input, isLoading, sessionId]);
+  }, [input, isLoading, isAuthenticated, sessionId, adoptSession, refreshSessions]);
 
   return (
     <div className="mx-auto w-full">
-      <section className="flex min-h-[min(72vh,680px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-          <div>
-            <h1 className="text-base font-semibold text-foreground">AI 코치</h1>
-            <p className="text-xs text-muted-foreground">데이터 근거로 진로 방향·기회·실행을 함께 판단해요.</p>
-          </div>
-        </header>
-
+      <section className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {!isAuthenticated && (
             <p className="text-sm text-muted-foreground">로그인하면 코치와 대화를 시작할 수 있어요.</p>
@@ -131,11 +127,19 @@ export function CoachView() {
               <div
                 className={
                   m.role === "user"
-                    ? "max-w-[80%] rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground"
-                    : "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground"
+                    ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground"
+                    : "max-w-[80%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground"
                 }
               >
-                {m.text || (isLoading ? "…" : "")}
+                {m.role === "assistant" ? (
+                  m.text ? (
+                    <ChatMarkdown>{m.text}</ChatMarkdown>
+                  ) : (
+                    isLoading ? "…" : ""
+                  )
+                ) : (
+                  m.text
+                )}
               </div>
             </div>
           ))}
@@ -159,7 +163,7 @@ export function CoachView() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={isAuthenticated ? "코치에게 물어보세요…" : "로그인이 필요해요"}
-            disabled={!isAuthenticated || isLoading || !sessionId}
+            disabled={!isAuthenticated || isLoading}
             className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary"
           />
           <button

@@ -1,14 +1,25 @@
 "use client";
 
-// AI 코치 좌측 사이드바 — 준비 중 플레이스홀더(레이아웃 일관성용 틀).
+// 코치 좌측 사이드바 — 새 채팅 + 세션 목록(전환).
 
-import { Sparkles } from "lucide-react";
+import { MessageSquarePlus, MessageCircle } from "lucide-react";
 import { SideNav, SideNavButton } from "@/components/layout/SideNav";
+import { useCoachNav } from "./CoachNavContext";
 
 export function CoachSidebar() {
+  const { sessionId, sessions, selectSession, startNewChat } = useCoachNav();
   return (
     <SideNav>
-      <SideNavButton icon={Sparkles} label="AI 코치" active />
+      <SideNavButton icon={MessageSquarePlus} label="새 채팅" onClick={startNewChat} active={sessionId === null} />
+      {sessions.map((s) => (
+        <SideNavButton
+          key={s.id}
+          icon={MessageCircle}
+          label={s.title ?? "대화"}
+          active={sessionId === s.id}
+          onClick={() => selectSession(s.id)}
+        />
+      ))}
     </SideNav>
   );
 }
