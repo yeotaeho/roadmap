@@ -60,6 +60,7 @@ export function HeroSection() {
         });
 
         const onMove = (e: PointerEvent) => {
+          if (e.pointerType !== "mouse") return; // 넓은 터치스크린에서 스크롤 제스처로 흔들리는 것 방지
           const nx = e.clientX / window.innerWidth - 0.5; // -0.5 ~ 0.5
           const ny = e.clientY / window.innerHeight - 0.5;
           layers.forEach((l) => {
@@ -67,7 +68,12 @@ export function HeroSection() {
             l.y(ny * 2 * l.depth);
           });
         };
-        const onLeave = () => layers.forEach((l) => (l.x(0), l.y(0)));
+        const onLeave = () => {
+          layers.forEach((l) => {
+            l.x(0);
+            l.y(0);
+          });
+        };
 
         section.addEventListener("pointermove", onMove);
         section.addEventListener("pointerleave", onLeave);
