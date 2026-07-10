@@ -33,6 +33,50 @@ export function HeroSection() {
         gsap.to(".hero-pulse-svg", { yPercent: 18, scrollTrigger: scrub });
         gsap.to(".hero-content", { opacity: 0, yPercent: -12, ease: "none", scrollTrigger: scrub });
       });
+
+      // 마우스 좌표 추종 패럴랙스 — 데스크톱(포인터 환경) 한정.
+      // 스크롤 패럴랙스(yPercent)와 다른 축(x/y 픽셀)이라 서로 간섭 없음.
+      mm.add(`${MM_CONDITIONS.isDesktop} and ${MM_CONDITIONS.motionOK}`, () => {
+        const section = ref.current;
+        if (!section) return;
+
+        // depth 부호를 섞어 레이어마다 반대 방향으로 움직여 깊이감을 만든다
+        const layers: { x: (v: number) => void; y: (v: number) => void; depth: number }[] = [];
+        (
+          [
+            [".hero-orb-a", 44],
+            [".hero-orb-b", -64],
+            [".hero-pulse-svg", 20],
+            [".hero-content", -14],
+          ] as const
+        ).forEach(([sel, depth]) => {
+          const el = section.querySelector(sel);
+          if (!el) return;
+          layers.push({
+            x: gsap.quickTo(el, "x", { duration: 0.8, ease: "power3.out" }),
+            y: gsap.quickTo(el, "y", { duration: 0.8, ease: "power3.out" }),
+            depth,
+          });
+        });
+
+        const onMove = (e: PointerEvent) => {
+          const nx = e.clientX / window.innerWidth - 0.5; // -0.5 ~ 0.5
+          const ny = e.clientY / window.innerHeight - 0.5;
+          layers.forEach((l) => {
+            l.x(nx * 2 * l.depth);
+            l.y(ny * 2 * l.depth);
+          });
+        };
+        const onLeave = () => layers.forEach((l) => (l.x(0), l.y(0)));
+
+        section.addEventListener("pointermove", onMove);
+        section.addEventListener("pointerleave", onLeave);
+        return () => {
+          section.removeEventListener("pointermove", onMove);
+          section.removeEventListener("pointerleave", onLeave);
+        };
+      });
+
       return () => mm.revert(); // unmount 시 media query 리스너까지 확실히 해제
     },
     { scope: ref }
