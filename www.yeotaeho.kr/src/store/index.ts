@@ -45,10 +45,12 @@ export const useStore = <T = StoreState>(
       const defaultState: StoreState = {
         token: null,
         isAuthenticated: false,
+        isAuthResolved: false,
         login: () => {},
         logout: () => {},
         logoutAsync: async () => {},
         setToken: () => {},
+        setAuthResolved: () => {},
         profile: null,
         isLoading: false,
         error: null,

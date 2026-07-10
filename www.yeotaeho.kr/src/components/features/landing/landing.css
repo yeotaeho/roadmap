@@ -1,0 +1,90 @@
+/* 랜딩 전용 스타일 — 헤더 스크롤 상태·SVG 모션 그래픽 키프레임 (reduced-motion 시 전부 비활성) */
+
+.landing-header--scrolled {
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8); /* slate-200 */
+}
+
+.dark .landing-header--scrolled {
+  background-color: rgba(2, 6, 23, 0.7); /* slate-950 */
+  border-bottom-color: rgba(30, 41, 59, 0.8); /* slate-800 */
+}
+
+/* ---- 기능 비주얼 SVG 모션 ---- */
+
+@keyframes landing-dash-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes landing-blink {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes landing-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.landing-viz-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: landing-dash-draw 2.4s ease-out forwards;
+}
+
+.landing-viz-blink {
+  animation: landing-blink 1.4s ease-in-out infinite;
+}
+
+.landing-viz-pop {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: landing-pop 0.5s ease-out forwards;
+}
+
+.landing-viz-float {
+  animation: landing-float 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-viz-draw {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  .landing-viz-blink,
+  .landing-viz-float {
+    animation: none;
+  }
+  .landing-viz-pop {
+    opacity: 1;
+    animation: none;
+  }
+}

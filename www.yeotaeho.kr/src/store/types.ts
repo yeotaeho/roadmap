@@ -34,10 +34,13 @@ export interface Toast {
 export interface AuthSlice {
   token: string | null;
   isAuthenticated: boolean;
+  /** 앱 시작 시 인증 복원(initializeAuth)이 끝났는지 — pending/guest 구분용 */
+  isAuthResolved: boolean;
   login: (token: string) => void;
   logout: () => void;
   logoutAsync: () => Promise<void>;
   setToken: (token: string | null) => void;
+  setAuthResolved: () => void;
 }
 
 /**
