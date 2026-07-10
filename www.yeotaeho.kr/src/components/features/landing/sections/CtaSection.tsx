@@ -24,6 +24,7 @@ export function CtaSection() {
         gsap.fromTo(".cta-content", { scale: 0.9, opacity: 0.4 }, { scale: 1, opacity: 1, ease: "none", scrollTrigger: scrub });
         gsap.fromTo(".cta-glow", { scale: 0.5, opacity: 0.2 }, { scale: 1.4, opacity: 1, ease: "none", scrollTrigger: scrub });
       });
+      return () => mm.revert(); // unmount 시 media query 리스너까지 확실히 해제
     },
     { scope: ref }
   );

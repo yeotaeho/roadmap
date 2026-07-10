@@ -29,6 +29,7 @@ export function ProblemSection() {
           }
         );
       });
+      return () => mm.revert(); // unmount 시 media query 리스너까지 확실히 해제
     },
     { scope: ref }
   );

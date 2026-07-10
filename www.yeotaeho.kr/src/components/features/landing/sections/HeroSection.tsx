@@ -33,6 +33,7 @@ export function HeroSection() {
         gsap.to(".hero-pulse-svg", { yPercent: 18, scrollTrigger: scrub });
         gsap.to(".hero-content", { opacity: 0, yPercent: -12, ease: "none", scrollTrigger: scrub });
       });
+      return () => mm.revert(); // unmount 시 media query 리스너까지 확실히 해제
     },
     { scope: ref }
   );

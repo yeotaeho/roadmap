@@ -20,7 +20,12 @@ function readAuthHint(): boolean {
 /** 인증 복원 대기 중 브랜드 스플래시 — 로그인 유저에게 랜딩이 번쩍이는 것을 방지 */
 function BrandSplash() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-slate-950">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex min-h-screen flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-slate-950"
+    >
+      <span className="sr-only">로그인 상태를 확인하는 중</span>
       <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
         {LANDING_COPY.brand.name}
       </span>
