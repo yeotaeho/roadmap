@@ -59,33 +59,6 @@ function NaverCallbackContent() {
                         setMessage(data.message || '회원가입이 완료되었습니다.');
                         console.log('Signup complete:', data);
 
-                        // localStorage에서 목표 직무/관심 키워드 읽어서 백엔드로 전달
-                        const signupTargetJob = localStorage.getItem('signup_target_job');
-                        const signupInterestKeywords = localStorage.getItem('signup_interest_keywords');
-
-                        if (signupTargetJob && signupInterestKeywords && data.userId) {
-                            try {
-                                await fetch('http://localhost:8000/api/oauth/update-signup-info', {
-                                    method: 'POST',
-                                    credentials: 'include',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                        userId: data.userId,
-                                        targetJob: signupTargetJob,
-                                        interestKeywords: JSON.parse(signupInterestKeywords)
-                                    }),
-                                });
-
-                                // localStorage 정리
-                                localStorage.removeItem('signup_target_job');
-                                localStorage.removeItem('signup_interest_keywords');
-                            } catch (error) {
-                                console.error('회원가입 정보 업데이트 실패:', error);
-                            }
-                        }
-
                         // 로그인 페이지로 리다이렉트
                         setTimeout(() => {
                             router.push('/login');

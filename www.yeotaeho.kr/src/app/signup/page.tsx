@@ -70,6 +70,7 @@ export default function SignupPage() {
                     <div className="space-y-3">
                         {/* Kakao */}
                         <button
+                            type="button"
                             onClick={() => handleSocialLogin('kakao')}
                             className="flex w-full items-center justify-center gap-3 rounded-lg bg-[#FEE500] py-3.5 font-medium text-[#191600] transition hover:brightness-95 cursor-pointer"
                         >
@@ -81,6 +82,7 @@ export default function SignupPage() {
 
                         {/* Naver */}
                         <button
+                            type="button"
                             onClick={() => handleSocialLogin('naver')}
                             className="flex w-full items-center justify-center gap-3 rounded-lg bg-[#03C75A] py-3.5 font-medium text-white transition hover:brightness-95 cursor-pointer"
                         >
@@ -90,6 +92,7 @@ export default function SignupPage() {
 
                         {/* Google */}
                         <button
+                            type="button"
                             onClick={() => handleSocialLogin('google')}
                             className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-white py-3.5 font-medium text-slate-700 transition hover:bg-slate-50 cursor-pointer"
                         >
