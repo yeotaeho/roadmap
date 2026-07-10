@@ -29,7 +29,7 @@ function useUpsertSyncProfile() {
 }
 
 const inputCls =
-  "w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  "w-full px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 const SECTOR_VALUES = new Set(INTEREST_SECTORS.map((o) => o.value));
 const JOB_VALUES = new Set(JOB_FAMILIES.map((o) => o.value));
@@ -88,12 +88,12 @@ export default function InterestSection({ className = "" }: { className?: string
   };
 
   return (
-    <section className={`rounded-lg border border-gray-200 p-4 ${className}`}>
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">관심 분야 · 직무</h3>
-      <p className="text-xs text-gray-500 mb-3">채울수록 추천이 정확해져요.</p>
+    <section className={`rounded-lg border border-border bg-card p-4 ${className}`}>
+      <h3 className="text-sm font-semibold text-foreground mb-1">관심 분야 · 직무</h3>
+      <p className="text-xs text-muted-foreground mb-3">채울수록 추천이 정확해져요.</p>
       <div className="space-y-3">
         <div>
-          <label className="block text-xs text-gray-600 mb-1">목표 직무</label>
+          <label className="block text-xs text-muted-foreground mb-1">목표 직무</label>
           <input
             value={targetJob}
             onChange={(e) => setTargetJob(e.target.value)}
@@ -102,7 +102,7 @@ export default function InterestSection({ className = "" }: { className?: string
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">관심 산업 (복수 선택)</label>
+          <label className="block text-xs text-muted-foreground mb-1">관심 산업 (복수 선택)</label>
           <ChipSelect
             options={INTEREST_SECTORS}
             value={selectedSectors}
@@ -111,7 +111,7 @@ export default function InterestSection({ className = "" }: { className?: string
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">관심 직무군 (복수 선택)</label>
+          <label className="block text-xs text-muted-foreground mb-1">관심 직무군 (복수 선택)</label>
           <ChipSelect
             options={JOB_FAMILIES}
             value={selectedJobs}
@@ -120,7 +120,7 @@ export default function InterestSection({ className = "" }: { className?: string
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">기타 키워드 (Enter로 추가)</label>
+          <label className="block text-xs text-muted-foreground mb-1">기타 키워드 (Enter로 추가)</label>
           <div className="flex gap-2">
             <input
               ref={inputRef}
@@ -133,7 +133,7 @@ export default function InterestSection({ className = "" }: { className?: string
             <button
               type="button"
               onClick={addCustom}
-              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200 whitespace-nowrap"
+              className="px-3 py-2 bg-muted text-foreground rounded-md text-sm hover:bg-accent whitespace-nowrap"
             >
               추가
             </button>
@@ -143,13 +143,13 @@ export default function InterestSection({ className = "" }: { className?: string
               {customKeywords.map((kw) => (
                 <span
                   key={kw}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted border border-border text-sm text-foreground"
                 >
                   {kw}
                   <button
                     type="button"
                     onClick={() => removeCustom(kw)}
-                    className="text-gray-400 hover:text-red-600 leading-none"
+                    className="text-muted-foreground hover:text-red-600 leading-none"
                   >
                     ×
                   </button>
@@ -162,7 +162,7 @@ export default function InterestSection({ className = "" }: { className?: string
           type="button"
           onClick={save}
           disabled={upsert.isPending}
-          className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50"
         >
           {upsert.isPending ? "저장 중…" : saved ? "저장됨" : "저장"}
         </button>

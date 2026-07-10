@@ -45,7 +45,7 @@ function toDraft(p?: Persona): Draft {
 }
 
 const inputCls =
-  "w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500";
+  "w-full px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 export function PersonaForm() {
   const { data, isLoading } = usePersona(true);
@@ -191,14 +191,14 @@ export function PersonaForm() {
     !view.projects.length;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <div className="bg-card rounded-lg shadow-sm border border-border p-6 mb-6">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-bold text-gray-800">역량 프로필</h3>
+        <h3 className="text-lg font-bold text-foreground">역량 프로필</h3>
         {!isEditing ? (
           <button
             type="button"
             onClick={startEdit}
-            className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700"
           >
             <Edit2 size={16} /> 편집
           </button>
@@ -208,7 +208,7 @@ export function PersonaForm() {
               type="button"
               onClick={save}
               disabled={busy}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-50"
             >
               <Save size={16} />{" "}
               {refresh.isPending ? "로드맵 생성 중…" : upsert.isPending ? "저장 중…" : "저장"}
@@ -217,21 +217,21 @@ export function PersonaForm() {
               type="button"
               onClick={cancel}
               disabled={busy}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 text-sm hover:bg-gray-200 disabled:opacity-50"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-muted text-foreground text-sm hover:bg-accent disabled:opacity-50"
             >
               <X size={16} /> 취소
             </button>
           </div>
         )}
       </div>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         스킬·경험·학력은 로드맵·싱크 분석의 기반이 됩니다. 저장하면 내 로드맵이 자동으로 다시 생성됩니다.
       </p>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">불러오는 중…</p>
+        <p className="text-sm text-muted-foreground">불러오는 중…</p>
       ) : !isEditing && isEmpty ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           아직 입력된 역량 정보가 없습니다. <strong>편집</strong>을 눌러 추가해 주세요.
         </p>
       ) : (
@@ -239,9 +239,9 @@ export function PersonaForm() {
           {/* 스킬 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">스킬</p>
+              <p className="text-sm font-semibold text-foreground">스킬</p>
               {isEditing && (
-                <button type="button" onClick={addSkill} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addSkill} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -257,7 +257,7 @@ export function PersonaForm() {
                       onChange={(e) => setSkill(i, { name: e.target.value })}
                     />
                     <select
-                      className="px-2 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="px-2 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={s.level}
                       onChange={(e) => setSkill(i, { level: e.target.value as SkillLevel })}
                     >
@@ -270,23 +270,23 @@ export function PersonaForm() {
                     <button
                       type="button"
                       onClick={() => removeSkill(i)}
-                      className="text-gray-400 hover:text-red-600"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
-                {!draft.skills.length && <p className="text-xs text-gray-400">+ 로 스킬을 추가하세요.</p>}
+                {!draft.skills.length && <p className="text-xs text-muted-foreground">+ 로 스킬을 추가하세요.</p>}
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {view.skills.map((s, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted border border-border text-sm text-foreground"
                   >
                     {s.name}
-                    <span className="text-xs text-red-600">{s.level}</span>
+                    <span className="text-xs text-indigo-600">{s.level}</span>
                   </span>
                 ))}
               </div>
@@ -296,9 +296,9 @@ export function PersonaForm() {
           {/* 경험 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">경험</p>
+              <p className="text-sm font-semibold text-foreground">경험</p>
               {isEditing && (
-                <button type="button" onClick={addExp} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addExp} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -306,7 +306,7 @@ export function PersonaForm() {
             {isEditing ? (
               <div className="space-y-3">
                 {draft.experiences.map((e, i) => (
-                  <div key={i} className="rounded-md border border-gray-200 p-3 space-y-2">
+                  <div key={i} className="rounded-md border border-border p-3 space-y-2">
                     <div className="flex gap-2">
                       <input
                         className={inputCls}
@@ -315,7 +315,7 @@ export function PersonaForm() {
                         onChange={(ev) => setExp(i, { title: ev.target.value })}
                       />
                       <input
-                        className="w-28 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-28 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         value={e.period}
                         placeholder="기간"
                         onChange={(ev) => setExp(i, { period: ev.target.value })}
@@ -323,7 +323,7 @@ export function PersonaForm() {
                       <button
                         type="button"
                         onClick={() => removeExp(i)}
-                        className="text-gray-400 hover:text-red-600"
+                        className="text-muted-foreground hover:text-red-600"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -337,16 +337,16 @@ export function PersonaForm() {
                   </div>
                 ))}
                 {!draft.experiences.length && (
-                  <p className="text-xs text-gray-400">+ 로 경험을 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 경험을 추가하세요.</p>
                 )}
               </div>
             ) : (
               <ul className="space-y-1">
                 {view.experiences.map((e, i) => (
-                  <li key={i} className="text-sm text-gray-700">
+                  <li key={i} className="text-sm text-foreground">
                     <span className="font-medium">{e.title}</span>
-                    {e.period ? <span className="text-gray-400"> · {e.period}</span> : null}
-                    {e.description ? <span className="text-gray-500"> — {e.description}</span> : null}
+                    {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
+                    {e.description ? <span className="text-muted-foreground"> — {e.description}</span> : null}
                   </li>
                 ))}
               </ul>
@@ -356,9 +356,9 @@ export function PersonaForm() {
           {/* 학력 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">학력</p>
+              <p className="text-sm font-semibold text-foreground">학력</p>
               {isEditing && (
-                <button type="button" onClick={addEdu} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addEdu} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -368,25 +368,25 @@ export function PersonaForm() {
                 {draft.education.map((e, i) => (
                   <div key={i} className="flex flex-wrap gap-2">
                     <input
-                      className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[120px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={e.school}
                       placeholder="학교"
                       onChange={(ev) => setEdu(i, { school: ev.target.value })}
                     />
                     <input
-                      className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[120px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={e.major}
                       placeholder="전공"
                       onChange={(ev) => setEdu(i, { major: ev.target.value })}
                     />
                     <input
-                      className="w-24 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-24 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={e.degree}
                       placeholder="학위"
                       onChange={(ev) => setEdu(i, { degree: ev.target.value })}
                     />
                     <input
-                      className="w-24 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-24 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={e.status}
                       placeholder="상태"
                       onChange={(ev) => setEdu(i, { status: ev.target.value })}
@@ -394,24 +394,24 @@ export function PersonaForm() {
                     <button
                       type="button"
                       onClick={() => removeEdu(i)}
-                      className="text-gray-400 hover:text-red-600"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
                 {!draft.education.length && (
-                  <p className="text-xs text-gray-400">+ 로 학력을 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 학력을 추가하세요.</p>
                 )}
               </div>
             ) : (
               <ul className="space-y-1">
                 {view.education.map((e, i) => (
-                  <li key={i} className="text-sm text-gray-700">
+                  <li key={i} className="text-sm text-foreground">
                     <span className="font-medium">{e.school}</span>
-                    {e.major ? <span className="text-gray-500"> {e.major}</span> : null}
-                    {e.degree ? <span className="text-gray-400"> · {e.degree}</span> : null}
-                    {e.status ? <span className="text-gray-400"> ({e.status})</span> : null}
+                    {e.major ? <span className="text-muted-foreground"> {e.major}</span> : null}
+                    {e.degree ? <span className="text-muted-foreground"> · {e.degree}</span> : null}
+                    {e.status ? <span className="text-muted-foreground"> ({e.status})</span> : null}
                   </li>
                 ))}
               </ul>
@@ -421,9 +421,9 @@ export function PersonaForm() {
           {/* 자격증 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">자격증</p>
+              <p className="text-sm font-semibold text-foreground">자격증</p>
               {isEditing && (
-                <button type="button" onClick={addCert} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addCert} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -433,19 +433,19 @@ export function PersonaForm() {
                 {draft.certifications.map((c, i) => (
                   <div key={i} className="flex flex-wrap gap-2 items-center">
                     <input
-                      className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[120px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={c.name}
                       placeholder="자격증명"
                       onChange={(e) => setCert(i, { name: e.target.value })}
                     />
                     <input
-                      className="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[100px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={c.issuer}
                       placeholder="발급기관"
                       onChange={(e) => setCert(i, { issuer: e.target.value })}
                     />
                     <input
-                      className="w-20 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-20 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={c.year}
                       placeholder="취득연도"
                       onChange={(e) => setCert(i, { year: e.target.value })}
@@ -453,14 +453,14 @@ export function PersonaForm() {
                     <button
                       type="button"
                       onClick={() => removeCert(i)}
-                      className="text-gray-400 hover:text-red-600"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
                 {!draft.certifications.length && (
-                  <p className="text-xs text-gray-400">+ 로 자격증을 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 자격증을 추가하세요.</p>
                 )}
               </div>
             ) : (
@@ -468,11 +468,11 @@ export function PersonaForm() {
                 {view.certifications.map((c, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted border border-border text-sm text-foreground"
                   >
                     {c.name}
-                    {c.issuer ? <span className="text-xs text-gray-500">({c.issuer})</span> : null}
-                    {c.year ? <span className="text-xs text-red-600">{c.year}</span> : null}
+                    {c.issuer ? <span className="text-xs text-muted-foreground">({c.issuer})</span> : null}
+                    {c.year ? <span className="text-xs text-indigo-600">{c.year}</span> : null}
                   </span>
                 ))}
               </div>
@@ -482,9 +482,9 @@ export function PersonaForm() {
           {/* 어학 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">어학</p>
+              <p className="text-sm font-semibold text-foreground">어학</p>
               {isEditing && (
-                <button type="button" onClick={addLang} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addLang} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -494,19 +494,19 @@ export function PersonaForm() {
                 {draft.languages.map((l, i) => (
                   <div key={i} className="flex flex-wrap gap-2 items-center">
                     <input
-                      className="flex-1 min-w-[80px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[80px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={l.language}
                       placeholder="언어 (예: 영어)"
                       onChange={(e) => setLang(i, { language: e.target.value })}
                     />
                     <input
-                      className="flex-1 min-w-[80px] px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 min-w-[80px] px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={l.test}
                       placeholder="시험 (예: TOEIC)"
                       onChange={(e) => setLang(i, { test: e.target.value })}
                     />
                     <input
-                      className="w-24 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-24 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={l.score}
                       placeholder="점수"
                       onChange={(e) => setLang(i, { score: e.target.value })}
@@ -514,14 +514,14 @@ export function PersonaForm() {
                     <button
                       type="button"
                       onClick={() => removeLang(i)}
-                      className="text-gray-400 hover:text-red-600"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
                 {!draft.languages.length && (
-                  <p className="text-xs text-gray-400">+ 로 어학 성적을 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 어학 성적을 추가하세요.</p>
                 )}
               </div>
             ) : (
@@ -529,11 +529,11 @@ export function PersonaForm() {
                 {view.languages.map((l, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted border border-border text-sm text-foreground"
                   >
                     {l.language}
-                    {l.test ? <span className="text-xs text-gray-500">{l.test}</span> : null}
-                    {l.score ? <span className="text-xs text-red-600">{l.score}</span> : null}
+                    {l.test ? <span className="text-xs text-muted-foreground">{l.test}</span> : null}
+                    {l.score ? <span className="text-xs text-indigo-600">{l.score}</span> : null}
                   </span>
                 ))}
               </div>
@@ -543,9 +543,9 @@ export function PersonaForm() {
           {/* 링크 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">링크</p>
+              <p className="text-sm font-semibold text-foreground">링크</p>
               {isEditing && (
-                <button type="button" onClick={addLink} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addLink} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -555,7 +555,7 @@ export function PersonaForm() {
                 {draft.links.map((l, i) => (
                   <div key={i} className="flex gap-2 items-center">
                     <select
-                      className="px-2 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="px-2 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       value={l.type}
                       onChange={(e) => setLink(i, { type: e.target.value })}
                     >
@@ -574,26 +574,26 @@ export function PersonaForm() {
                     <button
                       type="button"
                       onClick={() => removeLink(i)}
-                      className="text-gray-400 hover:text-red-600"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
                 ))}
                 {!draft.links.length && (
-                  <p className="text-xs text-gray-400">+ 로 링크를 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 링크를 추가하세요.</p>
                 )}
               </div>
             ) : (
               <ul className="space-y-1">
                 {view.links.map((l, i) => (
-                  <li key={i} className="text-sm text-gray-700">
-                    <span className="text-xs text-gray-500 mr-1">[{l.type}]</span>
+                  <li key={i} className="text-sm text-foreground">
+                    <span className="text-xs text-muted-foreground mr-1">[{l.type}]</span>
                     <a
                       href={l.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-red-600 hover:underline break-all"
+                      className="text-indigo-600 hover:underline break-all"
                     >
                       {l.url}
                     </a>
@@ -606,9 +606,9 @@ export function PersonaForm() {
           {/* 프로젝트 */}
           <section>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">프로젝트</p>
+              <p className="text-sm font-semibold text-foreground">프로젝트</p>
               {isEditing && (
-                <button type="button" onClick={addProject} className="text-red-600 hover:text-red-700">
+                <button type="button" onClick={addProject} className="text-indigo-600 hover:text-indigo-700">
                   <Plus size={16} />
                 </button>
               )}
@@ -616,7 +616,7 @@ export function PersonaForm() {
             {isEditing ? (
               <div className="space-y-3">
                 {draft.projects.map((p, i) => (
-                  <div key={i} className="rounded-md border border-gray-200 p-3 space-y-2">
+                  <div key={i} className="rounded-md border border-border p-3 space-y-2">
                     <div className="flex gap-2">
                       <input
                         className={inputCls}
@@ -625,7 +625,7 @@ export function PersonaForm() {
                         onChange={(e) => setProject(i, { title: e.target.value })}
                       />
                       <input
-                        className="w-28 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-28 px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         value={p.period}
                         placeholder="기간"
                         onChange={(e) => setProject(i, { period: e.target.value })}
@@ -633,7 +633,7 @@ export function PersonaForm() {
                       <button
                         type="button"
                         onClick={() => removeProject(i)}
-                        className="text-gray-400 hover:text-red-600"
+                        className="text-muted-foreground hover:text-red-600"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -666,22 +666,22 @@ export function PersonaForm() {
                   </div>
                 ))}
                 {!draft.projects.length && (
-                  <p className="text-xs text-gray-400">+ 로 프로젝트를 추가하세요.</p>
+                  <p className="text-xs text-muted-foreground">+ 로 프로젝트를 추가하세요.</p>
                 )}
               </div>
             ) : (
               <ul className="space-y-2">
                 {view.projects.map((p, i) => (
-                  <li key={i} className="text-sm text-gray-700">
+                  <li key={i} className="text-sm text-foreground">
                     <span className="font-medium">{p.title}</span>
-                    {p.role ? <span className="text-gray-500"> · {p.role}</span> : null}
-                    {p.period ? <span className="text-gray-400"> ({p.period})</span> : null}
+                    {p.role ? <span className="text-muted-foreground"> · {p.role}</span> : null}
+                    {p.period ? <span className="text-muted-foreground"> ({p.period})</span> : null}
                     {p.tech_stack.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {p.tech_stack.map((t, ti) => (
                           <span
                             key={ti}
-                            className="px-1.5 py-0.5 rounded bg-gray-100 text-xs text-gray-600"
+                            className="px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground"
                           >
                             {t}
                           </span>
@@ -696,18 +696,18 @@ export function PersonaForm() {
 
           {/* 요약 */}
           <section>
-            <p className="text-sm font-semibold text-gray-700 mb-2">한 줄 요약</p>
+            <p className="text-sm font-semibold text-foreground mb-2">한 줄 요약</p>
             {isEditing ? (
               <textarea
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 border border-border rounded-md bg-card text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={draft.summary}
                 placeholder="예: 에너지·ESG 도메인 × AI 엔지니어링으로 진로를 탐색 중"
                 onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))}
               />
             ) : (
-              <p className="text-sm text-gray-700">
-                {view.summary || <span className="text-gray-400">요약이 없습니다.</span>}
+              <p className="text-sm text-foreground">
+                {view.summary || <span className="text-muted-foreground">요약이 없습니다.</span>}
               </p>
             )}
           </section>

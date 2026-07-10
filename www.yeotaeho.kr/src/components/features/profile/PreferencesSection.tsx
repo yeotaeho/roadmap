@@ -49,12 +49,12 @@ export default function PreferencesSection({ className = "" }: { className?: str
   };
 
   return (
-    <section className={`rounded-lg border border-gray-200 p-4 ${className}`}>
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">성향·선호 · 선택 입력</h3>
-      <p className="text-xs text-gray-500 mb-3">채울수록 추천이 정확해져요.</p>
+    <section className={`rounded-lg border border-border bg-card p-4 ${className}`}>
+      <h3 className="text-sm font-semibold text-foreground mb-1">성향·선호 · 선택 입력</h3>
+      <p className="text-xs text-muted-foreground mb-3">채울수록 추천이 정확해져요.</p>
       <div className="space-y-3">
         <div>
-          <label className="block text-xs text-gray-600 mb-1">일하는 스타일</label>
+          <label className="block text-xs text-muted-foreground mb-1">일하는 스타일</label>
           <ChipSelect
             options={WORK_STYLE_OPTIONS}
             value={workStyle}
@@ -62,7 +62,7 @@ export default function PreferencesSection({ className = "" }: { className?: str
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">선호 기업 규모</label>
+          <label className="block text-xs text-muted-foreground mb-1">선호 기업 규모</label>
           <ChipSelect
             options={COMPANY_SIZE_OPTIONS}
             value={companySizePref}
@@ -70,7 +70,7 @@ export default function PreferencesSection({ className = "" }: { className?: str
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">근무 형태</label>
+          <label className="block text-xs text-muted-foreground mb-1">근무 형태</label>
           <ChipSelect
             options={WORK_TYPE_OPTIONS}
             value={workTypePref}
@@ -78,7 +78,7 @@ export default function PreferencesSection({ className = "" }: { className?: str
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-600 mb-1">직업 가치관 (복수 선택)</label>
+          <label className="block text-xs text-muted-foreground mb-1">직업 가치관 (복수 선택)</label>
           <ChipSelect
             options={WORK_VALUE_OPTIONS}
             value={workValues}
@@ -90,7 +90,7 @@ export default function PreferencesSection({ className = "" }: { className?: str
           type="button"
           onClick={save}
           disabled={upsert.isPending}
-          className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-50"
         >
           {upsert.isPending ? "저장 중…" : saved ? "저장됨" : "저장"}
         </button>

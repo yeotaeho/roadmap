@@ -52,13 +52,13 @@ export default function CompletionMeter() {
   const pct = Math.round((done / total) * 100);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 mb-4">
+    <div className="rounded-lg border border-border bg-card p-4 mb-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold text-gray-900">프로필 완성도</span>
-        <span className="text-sm font-semibold text-red-600">{pct}%</span>
+        <span className="text-sm font-semibold text-foreground">프로필 완성도</span>
+        <span className="text-sm font-semibold text-indigo-600">{pct}%</span>
       </div>
       <Progress value={pct} />
-      <p className="text-xs text-gray-500 mt-2">채울수록 Sync·Chance 추천이 정확해져요.</p>
+      <p className="text-xs text-muted-foreground mt-2">채울수록 Sync·Chance 추천이 정확해져요.</p>
     </div>
   );
 }

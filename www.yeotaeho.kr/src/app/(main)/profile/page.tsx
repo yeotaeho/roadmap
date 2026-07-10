@@ -181,16 +181,16 @@ export default function ProfilePage() {
       <div className="flex items-center gap-3 mb-6">
         <Link
           href="/"
-          className="p-2 text-gray-600 hover:text-red-600 transition rounded-full hover:bg-gray-100"
+          className="p-2 text-muted-foreground hover:text-indigo-600 transition rounded-full hover:bg-accent"
           aria-label="홈으로"
         >
           <ArrowLeft size={20} />
         </Link>
-        <h1 className="text-xl font-bold text-gray-800">프로필</h1>
+        <h1 className="text-xl font-bold text-foreground">프로필</h1>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
-        <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-12">
+      <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden mb-6">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 py-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
               <div className="relative">
@@ -232,7 +232,7 @@ export default function ProfilePage() {
                   } ${isEditing ? "cursor-pointer hover:bg-gray-100" : ""}`}
                   onClick={handleAvatarClick}
                 >
-                  <User size={48} className="text-red-600" />
+                  <User size={48} className="text-indigo-600" />
                 </div>
                 {isEditing && (
                   <div
@@ -240,7 +240,7 @@ export default function ProfilePage() {
                     onClick={handleAvatarClick}
                     title="프로필 사진 변경"
                   >
-                    <Camera size={16} className="text-red-600" />
+                    <Camera size={16} className="text-indigo-600" />
                   </div>
                 )}
               </div>
@@ -266,7 +266,7 @@ export default function ProfilePage() {
                     <h2 className="text-2xl font-bold mb-1">
                       {userName || "사용자"}
                     </h2>
-                    <p className="text-red-100 text-sm">
+                    <p className="text-indigo-100 text-sm">
                       {userEmail || "이메일 정보 없음"}
                     </p>
                   </>
@@ -276,7 +276,7 @@ export default function ProfilePage() {
             {!isEditing ? (
               <button
                 onClick={handleEdit}
-                className="text-white hover:text-red-100 transition p-2 rounded-full hover:bg-white/20"
+                className="text-white hover:text-indigo-100 transition p-2 rounded-full hover:bg-white/20"
                 title="프로필 편집"
                 type="button"
               >
@@ -287,7 +287,7 @@ export default function ProfilePage() {
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="text-white hover:text-red-100 transition p-2 rounded-full hover:bg-white/20 disabled:opacity-50"
+                  className="text-white hover:text-indigo-100 transition p-2 rounded-full hover:bg-white/20 disabled:opacity-50"
                   title="저장"
                   type="button"
                 >
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                 <button
                   onClick={handleCancel}
                   disabled={isSaving}
-                  className="text-white hover:text-red-100 transition p-2 rounded-full hover:bg-white/20 disabled:opacity-50"
+                  className="text-white hover:text-indigo-100 transition p-2 rounded-full hover:bg-white/20 disabled:opacity-50"
                   title="취소"
                   type="button"
                 >
@@ -308,25 +308,25 @@ export default function ProfilePage() {
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="flex items-center space-x-4 pb-4 border-b border-gray-200">
-            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-              <User size={20} className="text-gray-600" />
+          <div className="flex items-center space-x-4 pb-4 border-b border-border">
+            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+              <User size={20} className="text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-sm text-gray-500 mb-1">사용자 ID</p>
-              <p className="text-gray-800 font-medium">
+              <p className="text-sm text-muted-foreground mb-1">사용자 ID</p>
+              <p className="text-foreground font-medium">
                 {userId || "ID 정보 없음"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4 pb-4 border-b border-gray-200">
-            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-              <Mail size={20} className="text-gray-600" />
+          <div className="flex items-center space-x-4 pb-4 border-b border-border">
+            <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
+              <Mail size={20} className="text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-sm text-gray-500 mb-1">이메일</p>
-              <p className="text-gray-800 font-medium">
+              <p className="text-sm text-muted-foreground mb-1">이메일</p>
+              <p className="text-foreground font-medium">
                 {userEmail || "이메일 정보 없음"}
               </p>
             </div>
@@ -335,7 +335,7 @@ export default function ProfilePage() {
           <div className="pt-4 space-y-3">
             <button
               type="button"
-              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-muted text-foreground rounded-lg hover:bg-accent transition font-medium"
             >
               <Settings size={20} />
               <span>설정</span>
@@ -361,11 +361,11 @@ export default function ProfilePage() {
         <InterestSection />
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">계정 정보</h3>
-        <div className="space-y-3 text-sm text-gray-600">
+      <div className="bg-card rounded-lg shadow-sm border border-border p-6">
+        <h3 className="text-lg font-bold text-foreground mb-4">계정 정보</h3>
+        <div className="space-y-3 text-sm text-muted-foreground">
           <p>계정 관리를 위해 필요한 정보입니다.</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             추가 기능은 추후 업데이트 예정입니다.
           </p>
         </div>

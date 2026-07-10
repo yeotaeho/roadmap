@@ -32,8 +32,8 @@ export default function ChipSelect({ options, value, multi = false, onChange }: 
           onClick={() => toggle(o.value)}
           className={`px-3 py-1.5 rounded-full text-sm border transition ${
             selected(o.value)
-              ? "border-red-600 bg-red-600 text-white"
-              : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+              ? "border-indigo-600 bg-indigo-600 text-white"
+              : "border-border bg-card text-foreground hover:border-muted-foreground"
           }`}
         >
           {o.label}
