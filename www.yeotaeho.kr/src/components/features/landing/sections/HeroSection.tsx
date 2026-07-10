@@ -102,7 +102,7 @@ export function HeroSection() {
 
       <div className="hero-scroll-hint absolute bottom-8 left-1/2 z-10 -translate-x-1/2 text-center">
         <p className="mb-1 text-xs font-medium text-slate-400 dark:text-slate-500">{hero.scrollHint}</p>
-        <ChevronDown className="landing-viz-float mx-auto h-5 w-5 text-slate-400 dark:text-slate-500" />
+        <ChevronDown aria-hidden className="landing-viz-float mx-auto h-5 w-5 text-slate-400 dark:text-slate-500" />
       </div>
     </section>
   );

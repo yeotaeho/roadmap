@@ -1,5 +1,10 @@
 /* 랜딩 전용 스타일 — 헤더 스크롤 상태·SVG 모션 그래픽 키프레임 (reduced-motion 시 전부 비활성) */
 
+/* 로그인 이력자 첫 페인트: page.tsx 인라인 스크립트가 이 클래스를 걸어 SSR 랜딩 플래시를 가린다 */
+html.yi-auth-pending .landing-root {
+  visibility: hidden;
+}
+
 .landing-header--scrolled {
   background-color: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);

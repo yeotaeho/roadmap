@@ -28,7 +28,7 @@ export function LandingView() {
 
   return (
     <SmoothScrollProvider>
-      <div className="bg-white font-sans dark:bg-slate-950">
+      <div className="landing-root bg-white font-sans dark:bg-slate-950">
         <LandingHeader />
         <main>
           <HeroSection />

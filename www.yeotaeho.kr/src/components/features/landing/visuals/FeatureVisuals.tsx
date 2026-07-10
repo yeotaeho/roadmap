@@ -1,4 +1,5 @@
 // 랜딩 기능 카드용 인라인 SVG 모션 그래픽 6종 — 실제 스크린샷 에셋 도착 시 next/image로 교체 가능한 슬롯
+// 내부의 짧은 라벨·수치("채용 공고", 78 등)는 장식용 목데이터로, landing.copy.ts 카피 규칙의 의도적 예외다.
 import type { LandingFeatureId } from "../landing.copy";
 
 const VIEWBOX = "0 0 240 150";

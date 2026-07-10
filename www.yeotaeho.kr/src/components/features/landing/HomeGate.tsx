@@ -42,8 +42,17 @@ export function HomeGate() {
     setMounted(true);
   }, []);
 
-  // 서버 렌더와 첫 클라이언트 페인트를 동일하게 유지 (hydration mismatch 방지)
-  if (!mounted) return null;
+  // 분기 확정(인증됨 또는 복원 완료) 시 인라인 스크립트가 걸어둔 랜딩 숨김 해제
+  // (page.tsx의 yi-auth-pending — 로그아웃 후 게스트 랜딩이 hidden으로 남지 않도록 필수)
+  useEffect(() => {
+    if (isAuthenticated || isAuthResolved) {
+      document.documentElement.classList.remove("yi-auth-pending");
+    }
+  }, [isAuthenticated, isAuthResolved]);
+
+  // 서버 렌더·첫 클라이언트 렌더는 항상 랜딩 — 게스트 SEO/LCP 확보 (hydration mismatch 방지)
+  // 로그인 이력자는 yi-auth-pending CSS가 첫 페인트 전에 랜딩을 가린다.
+  if (!mounted) return <LandingView />;
 
   if (isAuthenticated) {
     return (

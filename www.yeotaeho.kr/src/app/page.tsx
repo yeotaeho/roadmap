@@ -10,5 +10,15 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <HomeGate />;
+  return (
+    <>
+      {/* 로그인 이력자(yi-auth-hint)는 첫 페인트 전에 랜딩을 숨겨 플래시 방지 — 테마 anti-FOUC와 동일 패턴 */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{if(localStorage.getItem('yi-auth-hint')==='1')document.documentElement.classList.add('yi-auth-pending');}catch(e){}})();`,
+        }}
+      />
+      <HomeGate />
+    </>
+  );
 }
