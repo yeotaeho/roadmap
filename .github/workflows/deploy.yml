@@ -90,4 +90,7 @@ jobs:
             cd /opt/roadmap
             docker compose pull
             docker compose up -d
+            # nginx 는 이미지가 안 바뀌면 재생성되지 않아 재생성된 web/api 의 옛 IP 를 물고 502 를 낸다.
+            # 매 배포마다 재시작해 upstream IP 재해석 + nginx.conf 변경 반영을 겸한다.
+            docker compose restart nginx
             docker image prune -f
