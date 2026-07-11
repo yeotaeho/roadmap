@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # 도메인 연결·HTTPS 전환 시 이 값만 바꾸면 된다 (NEXT_PUBLIC_* 는 빌드 타임에 번들로 구워짐).
-  PUBLIC_ORIGIN: http://141.164.34.154
+  # 도메인 변경 시 이 값만 바꾸면 된다 (NEXT_PUBLIC_* 는 빌드 타임에 번들로 구워짐).
+  PUBLIC_ORIGIN: https://wepon.kr
 
 jobs:
   build-api:

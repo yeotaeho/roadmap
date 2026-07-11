@@ -4,10 +4,14 @@
 services:
   nginx:
     image: nginx:alpine
+    container_name: roadmap-nginx  # certbot 갱신 deploy-hook 에서 reload 대상으로 참조.
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
     depends_on:
       web:
         condition: service_started
