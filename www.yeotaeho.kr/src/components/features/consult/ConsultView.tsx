@@ -7,7 +7,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DEMO_ATTACHED_CONTEXTS,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/consult";
 import { useStore } from "@/store";
 import { ChatMarkdown } from "@/components/common/ChatMarkdown";
+import { TypingDots } from "@/components/common/TypingDots";
 import { SelfModelPanel } from "./SelfModelPanel";
 import { useConsultNav } from "./ConsultNavContext";
 
@@ -49,7 +50,7 @@ const INITIAL_MESSAGES: ConsultMessage[] = [buildProactiveGreeting()];
 
 export function ConsultView() {
   const formId = useId();
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const isAuthenticated = useStore((s) => s.isAuthenticated);
   const profile = useStore((s) => s.profile);
@@ -63,13 +64,11 @@ export function ConsultView() {
   const { sessionId, navToken, adoptSession, refreshSessions } = useConsultNav();
   const sendingRef = useRef(false);
 
-  const scrollBottom = useCallback(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
+  // 새 메시지·스트리밍 시 채팅 컨테이너 내부만 맨 아래로 스크롤(페이지는 이동시키지 않음).
   useEffect(() => {
-    scrollBottom();
-  }, [messages, isLoading, scrollBottom]);
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, isLoading]);
 
   // 로그아웃/사용자 전환·세션 전환·새 채팅 시 이전 진행률이 잠깐 노출되지 않도록 리셋
   useEffect(() => {
@@ -203,45 +202,39 @@ export function ConsultView() {
             </p>
           </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`relative max-w-[92%] sm:max-w-[85%] ${
-                    m.role === "user"
-                      ? "rounded-2xl rounded-tr-md bg-indigo-600 px-4 py-3 text-sm text-white shadow-sm"
-                      : "rounded-2xl rounded-tl-md bg-slate-100 px-4 py-3 text-sm text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
-                  }`}
-                >
-                  {m.role === "assistant" && m.badge ? (
-                    <span className="mb-2 inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/80">
-                      {m.badge}
-                    </span>
-                  ) : null}
-                  {m.role === "assistant" ? (
-                    <ChatMarkdown>{m.text}</ChatMarkdown>
-                  ) : (
-                    <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
-                  )}
-                  {m.code ? (
-                    <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900/95 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 ring-1 ring-slate-700">
-                      <code>{m.code}</code>
-                    </pre>
-                  ) : null}
+          <div ref={listRef} className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+            {messages.map((m) =>
+              m.role === "user" ? (
+                <div key={m.id} className="flex justify-end">
+                  <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-indigo-600 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+                    {m.text}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {isLoading ? (
-              <div className="flex justify-start">
-                <div className="rounded-2xl bg-slate-100 px-4 py-3 text-xs text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-                  응답 작성 중…
+              ) : (
+                <div key={m.id} className="flex gap-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white shadow-sm">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5 text-slate-900 dark:text-slate-100">
+                    {m.badge ? (
+                      <span className="mb-1.5 inline-block rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800 ring-1 ring-indigo-200/80 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800/50">
+                        {m.badge}
+                      </span>
+                    ) : null}
+                    {m.text ? (
+                      <ChatMarkdown>{m.text}</ChatMarkdown>
+                    ) : isLoading ? (
+                      <TypingDots />
+                    ) : null}
+                    {m.code ? (
+                      <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900/95 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 ring-1 ring-slate-700">
+                        <code>{m.code}</code>
+                      </pre>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <div ref={endRef} />
+              ),
+            )}
           </div>
 
           <div className="border-t border-slate-200 bg-[#F8FAFC] p-3 dark:border-slate-700 dark:bg-slate-900">

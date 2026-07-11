@@ -1,11 +1,12 @@
 // AI 코치 대화 화면(최소) — SSE 스트리밍 + tool 활동 인디케이터
 "use client";
 
-import { SendHorizonal } from "lucide-react";
+import { SendHorizonal, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createNewCoachSession, fetchCoachMessages, streamCoach } from "@/lib/api/coach";
 import { useStore } from "@/store";
 import { ChatMarkdown } from "@/components/common/ChatMarkdown";
+import { TypingDots } from "@/components/common/TypingDots";
 import { useCoachNav } from "./CoachNavContext";
 
 type CoachMessage = {
@@ -26,7 +27,7 @@ const GREETING: CoachMessage = {
 };
 
 export function CoachView() {
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const isAuthenticated = useStore((s) => s.isAuthenticated);
   const [messages, setMessages] = useState<CoachMessage[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -35,8 +36,10 @@ export function CoachView() {
   const [sessionError, setSessionError] = useState(false);
   const { sessionId, navToken, adoptSession, refreshSessions } = useCoachNav();
 
+  // 새 메시지·스트리밍 시 채팅 컨테이너 내부만 맨 아래로 스크롤(페이지는 이동시키지 않음).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, isLoading, toolActivity]);
 
   // navToken 변화(네비게이션)에만 히스토리 로드 — 전송 중 세션 채택은 재로드하지 않음.
@@ -121,41 +124,41 @@ export function CoachView() {
   return (
     <div className="mx-auto w-full">
       <section className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div ref={listRef} className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
           {!isAuthenticated && (
             <p className="text-sm text-muted-foreground">로그인하면 코치와 대화를 시작할 수 있어요.</p>
           )}
           {sessionError && (
             <p className="text-sm text-destructive">세션을 열지 못했어요. 새로고침 후 다시 시도해 주세요.</p>
           )}
-          {messages.map((m) => (
-            <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[80%] whitespace-pre-wrap rounded-2xl bg-primary px-4 py-2.5 text-sm text-primary-foreground"
-                    : "max-w-[80%] rounded-2xl bg-muted px-4 py-2.5 text-sm text-foreground"
-                }
-              >
-                {m.role === "assistant" ? (
-                  m.text ? (
-                    <ChatMarkdown>{m.text}</ChatMarkdown>
-                  ) : (
-                    isLoading ? "…" : ""
-                  )
-                ) : (
-                  m.text
-                )}
+          {messages.map((m) =>
+            m.role === "user" ? (
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
+                  {m.text}
+                </div>
               </div>
-            </div>
-          ))}
+            ) : (
+              <div key={m.id} className="flex gap-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5 text-foreground">
+                  {m.text ? (
+                    <ChatMarkdown>{m.text}</ChatMarkdown>
+                  ) : isLoading ? (
+                    <TypingDots />
+                  ) : null}
+                </div>
+              </div>
+            ),
+          )}
           {toolActivity && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 pl-10 text-xs text-muted-foreground">
               <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
               {toolActivity} 중…
             </div>
           )}
-          <div ref={endRef} />
         </div>
 
         <form

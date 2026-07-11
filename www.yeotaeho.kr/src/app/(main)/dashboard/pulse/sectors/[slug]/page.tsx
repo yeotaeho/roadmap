@@ -3,7 +3,7 @@
 // 섹터 주간 트렌드 상세 페이지 — 메인(주간 차트·인과사슬) + 우측(14일 전망·크로스오버·관련 문서) 드릴다운 뷰
 
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 
 import { PanelStatus } from "@/components/features/dashboard/PanelStatus";
@@ -188,12 +188,17 @@ function InvestmentFlowSection({ data }: { data: PulseInvestments }) {
 
 // 관련 문서 리스트 — 제목(원문 링크)·출처 라벨·일자·감성 점.
 function DocList({ docs, emptyText }: { docs: PulseDocument[]; emptyText: string }) {
+  const [expanded, setExpanded] = useState(false);
   if (docs.length === 0) {
     return <p className="text-xs text-slate-400">{emptyText}</p>;
   }
+  const COLLAPSED = 5;
+  const hasMore = docs.length > COLLAPSED;
+  const visible = expanded ? docs : docs.slice(0, COLLAPSED);
   return (
-    <ul className="flex flex-col gap-2.5">
-      {docs.map((doc, i) => (
+    <div>
+      <ul className={`flex flex-col gap-2.5${expanded ? " max-h-72 overflow-y-auto pr-1" : ""}`}>
+        {visible.map((doc, i) => (
         <li key={`${doc.url ?? doc.title}-${i}`} className="flex items-start gap-2">
           <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${sentimentDot(doc.sentiment)}`} aria-hidden />
           <div className="min-w-0">
@@ -217,8 +222,18 @@ function DocList({ docs, emptyText }: { docs: PulseDocument[]; emptyText: string
             </span>
           </div>
         </li>
-      ))}
-    </ul>
+        ))}
+      </ul>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 text-xs font-medium text-indigo-500 hover:underline underline-offset-2"
+        >
+          {expanded ? "접기" : `더보기 (${docs.length - COLLAPSED}개 더)`}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -262,9 +277,9 @@ export default function PulseSectorDetailPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* 메인 — 주간 트렌드 차트 + 인과관계 체인 */}
-        <div className="xl:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-10 gap-6">
+        {/* 메인 — 주간 트렌드 차트 + 인과관계 체인 (70%) */}
+        <div className="xl:col-span-7 space-y-6">
           <PanelStatus isLoading={isLoading} isError={isError} isEmpty={weekly.length === 0} label="주간 트렌드">
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -275,7 +290,7 @@ export default function PulseSectorDetailPage() {
 
               <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
                 <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4">주간 트렌드</h2>
-                <WeeklyTrendChart points={weekly} accent={live?.accent_color ?? null} />
+                <WeeklyTrendChart points={weekly} momentum={live?.momentum_pct ?? null} />
               </section>
             </div>
           </PanelStatus>
@@ -308,8 +323,8 @@ export default function PulseSectorDetailPage() {
           </section>
         </div>
 
-        {/* 우측 — 14일 전망 · 크로스오버 · 관련 문서 */}
-        <div className="space-y-6">
+        {/* 우측 — 14일 전망 · 크로스오버 · 관련 문서 (30%) */}
+        <div className="xl:col-span-3 space-y-6">
           <SideCard title="14일 전망">
             <PanelStatus isLoading={fcLoading} isError={fcError} isEmpty={false} label="시장 전망">
               {forecast ? (

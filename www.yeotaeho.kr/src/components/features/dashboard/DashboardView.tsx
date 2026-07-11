@@ -19,16 +19,7 @@ export function DashboardView() {
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-          인사이트 대시보드
-        </h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          지금의 흐름, 기회, 나와의 연결, 당장의 행동을 한곳에서 확인하세요.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(15,23,42,0.08)] min-h-[420px] dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_8px_30px_rgba(15,23,42,0.08)] min-h-[calc(100vh-220px)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-none">
         {activeTab === "pulse" && <PulseTab section={pulseSection} />}
         {activeTab === "gap" && <GapPanel />}
         {activeTab === "sync" && <SyncPanel />}

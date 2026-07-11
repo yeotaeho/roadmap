@@ -234,7 +234,9 @@ export interface PulseDocuments {
 }
 
 export async function fetchPulseDocuments(sector: string): Promise<PulseDocuments> {
-  const { data } = await apiClient.get(`/api/insight/pulse/${sector}/documents`);
+  const { data } = await apiClient.get(`/api/insight/pulse/${sector}/documents`, {
+    params: { limit: 30 },
+  });
   return {
     sector_slug: data.sector_slug,
     sector_name: data.sector_name,

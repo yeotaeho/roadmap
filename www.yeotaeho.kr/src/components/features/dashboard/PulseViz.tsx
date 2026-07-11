@@ -53,22 +53,53 @@ export function CrossoverChart({ data }: { data: Crossover }) {
     return <p className="text-sm text-slate-400">크로스오버 데이터가 아직 부족합니다.</p>;
   }
   const w = 560;
-  const h = 180;
+  const h = 200;
+  const padL = 34;
+  const padR = 14;
+  const padT = 12;
+  const padB = 26;
   const all = pts.flatMap((p) => [p.legacy_value as number, p.emerging_value as number]);
   const max = Math.max(...all, 1);
   const min = Math.min(...all, 0);
   const span = max - min || 1;
-  const xAt = (i: number) => (i / (pts.length - 1)) * w;
-  const yAt = (v: number) => h - ((v - min) / span) * h;
+  const xAt = (i: number) => padL + (i / (pts.length - 1)) * (w - padL - padR);
+  const yAt = (v: number) => padT + (1 - (v - min) / span) * (h - padT - padB);
   const path = (key: "legacy_value" | "emerging_value") =>
-    pts.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i)},${yAt(p[key] as number)}`).join(" ");
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAt(p[key] as number).toFixed(1)}`).join(" ");
+  const gridRows = [0, 0.5, 1].map((t) => ({ y: padT + t * (h - padT - padB), v: Math.round(max - t * span) }));
+  const labelStep = Math.max(1, Math.ceil(pts.length / 6));
+  // "YYYY-MM" → "YY.M" 연·월 X축 라벨(예: 26.7).
+  const monthLabel = (bucket: string) => {
+    const [y, m] = bucket.split("-");
+    return `${(y ?? "").slice(2)}.${Number(m ?? 0)}`;
+  };
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-44" role="img" aria-label="세대교체 크로스오버 차트">
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" role="img" aria-label="세대교체 크로스오버 차트">
+      {/* Y축 격자·눈금값 */}
+      {gridRows.map((g) => (
+        <g key={g.y}>
+          <line x1={padL} y1={g.y} x2={w - padR} y2={g.y} stroke="currentColor" strokeDasharray="3 4" className="text-slate-200 dark:text-slate-700" />
+          <text x={padL - 6} y={g.y + 3} textAnchor="end" fontSize="8" className="fill-slate-400">
+            {g.v}
+          </text>
+        </g>
+      ))}
+      {/* 축선 — 왼쪽(Y)·아래(X) */}
+      <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeWidth="1" className="text-slate-300 dark:text-slate-600" />
+      <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeWidth="1" className="text-slate-300 dark:text-slate-600" />
       <path d={path("legacy_value")} fill="none" stroke="#94a3b8" strokeWidth="2" />
       <path d={path("emerging_value")} fill="none" stroke="#6366f1" strokeWidth="2" />
       {pts.map((p, i) =>
         p.is_crossover ? (
           <circle key={p.bucket} cx={xAt(i)} cy={yAt(p.emerging_value as number)} r="5" fill="#8b5cf6" />
+        ) : null,
+      )}
+      {/* X축 월 라벨 */}
+      {pts.map((p, i) =>
+        i % labelStep === 0 ? (
+          <text key={`x-${p.bucket}`} x={xAt(i)} y={h - padB + 14} textAnchor="middle" fontSize="8" className="fill-slate-400">
+            {monthLabel(p.bucket)}
+          </text>
         ) : null,
       )}
     </svg>
