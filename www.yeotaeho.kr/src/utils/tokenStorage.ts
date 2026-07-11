@@ -46,11 +46,22 @@ export const hasToken = (): boolean => {
 };
 
 /**
+ * JWT 페이로드에서 사용하는 클레임(모두 선택적).
+ */
+interface JwtPayload {
+    email?: string;
+    name?: string;
+    userId?: string | number;
+    sub?: string;
+    exp?: number;
+}
+
+/**
  * JWT 토큰 디코딩 (Base64 디코딩)
  * @param token JWT 토큰 문자열
  * @returns 디코딩된 페이로드 객체 또는 null
  */
-export const decodeToken = (token: string): any | null => {
+export const decodeToken = (token: string): JwtPayload | null => {
     try {
         const parts = token.split('.');
         if (parts.length !== 3) {

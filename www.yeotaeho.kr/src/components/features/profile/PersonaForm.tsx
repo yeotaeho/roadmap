@@ -2,7 +2,7 @@
 "use client";
 
 import { Edit2, Plus, Save, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type {
   CertificationItem,
   EducationItem,
@@ -55,10 +55,12 @@ export function PersonaForm() {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(data));
 
-  // 서버 데이터 도착/갱신 시 보기모드 draft 동기화(편집 중이면 보존).
-  useEffect(() => {
+  // 서버 데이터 도착/갱신 시 보기모드 draft 동기화(편집 중이면 보존) — 렌더 중 이전 data 비교(효과 대체).
+  const [prevData, setPrevData] = useState(data);
+  if (data !== prevData) {
+    setPrevData(data);
     if (!isEditing) setDraft(toDraft(data));
-  }, [data, isEditing]);
+  }
 
   const startEdit = () => {
     setDraft(toDraft(data));

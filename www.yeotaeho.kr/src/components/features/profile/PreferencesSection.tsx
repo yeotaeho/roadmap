@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import ChipSelect from "./ChipSelect";
 import {
@@ -23,13 +23,15 @@ export default function PreferencesSection({ className = "" }: { className?: str
   const [saved, setSaved] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
-  useEffect(() => {
-    if (!data) return;
+  // 서버 데이터 도착/갱신 시 입력값 동기화 — 렌더 중 이전 data 와 비교(효과 대체).
+  const [prevData, setPrevData] = useState(data);
+  if (data && data !== prevData) {
+    setPrevData(data);
     setWorkStyle(data.workStyle ?? "");
     setCompanySizePref(data.companySizePref ?? "");
     setWorkTypePref(data.workTypePref ?? "");
     setWorkValues(data.workValues ?? []);
-  }, [data]);
+  }
 
   const save = async () => {
     try {
