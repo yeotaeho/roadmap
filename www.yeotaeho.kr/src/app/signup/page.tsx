@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function SignupPage() {
     // 소셜 로그인 핸들러 (회원가입 모드)
