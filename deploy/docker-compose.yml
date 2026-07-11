@@ -9,12 +9,15 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - web
-      - api
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy  # 마이그레이션 완료 전 502 창 방지.
     restart: unless-stopped
 
   web:
     image: ghcr.io/yeotaeho/roadmap-web:latest
+    mem_limit: 512m
     restart: unless-stopped
 
   api:
@@ -23,6 +26,13 @@ services:
     environment:
       SCHEDULER_ENABLED: "false"  # API 는 배치 미실행 — 잡 중복 방지.
       RUN_MIGRATIONS: "true"      # 마이그레이션은 api 만 수행.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s           # 부팅 시 alembic upgrade 시간 확보.
+    mem_limit: 900m               # 2GB 인스턴스 — OOM 시 킬 대상을 이 컨테이너로 한정.
     restart: unless-stopped
 
   worker:
@@ -33,5 +43,7 @@ services:
       SCHEDULER_ENABLED: "true"   # 배치는 worker 하나에서만.
       RUN_MIGRATIONS: "false"     # 마이그레이션 중복·경합 방지(api 담당).
     depends_on:
-      - api
+      api:
+        condition: service_healthy  # 마이그레이션 완료 후 스케줄러 기동.
+    mem_limit: 900m
     restart: unless-stopped

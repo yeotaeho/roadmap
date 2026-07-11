@@ -40,7 +40,7 @@ function KakaoCallbackContent() {
                 const state = searchParams.get('state');
 
                 // 백엔드로 code와 state 전송하여 토큰 교환
-                const response = await fetch('http://localhost:8000/api/oauth/kakao/callback', {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/oauth/kakao/callback`, {
                     method: 'POST',
                     credentials: 'include',
                     headers: {

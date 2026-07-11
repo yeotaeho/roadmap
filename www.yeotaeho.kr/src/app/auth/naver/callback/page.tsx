@@ -41,7 +41,7 @@ function NaverCallbackContent() {
                 // state 파라미터는 이미 추출되어 있음
 
                 // 백엔드로 code와 state 전송하여 토큰 교환
-                const response = await fetch('http://localhost:8000/api/oauth/naver/callback', {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/oauth/naver/callback`, {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
